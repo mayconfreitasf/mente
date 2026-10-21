@@ -1,0 +1,1027 @@
+<title>Mente</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mente">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: app de uma tela, coluna única de até 480px, barra de abas embaixo. Dark-first, vinho e champanhe. */
+:root {
+  --bg: #150d11;
+  --surface: #21151a;
+  --surface-2: #2c1c23;
+  --line: #3e2931;
+  --fg: #f4ebe7;
+  --muted: #b39ca4;
+  --accent: #c2304f;
+  --accent-soft: #c2304f26;
+  --accent-fg: #fff6f7;
+  --gold: #d8b06a;
+  --ok: #4cb782;
+  --bad: #e2596f;
+  --shadow: 0 18px 40px #00000066;
+  --f-display: "Sora", "Avenir Next", -apple-system, "Segoe UI", sans-serif;
+  --f-body: "Figtree", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
+    --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
+    --gold: #8f6520; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
+  --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
+  --gold: #8f6520; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  color-scheme: light;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--f-body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.app { max-width: 480px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
+.topo { display: flex; align-items: center; justify-content: space-between; padding-block: 12px 8px; }
+.logo { font-family: var(--f-display); font-weight: 700; font-size: 28px; line-height: 1; letter-spacing: -0.04em; }
+.logo b { color: var(--accent); font-weight: 700; }
+.logo { display: flex; align-items: center; gap: 8px; }
+.marca { width: 36px; height: 36px; flex: none; overflow: visible; }
+.m-cerebro { fill: color-mix(in srgb, var(--accent) 30%, var(--surface-2)); stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+.m-dobra { fill: none; stroke: var(--accent); stroke-width: 1.3; stroke-linecap: round; opacity: .55; }
+.m-coracao { fill: var(--accent); stroke: var(--bg); stroke-width: 1.2; }
+.m-mini { fill: var(--gold); }
+@keyframes bate { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.18); } 30% { transform: scale(1); } 45% { transform: scale(1.12); } }
+.m-coracao { transform-origin: 20px 22px; animation: bate 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .m-coracao { animation: none; } }
+.chip-nivel { position: relative; display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.chip-nivel small { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.chip-nivel strong { font-family: var(--f-mono); color: var(--gold); font-size: 15px; }
+
+main { flex: 1; overflow-y: auto; overflow-x: hidden; padding-block: 4px 16px; min-height: 0; }
+.abas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-block: 8px; border-top: 1px solid var(--line); background: var(--bg); }
+.aba { background: none; border: 0; padding: 8px 4px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 12px; font-weight: 600; position: relative; }
+.aba svg { width: 22px; height: 22px; }
+.aba[aria-current="page"] { color: var(--fg); background: var(--surface); }
+.aba[aria-current="page"] svg { color: var(--accent); }
+.badge { position: absolute; top: 4px; right: calc(50% - 20px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-size: 10px; display: grid; place-items: center; padding: 0 4px; }
+
+h1, h2 { font-family: var(--f-display); font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.12; }
+h2 { font-size: 21px; line-height: 1.2; }
+.rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
+.muted { color: var(--muted); }
+.pilha { display: flex; flex-direction: column; gap: 16px; }
+.linha { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.btn { border: 0; border-radius: 14px; padding: 14px 18px; font-weight: 700; background: var(--accent); color: var(--accent-fg); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn:active { transform: scale(0.98); }
+.btn.sec { background: var(--surface-2); color: var(--fg); }
+.btn.ouro { background: var(--gold); color: #1d1206; }
+.btn.bloco { width: 100%; }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.link { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 8px; }
+
+.campo { display: flex; flex-direction: column; gap: 6px; }
+.campo label { font-size: 13px; font-weight: 600; }
+.campo input, .campo textarea, .campo select { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; width: 100%; }
+.campo textarea { resize: vertical; min-height: 72px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.seg button { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 6px; font-weight: 600; font-size: 14px; }
+.seg button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+.erro { color: var(--bad); font-size: 13px; min-height: 18px; }
+
+/* Nível */
+.placar { display: grid; grid-template-columns: auto 1fr; gap: 4px 18px; align-items: end; padding: 18px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
+.placar .num { font-family: var(--f-mono); font-size: 56px; line-height: 0.9; color: var(--gold); font-weight: 700; grid-row: span 2; font-variant-numeric: tabular-nums; }
+.placar p { margin: 0; font-size: 14px; }
+.prox { grid-column: 1 / -1; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.trilho { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.trilho i { display: block; height: 100%; background: var(--gold); border-radius: 3px; }
+
+/* Categorias */
+.cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cat { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cat strong { font-size: 14px; line-height: 1.2; }
+.cat span { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.cat:active { border-color: var(--accent); }
+
+/* Rodada */
+.rodada { display: flex; flex-direction: column; gap: 18px; padding-top: 6px; }
+.rodada-topo { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.rodada-topo .num { font-family: var(--f-mono); color: var(--muted); }
+.tempo { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.tempo i { display: block; height: 100%; width: 100%; background: var(--gold); transform-origin: left; }
+.tempo.alerta i { background: var(--bad); }
+.enunciado { font-family: var(--f-display); font-weight: 600; letter-spacing: -0.02em; font-size: 23px; line-height: 1.25; min-height: 3.5em; text-wrap: balance; }
+.opcoes { display: flex; flex-direction: column; gap: 10px; }
+.opcao { text-align: left; padding: 16px; border-radius: 16px; background: var(--surface); border: 1.5px solid var(--line); font-size: 16px; font-weight: 600; display: flex; gap: 12px; align-items: center; }
+.opcao kbd { font-family: var(--f-mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+.opcao.certa { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, var(--surface)); }
+.opcao.errada { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, var(--surface)); }
+.feedback { text-align: center; font-weight: 700; min-height: 24px; }
+.feedback.ok { color: var(--ok); } .feedback.no { color: var(--bad); }
+.resultado { text-align: center; padding: 26px 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.resultado .grande { font-family: var(--f-mono); font-size: 64px; font-weight: 700; color: var(--gold); line-height: 1; }
+
+/* Perfis */
+.avatar { border-radius: 50%; display: grid; place-items: center; font-family: var(--f-display); color: #fff; overflow: hidden; flex: none; background-size: cover; background-position: center; }
+.cartao { border-radius: 24px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); position: relative; }
+.cartao .foto { aspect-ratio: 4 / 4.3; max-width: 100%; display: grid; place-items: center; font-family: var(--f-display); font-size: 120px; color: #ffffffe6; background-size: cover; background-position: center; position: relative; }
+.cartao .foto .nivel-tag { position: absolute; top: 14px; left: 14px; padding: 6px 12px; border-radius: 999px; background: #120a0dcc; color: #f4d9a6; font-family: var(--f-mono); font-size: 13px; font-weight: 700; }
+.cartao .info { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
+.cartao .nome { font-family: var(--f-display); font-weight: 700; letter-spacing: -0.03em; font-size: 26px; line-height: 1.1; }
+.cartao .nome span { font-family: var(--f-body); font-size: 20px; color: var(--muted); }
+.cartao .bio { margin: 4px 0 0; }
+.cartao.bloqueado .foto { filter: blur(14px) saturate(0.6); transform: scale(1.08); }
+.cadeado { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
+.cadeado .grande { font-family: var(--f-mono); font-size: 40px; color: var(--gold); font-weight: 700; }
+.acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+
+.lista { display: flex; flex-direction: column; }
+.item { display: flex; gap: 12px; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--line); background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; width: 100%; }
+.item .txt { min-width: 0; flex: 1; }
+.item .txt strong { display: block; }
+.item .txt span { display: block; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Chat */
+.chat { display: flex; flex-direction: column; height: 100%; }
+.chat-topo { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-block: 14px; min-height: 0; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: 18px; overflow-wrap: anywhere; }
+.msg.eu { align-self: flex-end; background: var(--accent); color: var(--accent-fg); border-bottom-right-radius: 6px; }
+.msg.ela { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 6px; }
+.digitando { color: var(--muted); font-size: 13px; font-style: italic; }
+.envio { display: flex; gap: 8px; padding-top: 8px; }
+.envio input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 12px 16px; }
+
+/* Folha (modal) */
+.veu { position: fixed; inset: 0; background: #0a0507b3; display: flex; align-items: flex-end; justify-content: center; z-index: 50; padding: 0 max(12px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.folha { width: 100%; max-width: 480px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: var(--shadow); }
+.match-tela { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; padding: 24px; background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 55%, var(--bg)), var(--bg) 70%); }
+.match-tela h1 { font-size: 44px; }
+.duo { display: flex; }
+.duo .avatar { border: 3px solid var(--bg); }
+.duo .avatar + .avatar { margin-left: -18px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; z-index: 70; white-space: nowrap; }
+.vazio { text-align: center; padding: 40px 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat b { font-family: var(--f-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); }
+.caixa { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.chave { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.toggle { width: 50px; height: 30px; border-radius: 15px; border: 0; background: var(--surface-2); position: relative; flex: none; }
+.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--muted); transition: transform .2s; }
+.toggle[aria-checked="true"] { background: var(--accent); }
+.toggle[aria-checked="true"]::after { transform: translateX(20px); background: #fff; }
+.aviso { font-size: 12px; color: var(--muted); text-align: center; }
+
+/* Seleção de assuntos */
+.cat[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.cat[aria-pressed="true"] span { color: var(--fg); }
+.cat.aleatorio { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; border-style: dashed; }
+.cat.aleatorio[aria-pressed="true"] { border-style: solid; }
+.iniciar { position: sticky; bottom: 0; padding-block: 12px 4px; background: linear-gradient(transparent, var(--bg) 30%); }
+.trilho i.carregando { width: 40%; animation: carrega 1.2s ease-in-out infinite; }
+@keyframes carrega { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .trilho i.carregando { animation: none; width: 100%; opacity: .5; } }
+.tag-dobro { color: var(--bg); background: var(--gold); border-radius: 6px; padding: 1px 6px; margin-left: 4px; letter-spacing: 0; }
+.modos { grid-template-columns: 1fr 1fr; }
+.modos button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; text-align: left; }
+.modos small { font-weight: 500; font-size: 12px; color: var(--muted); }
+.modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, transparent); }
+.tag-cat { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); font-weight: 700; }
+
+/* Nível subindo */
+@keyframes sobe { 0% { transform: none; } 35% { transform: translateY(-5px) scale(1.45); color: var(--ok); } 100% { transform: none; } }
+@keyframes brilho { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 60%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+@keyframes mais1 { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.7); } 20% { opacity: 1; transform: translate(-50%, -6px) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -34px) scale(1); } }
+.chip-nivel.sobe { animation: brilho .7s ease-out; }
+.chip-nivel.sobe strong { display: inline-block; animation: sobe .6s cubic-bezier(.3,1.6,.5,1); }
+.mais1 { position: absolute; left: 50%; top: -4px; font-family: var(--f-mono); font-weight: 700; font-size: 15px; color: var(--ok); pointer-events: none; animation: mais1 .9s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) { .chip-nivel.sobe, .chip-nivel.sobe strong, .mais1 { animation: none; } .mais1 { display: none; } }
+
+@keyframes entra { from { opacity: 0.4; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.entra { animation: entra .25s ease-out; }
+@media (prefers-reduced-motion: reduce) { .entra { animation: none; } .toggle::after { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="topo">
+    <div class="logo"><svg class="marca" viewBox="0 0 40 40" aria-hidden="true">
+      <path class="m-cerebro" d="M20 9c-1.8-2.4-5.4-2.8-7.6-.8-2.7-.5-5.2 1.4-5.4 4.1-2.2 1-3.4 3.6-2.5 6-1.6 1.9-1.4 4.8.4 6.5-.4 2.8 1.6 5.3 4.4 5.7 1.2 2.3 4.1 3.1 6.4 1.9 1.4 1.1 3.2 1.2 4.3.4 1.1.8 2.9.7 4.3-.4 2.3 1.2 5.2.4 6.4-1.9 2.8-.4 4.8-2.9 4.4-5.7 1.8-1.7 2-4.6.4-6.5.9-2.4-.3-5-2.5-6-.2-2.7-2.7-4.6-5.4-4.1C25.4 6.2 21.8 6.6 20 9z"/>
+      <path class="m-dobra" d="M20 9.5v23M13 14c2 .4 3.2 1.8 3.4 3.8M27 14c-2 .4-3.2 1.8-3.4 3.8M10.5 22.5c1.8-.6 3.6-.2 4.8 1.2M29.5 22.5c-1.8-.6-3.6-.2-4.8 1.2"/>
+      <path class="m-coracao" d="M20 27.2s-5.6-3.4-5.6-7.1c0-1.8 1.4-3.1 3-3.1 1.1 0 2 .6 2.6 1.5.6-.9 1.5-1.5 2.6-1.5 1.6 0 3 1.3 3 3.1 0 3.7-5.6 7.1-5.6 7.1z"/>
+      <path class="m-mini" d="M33 4.6s-2.6-1.6-2.6-3.3c0-.8.6-1.4 1.4-1.4.5 0 .9.3 1.2.7.3-.4.7-.7 1.2-.7.8 0 1.4.6 1.4 1.4 0 1.7-2.6 3.3-2.6 3.3z" transform="translate(1 3)"/>
+    </svg><span>mente<b>.</b></span></div>
+    <div class="chip-nivel" id="chipNivel" hidden><small>nível</small><strong id="chipNum">0</strong></div>
+  </header>
+  <main id="tela"></main>
+  <nav class="abas" id="abas" hidden>
+    <button class="aba" data-aba="quiz" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><circle cx="12" cy="17.5" r=".6" fill="currentColor"/><circle cx="12" cy="12" r="9"/></svg>Quiz</button>
+    <button class="aba" data-aba="descobrir" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="3"/><circle cx="12" cy="10" r="3"/><path d="M8 17c1-2 2.4-3 4-3s3 1 4 3"/></svg>Descobrir</button>
+    <button class="aba" data-aba="matches" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Matches<span class="badge" id="badgeMatches" hidden>0</span></button>
+    <button class="aba" data-aba="perfil" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Perfil</button>
+  </nav>
+</div>
+
+<script src="perguntas.js"></script>
+<script src="dificeis.js"></script>
+<script>
+(() => {
+"use strict";
+
+// ---------- Dados fixos ----------
+const CATS = window.MENTE_CATEGORIAS || [];
+const DIF = window.MENTE_DIFICEIS || {};
+
+// Perfis fictícios: [id, nome, sexo, idade, profissão, cidade, nível, passe (null = não aceita), bio]
+const PERFIS = [
+  ["p01","Luana","F",24,"Estudante de Design","Curitiba",0,null,"Começando agora. Café, museus e playlists longas."],
+  ["p02","Caio","M",27,"Barista","São Paulo",0,null,"Faço o melhor flat white da Augusta. Aceito desafios."],
+  ["p03","Bruna","F",26,"Assistente administrativa","Belo Horizonte",1,null,"Pão de queijo é argumento suficiente."],
+  ["p04","Igor","M",29,"Personal trainer","Rio de Janeiro",2,50,"Treino de manhã, samba à noite."],
+  ["p05","Priscila","F",31,"Vendedora","Salvador",3,null,"Praia, dendê e boas risadas."],
+  ["p06","Diego","M",25,"Técnico de TI","Recife",5,50,"Conserto seu computador e talvez seu coração."],
+  ["p07","Yasmin","F",23,"Estudante de Letras","Porto Alegre",6,80,"Leio Clarice no ônibus. Corrijo crase com carinho."],
+  ["p08","Thiago","M",30,"Eletricista","Campinas",8,null,"Sei por que a resistência do chuveiro queima."],
+  ["p09","Natália","F",28,"Fisioterapeuta","Florianópolis",10,100,"Trilha no sábado, vinho no domingo."],
+  ["p10","Rafael","M",33,"Analista de sistemas","Brasília",12,100,"C# de dia, astronomia de noite."],
+  ["p11","Olívia","F",27,"Jornalista","São Paulo",15,120,"Pergunto demais. É profissional."],
+  ["p12","Gustavo","M",31,"Contador","Goiânia",18,null,"Planilhas organizadas, vida nem tanto."],
+  ["p13","Camila","F",29,"Bióloga","Manaus",20,150,"Conheço mais fungos do que pessoas."],
+  ["p14","Henrique","M",35,"Policial civil","Belo Horizonte",25,150,"Faço perguntas melhores que as do quiz."],
+  ["p15","Sofia","F",30,"Professora de inglês","Curitiba",30,150,"Fluent in sarcasm."],
+  ["p16","Eduardo","M",34,"Engenheiro eletricista","Vitória",35,200,"Lei de Ohm é meu idioma do amor."],
+  ["p17","Mariana","F",32,"Psicóloga","Rio de Janeiro",40,200,"Tarô por diversão, terapia por ofício."],
+  ["p18","Vinícius","M",28,"Músico","Salvador",50,150,"Toco violão de 7 cordas e bossa nova."],
+  ["p19","Gabriela","F",33,"Economista","São Paulo",60,250,"Falo de Selic sem dar sono. Juro."],
+  ["p20","Leonardo","M",36,"Professor de história","Recife",70,200,"Sei a data de tudo, menos do seu aniversário (ainda)."],
+  ["p21","Helena","F",34,"Astrônoma","Campinas",80,300,"Mostro Saturno no telescópio no 2º encontro."],
+  ["p22","Marcelo","M",38,"Juiz do trabalho","Porto Alegre",90,400,"CLT, Machado de Assis e churrasco."],
+  ["p23","Isabela","F",31,"Farmacêutica","Belo Horizonte",100,250,"Pesquiso psicodélicos para saúde mental."],
+  ["p24","Felipe","M",37,"Físico","São Carlos",120,300,"Quer saber por que o céu é azul?"],
+  ["p25","Renata","F",35,"Promotora de justiça","Brasília",140,400,"Direta, justa e com bom humor."],
+  ["p26","João","M",40,"Cientista político","Rio de Janeiro",160,300,"Debato política sem brigar."],
+  ["p27","Tatiana","F",36,"Engenheira de software","Florianópolis",180,350,"Angular, React e jiu-jítsu."],
+  ["p28","André","M",42,"Delegado da PF","Brasília",200,500,"Investigo tudo, inclusive bons vinhos."],
+  ["p29","Daniela","F",34,"Astróloga e escritora","São Paulo",230,250,"Ascendente em Escorpião. Você foi avisado."],
+  ["p30","Bruno","M",39,"Neurocientista","Natal",260,500,"Estudo como a mente se apaixona."],
+  ["p31","Juliana","F",37,"Médica cardiologista","São Paulo",300,300,"Cuido de corações por profissão."],
+  ["p32","Lucas","M",41,"Diplomata","Brasília",350,600,"Falo quatro idiomas e ainda erro crase."],
+  ["p33","Fernanda","F",39,"Advogada tributarista","Rio de Janeiro",400,600,"Leio contratos e pessoas."],
+  ["p34","Paula","F",42,"Professora de matemática (doutora)","Belo Horizonte",450,500,"Se a gente der match, a probabilidade foi alta."],
+  ["p35","Ricardo","M",44,"Cirurgião","Curitiba",500,800,"Mãos firmes, papo leve."],
+  ["p36","Elisa","F",40,"Pesquisadora em genética","Campinas",600,800,"Mendel ficaria orgulhoso."],
+  ["p37","Carolina","F",38,"Maestrina","São Paulo",700,700,"Rege orquestra. E a própria vida."],
+  ["p38","Vanessa","F",41,"Desembargadora","Porto Alegre",850,1000,"Sentenças curtas, conversas longas."],
+  ["p39","Otávio","M",45,"Astrofísico","Rio de Janeiro",1000,1000,"Já contei estrelas. Agora conto dias."],
+  ["p40","Beatriz","F",36,"Engenheira aeroespacial","São José dos Campos",1200,1500,"Não é rocket science. Na verdade é."]
+].map(([id, nome, sexo, idade, prof, cidade, nivel, passe, bio], i) => ({ id, nome, sexo, idade, prof, cidade, nivel, passe, bio, hue: (i * 47 + 340) % 360 }));
+const PERFIL = Object.fromEntries(PERFIS.map(p => [p.id, p]));
+
+const RESPOSTAS = [
+  "Oi! Gostei de ver você por aqui 😊", "Haha, verdade. E você, qual categoria mais joga?",
+  "Fiz 9 de 10 em História do Brasil ontem. Duvido você bater.", "Que legal! Me conta mais.",
+  "Adoro gente curiosa.", "Topa um café pra continuar essa conversa?", "Hmm, interessante… e o que você faz da vida?",
+  "Confesso que errei a da resistência do chuveiro 😅", "Tô subindo de nível devagar, mas sempre.",
+  "Você parece divertido(a). Gostei."
+];
+
+// ---------- Estado ----------
+const CHAVE = "mente.estado.v1";
+const PADRAO = () => ({
+  v: 1, perfil: null, nivel: 0, respondidas: 0, porCat: {}, vistas: {},
+  curtidos: [], passados: [], matches: [], novos: [], chats: {}, passes: [],
+  meuPasse: { ativo: true, valor: 150 }, selecao: [], modo: "normal", atualizado: 0
+});
+let S = carregarLocal() || PADRAO();
+let db = null, uid = null, salvarTimer = null;
+
+function carregarLocal() {
+  try { const t = localStorage.getItem(CHAVE); return t ? Object.assign(PADRAO(), JSON.parse(t)) : null; } catch { return null; }
+}
+function salvar() {
+  S.atualizado = Date.now();
+  try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {}
+  clearTimeout(salvarTimer);
+  salvarTimer = setTimeout(salvarNuvem, 800);
+}
+let gravando = false, pendente = false;
+async function salvarNuvem() {
+  if (!db || !uid) return;
+  if (gravando) { pendente = true; return; }
+  gravando = true;
+  try { await db.doc("data/users/" + uid + "/estado").set(JSON.parse(JSON.stringify(S))); } catch (e) { if (e && e.code === "invalid_argument") db = null; }
+  gravando = false;
+  if (pendente) { pendente = false; salvarNuvem(); }
+}
+async function conectarNuvem() {
+  try {
+    if (!window.claude || !window.claude.use) return;
+    const user = await window.claude.use("user");
+    uid = user ? await user.id() : null;
+    if (!uid) return;
+    db = await window.claude.use("db");
+    if (!db) return;
+    const snap = await db.doc("data/users/" + uid + "/estado").get();
+    const remoto = snap.exists ? snap.data() : null;
+    if (remoto && (remoto.atualizado || 0) > (S.atualizado || 0)) {
+      S = Object.assign(PADRAO(), JSON.parse(JSON.stringify(remoto)));
+      try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {}
+      if (!rodada) render();
+    } else if (S.perfil) {
+      salvarNuvem();
+    }
+  } catch {}
+}
+
+// ---------- Utilidades ----------
+const $ = s => document.querySelector(s);
+const tela = $("#tela");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const brl = v => "R$ " + Number(v).toLocaleString("pt-BR");
+const embaralhar = a => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+const iniciais = n => n.split(" ").map(x => x[0]).slice(0, 2).join("").toUpperCase();
+function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); }
+function fundo(p) { return `linear-gradient(150deg, hsl(${p.hue} 45% 38%), hsl(${(p.hue + 40) % 360} 50% 22%))`; }
+function avatarHTML(p, tam) {
+  const eu = p === "eu";
+  const foto = eu ? S.perfil.foto : null;
+  const nome = eu ? S.perfil.nome : p.nome;
+  const bg = foto ? `background-image:url(${foto})` : `background:${eu ? "linear-gradient(150deg, var(--accent), #4a1022)" : fundo(p)}`;
+  return `<div class="avatar" style="width:${tam}px;height:${tam}px;font-size:${Math.round(tam * 0.42)}px;${bg}">${foto ? "" : esc(iniciais(nome))}</div>`;
+}
+function toast(txt) {
+  const t = document.createElement("div"); t.className = "toast entra"; t.textContent = txt;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1800);
+}
+function animarNivel(qtd = 1) {
+  const chip = $("#chipNivel");
+  $("#chipNum").textContent = S.nivel;
+  chip.classList.remove("sobe"); void chip.offsetWidth; chip.classList.add("sobe");
+  const m = document.createElement("span"); m.className = "mais1"; m.textContent = "+" + qtd;
+  chip.appendChild(m); setTimeout(() => m.remove(), 950);
+}
+function folha(html) {
+  const v = document.createElement("div"); v.className = "veu";
+  v.innerHTML = `<div class="folha entra" role="dialog" aria-modal="true">${html}</div>`;
+  v.addEventListener("click", e => { if (e.target === v) v.remove(); });
+  document.body.appendChild(v); return v;
+}
+function interesseOk(p) { const i = S.perfil.interesse; return i === "T" || i === p.sexo; }
+function desbloqueado(p) { return p.nivel <= S.nivel || S.passes.includes(p.id); }
+
+// ---------- Navegação ----------
+let aba = "quiz", rodada = null, chatAberto = null;
+function irPara(a) { aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
+$("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
+
+function render() {
+  pararTimer();
+  if (!S.perfil) { $("#abas").hidden = true; $("#chipNivel").hidden = true; return renderCadastro(); }
+  $("#abas").hidden = false; $("#chipNivel").hidden = false;
+  $("#chipNum").textContent = S.nivel;
+  document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-current", b.dataset.aba === aba ? "page" : "false"));
+  const nb = $("#badgeMatches"); nb.hidden = !S.novos.length; nb.textContent = S.novos.length;
+  if (aba === "quiz") return rodada ? renderPergunta() : renderQuizInicio();
+  if (aba === "descobrir") return renderDescobrir();
+  if (aba === "matches") return chatAberto ? renderChat() : renderMatches();
+  if (aba === "perfil") return renderPerfil();
+}
+
+// ---------- Cadastro ----------
+let rascunho = { nome: "", idade: "", sexo: "", interesse: "", prof: "", cidade: "", bio: "", foto: null };
+function renderCadastro(editando) {
+  const r = editando ? Object.assign({}, S.perfil) : rascunho;
+  if (editando) rascunho = r;
+  const seg = (campo, ops) => `<div class="seg" data-campo="${campo}">${ops.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${r[campo] === v}">${t}</button>`).join("")}</div>`;
+  tela.innerHTML = `
+  <form class="pilha entra" id="fCad" novalidate>
+    ${editando ? `<h2>Editar perfil</h2>` : `<div class="pilha" style="gap:8px;padding-top:8px">
+      <span class="rotulo">Primeiro a mente. Depois o match.</span>
+      <h1>Responda, suba de nível e conheça quem pensa no seu ritmo.</h1>
+      <p class="muted" style="margin:0">Você começa no nível 0. Cada resposta certa vale +1 nível e desbloqueia pessoas do mesmo nível.</p>
+    </div>`}
+    <div class="linha" style="gap:14px">
+      <div id="fotoPrev">${r.foto ? `<div class="avatar" style="width:72px;height:72px;background-image:url(${r.foto})"></div>` : `<div class="avatar" style="width:72px;height:72px;font-size:30px;background:var(--surface-2);color:var(--muted)">+</div>`}</div>
+      <div class="pilha" style="gap:4px">
+        <label class="btn sec" for="fFoto" style="padding:10px 14px">${r.foto ? "Trocar foto" : "Adicionar foto"}</label>
+        <input id="fFoto" type="file" accept="image/*" hidden>
+        <span class="muted" style="font-size:12px">Opcional</span>
+      </div>
+    </div>
+    <div class="campo"><label for="fNome">Nome</label><input id="fNome" value="${esc(r.nome)}" maxlength="30" autocomplete="given-name"></div>
+    <div class="linha" style="flex-wrap:nowrap">
+      <div class="campo" style="flex:1"><label for="fIdade">Idade</label><input id="fIdade" type="number" inputmode="numeric" min="18" max="99" value="${esc(r.idade)}"></div>
+      <div class="campo" style="flex:2"><label for="fCidade">Cidade</label><input id="fCidade" value="${esc(r.cidade)}" maxlength="40"></div>
+    </div>
+    <div class="campo"><label>Eu sou</label>${seg("sexo", [["F", "Mulher"], ["M", "Homem"], ["O", "Outro"]])}</div>
+    <div class="campo"><label>Quero conhecer</label>${seg("interesse", [["F", "Mulheres"], ["M", "Homens"], ["T", "Todos"]])}</div>
+    <div class="campo"><label for="fProf">Profissão</label><input id="fProf" value="${esc(r.prof)}" maxlength="40"></div>
+    <div class="campo"><label for="fBio">Sobre você</label><textarea id="fBio" maxlength="140" placeholder="Uma frase que puxe conversa">${esc(r.bio)}</textarea></div>
+    <div class="erro" id="fErro"></div>
+    <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : "Começar no nível 0"}</button>
+    ${editando ? `<button class="link" type="button" id="fCancelar">Cancelar</button>` : `<p class="aviso">Protótipo: os outros perfis são fictícios e seus dados ficam só com você.</p>`}
+  </form>`;
+  const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, cidade: $("#fCidade").value.trim(), prof: $("#fProf").value.trim(), bio: $("#fBio").value.trim() });
+  tela.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    rascunho[g.dataset.campo] = b.dataset.v;
+    g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  }));
+  $("#fFoto").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { const img = new Image(); img.onload = () => {
+      const lado = 320, c = document.createElement("canvas"); c.width = c.height = lado;
+      const s = Math.min(img.width, img.height); c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, lado, lado);
+      ler(); rascunho.foto = c.toDataURL("image/jpeg", 0.8); renderCadastro(editando);
+    }; img.src = rd.result; };
+    rd.readAsDataURL(f);
+  });
+  if (editando) $("#fCancelar").addEventListener("click", () => irPara("perfil"));
+  $("#fCad").addEventListener("submit", e => {
+    e.preventDefault(); ler();
+    const idade = parseInt(rascunho.idade, 10);
+    let erro = "";
+    if (!rascunho.nome) erro = "Informe seu nome.";
+    else if (!(idade >= 18 && idade <= 99)) erro = "O Mente é só para maiores de 18 anos.";
+    else if (!rascunho.sexo) erro = "Escolha como você se identifica.";
+    else if (!rascunho.interesse) erro = "Escolha quem você quer conhecer.";
+    if (erro) { $("#fErro").textContent = erro; return; }
+    S.perfil = { nome: rascunho.nome, idade, sexo: rascunho.sexo, interesse: rascunho.interesse, prof: rascunho.prof, cidade: rascunho.cidade, bio: rascunho.bio, foto: rascunho.foto };
+    salvar(); irPara(editando ? "perfil" : "quiz");
+  });
+}
+
+// ---------- Quiz ----------
+// Próximo degrau: o menor nível acima do seu que ainda tem gente bloqueada.
+function proximoGrupo() {
+  const presos = PERFIS.filter(p => interesseOk(p) && !desbloqueado(p));
+  if (!presos.length) return null;
+  const nivel = Math.min(...presos.map(p => p.nivel));
+  const pessoas = presos.filter(p => p.nivel === nivel);
+  return { nivel, falta: nivel - S.nivel, pessoas };
+}
+function textoFalta(g) {
+  const n = g.pessoas.length;
+  return `Faltam <b style="color:var(--gold)">+${g.falta} ${g.falta === 1 ? "ponto" : "pontos"}</b> para desbloquear <b style="color:var(--fg)">${n} ${n === 1 ? "pessoa" : "pessoas"}</b>`;
+}
+const ALEATORIO = "aleatorio";
+let selecao = null; // Set com ids de assuntos, ou com ALEATORIO
+function nomeSelecao(ids) {
+  if (ids.includes(ALEATORIO)) return "Aleatório";
+  if (ids.length === 1) return CATS.find(c => c.id === ids[0]).nome;
+  return ids.length + " assuntos";
+}
+function renderQuizInicio() {
+  if (!selecao) selecao = new Set(S.selecao || []);
+  const dobro = S.modo === "dobro";
+  const g = proximoGrupo();
+  const liberados = PERFIS.filter(p => interesseOk(p) && desbloqueado(p)).length;
+  const anterior = PERFIS.filter(p => interesseOk(p) && p.nivel <= S.nivel).reduce((m, p) => Math.max(m, p.nivel), 0);
+  const pct = g ? Math.round(((S.nivel - anterior) / Math.max(1, g.nivel - anterior)) * 100) : 100;
+  const alea = selecao.has(ALEATORIO);
+  const qtd = alea ? CATS.length : selecao.size;
+  const alvo = alea ? "assuntos aleatórios" : qtd === 1 ? "1 assunto" : qtd + " assuntos";
+  tela.innerHTML = `
+  <div class="pilha entra">
+    <section class="placar">
+      <div class="num">${S.nivel}</div>
+      <span class="rotulo">Seu nível</span>
+      <p>${liberados} ${liberados === 1 ? "pessoa liberada" : "pessoas liberadas"} para você</p>
+      ${g ? `<div class="prox"><div class="trilho"><i style="width:${pct}%"></i></div>
+        <span class="muted" style="font-size:13px">${textoFalta(g)} no nível ${g.nivel}.</span></div>` : `<div class="prox muted" style="font-size:13px">Você desbloqueou todo mundo. Impressionante.</div>`}
+    </section>
+    <div class="pilha" style="gap:10px">
+      <h2>Modo</h2>
+      <div class="seg modos">
+        <button type="button" data-modo="normal" aria-pressed="${!dobro}"><b>Normal</b><small>+1 nível por acerto</small></button>
+        <button type="button" data-modo="dobro" aria-pressed="${dobro}"><b>Dobro nível</b><small>perguntas difíceis · +2</small></button>
+      </div>
+    </div>
+    ${true ? `<div class="caixa">
+      <div><strong>Quiz do seu arquivo</strong><div class="muted" style="font-size:13px">Anexe um PDF e o Mente irá criar um quiz com o conteúdo do seu arquivo.</div></div>
+      <label class="btn sec bloco" for="fArq">Anexar arquivo</label>
+      <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
+    </div>` : ""}
+    <div class="pilha" style="gap:10px">
+      <div class="linha" style="justify-content:space-between"><h2>Escolha os assuntos</h2><span class="rotulo">um ou vários</span></div>
+      <div class="cats">
+        <button class="cat aleatorio" type="button" data-cat="${ALEATORIO}" aria-pressed="${alea}"><strong>Aleatório</strong><span>todos os ${CATS.length} assuntos misturados</span></button>
+        ${CATS.map(c => { const pc = S.porCat[c.id] || { r: 0, a: 0 }; return `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="${!alea && selecao.has(c.id)}"><strong>${esc(c.nome)}</strong><span>${pc.r ? `${pc.a}/${pc.r} acertos` : "nova"}</span></button>`; }).join("")}
+      </div>
+      <div class="iniciar">
+        <button class="btn bloco ${dobro ? "ouro" : ""}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${dobro ? " Dobro nível" : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
+        <p class="aviso" style="margin:8px 0 0">As perguntas seguem sem limite até você encerrar.</p>
+      </div>
+    </div>
+  </div>`;
+  const redesenhar = () => { const topo = tela.scrollTop; renderQuizInicio(); tela.scrollTop = topo; tela.firstElementChild.classList.remove("entra"); };
+  tela.querySelectorAll(".modos button").forEach(b => b.addEventListener("click", () => { S.modo = b.dataset.modo; salvar(); redesenhar(); }));
+  tela.querySelectorAll(".cat").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.cat;
+    if (id === ALEATORIO) { selecao = selecao.has(ALEATORIO) ? new Set() : new Set([ALEATORIO]); }
+    else { selecao.delete(ALEATORIO); selecao.has(id) ? selecao.delete(id) : selecao.add(id); }
+    redesenhar();
+  }));
+  $("#comecar").addEventListener("click", () => { S.selecao = [...selecao]; salvar(); iniciarRodada(S.selecao, dobro); });
+  const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
+    const l = [...fa.files]; fa.value = ""; if (!l.length) return;
+    if (!sampleFn && !modoServidor) await prepararClaude();
+    if (!sampleFn && !modoServidor) {
+      const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Claude indisponível aqui</h2>
+        <p style="margin:0">Para criar perguntas do seu arquivo, o app precisa falar com o Claude, e esta tela não liberou isso. Abra o Mente pelo claude.ai ou pelo app do Claude, logado na sua conta, e tente de novo.</p>
+        <p class="aviso" style="margin:0">${esc(diagClaude)}</p><button class="btn bloco" type="button" id="okC">Entendi</button>`);
+      v.querySelector("#okC").addEventListener("click", () => v.remove());
+      return;
+    }
+    quizDoArquivo(l);
+  });
+}
+function iniciarRodada(ids, dobro) {
+  const cats = ids.includes(ALEATORIO) ? CATS : CATS.filter(c => ids.includes(c.id));
+  rodada = { nome: nomeSelecao(ids) + (dobro ? " · Dobro nível" : ""), ids, dobro, cats, n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
+  tela.scrollTop = 0; render();
+}
+// Sorteia a próxima pergunta: alterna os assuntos e não repete até esgotar o banco escolhido.
+function sortearPergunta(r) {
+  if (r.arquivo) {
+    const c = r.cats[0];
+    const livres = c.q.map((_, i) => i).filter(i => !r.usadas.has(i));
+    if (!livres.length) return null;
+    const i = livres[Math.floor(Math.random() * livres.length)]; r.usadas.add(i);
+    const [q, certa, ...e] = c.q[i];
+    return { cat: c, idx: i, chave: null, q, certa, ops: embaralhar([certa, ...e]) };
+  }
+  const banco = c => r.dobro ? (DIF[c.id] || []) : c.q;
+  const chave = c => r.dobro ? c.id + ":d" : c.id;
+  const livres = () => r.cats.map(c => { const v = new Set(S.vistas[chave(c)] || []); return { c, idx: banco(c).map((_, i) => i).filter(i => !v.has(i)) }; }).filter(x => x.idx.length);
+  let disp = livres();
+  if (!disp.length) { r.cats.forEach(c => { S.vistas[chave(c)] = []; }); disp = livres(); }
+  if (!disp.length) return null;
+  let opc = disp.filter(x => x.c !== r.ultimaCat); if (!opc.length) opc = disp;
+  const x = opc[Math.floor(Math.random() * opc.length)];
+  const i = x.idx[Math.floor(Math.random() * x.idx.length)];
+  const [q, certa, ...e] = banco(x.c)[i];
+  r.ultimaCat = x.c;
+  return { cat: x.c, idx: i, chave: chave(x.c), q, certa, ops: embaralhar([certa, ...e]) };
+}
+const segundosPara = q => Math.min(15, Math.max(10, Math.round(10 + (q.length - 35) / 10)));
+let raf = 0, fimTempo = 0, durTempo = 0;
+function pararTimer() { cancelAnimationFrame(raf); raf = 0; }
+function renderPergunta() {
+  const r = rodada;
+  if (r.fim) return renderResultado();
+  if (r.arquivo && !r.atual && r.cats[0].q.length - r.usadas.size <= 3) gerarMais(r);
+  const it = r.atual || (r.atual = sortearPergunta(r));
+  if (!it) {
+    if (r.arquivo && r.gerando) {
+      tela.innerHTML = `<div class="vazio entra"><h2>Criando mais perguntas…</h2><p class="muted" style="margin:0">O Mente está preparando outra leva sobre ${esc(r.cats[0].nome)}.</p><div class="trilho" style="width:100%"><i class="carregando"></i></div><button class="btn sec" type="button" id="encerrar">Encerrar quiz</button></div>`;
+      $("#encerrar").addEventListener("click", () => { rodada.fim = true; render(); });
+      return;
+    }
+    r.fim = true; return renderResultado();
+  }
+  durTempo = segundosPara(it.q) * 1000;
+  tela.innerHTML = `
+  <div class="rodada entra">
+    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.dobro ? ` <span class="tag-dobro">×2</span>` : ""}</span><span class="num">#${r.n + 1} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
+    <div class="tempo" id="tempo"><i id="barra"></i></div>
+    <div class="enunciado">${esc(it.q)}</div>
+    <div class="opcoes">${it.ops.map((o, k) => `<button class="opcao" type="button" data-k="${k}"><kbd>${"ABC"[k]}</kbd><span>${esc(o)}</span></button>`).join("")}</div>
+    <div class="feedback" id="fb" aria-live="polite"></div>
+    <button class="btn sec bloco" type="button" id="encerrar">Encerrar quiz</button>
+  </div>`;
+  tela.querySelectorAll(".opcao").forEach(b => b.addEventListener("click", () => responder(Number(b.dataset.k))));
+  $("#encerrar").addEventListener("click", () => { pararTimer(); rodada.fim = true; render(); });
+  fimTempo = performance.now() + durTempo;
+  const barra = $("#barra"), seg = $("#seg"), trilho = $("#tempo");
+  const tick = agora => {
+    const resta = Math.max(0, fimTempo - agora);
+    barra.style.transform = `scaleX(${resta / durTempo})`;
+    seg.textContent = Math.ceil(resta / 1000);
+    trilho.classList.toggle("alerta", resta < 3000);
+    if (resta <= 0) { raf = 0; responder(-1); return; }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+function responder(k) {
+  const r = rodada; if (!r || r.travado || !r.atual) return;
+  r.travado = true; pararTimer();
+  const it = r.atual;
+  const certo = k >= 0 && it.ops[k] === it.certa;
+  tela.querySelectorAll(".opcao").forEach((b, j) => {
+    b.disabled = true;
+    if (it.ops[j] === it.certa) b.classList.add("certa"); else if (j === k) b.classList.add("errada");
+  });
+  const fb = $("#fb");
+  if (certo) {
+    const pts = r.dobro ? 2 : 1;
+    r.acertos++; r.pontos += pts; S.nivel += pts;
+    fb.className = "feedback ok"; fb.textContent = "Certo! Nível " + S.nivel; animarNivel(pts);
+  } else { fb.className = "feedback no"; fb.textContent = k < 0 ? "Tempo esgotado" : "Errou"; }
+  r.n++; S.respondidas++;
+  if (!r.arquivo) {
+    const pc = S.porCat[it.cat.id] || (S.porCat[it.cat.id] = { r: 0, a: 0 }); pc.r++; if (certo) pc.a++;
+    (S.vistas[it.chave] || (S.vistas[it.chave] = [])).push(it.idx);
+  }
+  salvar();
+  setTimeout(() => { if (rodada !== r || r.fim) return; r.atual = null; r.travado = false; render(); }, certo ? 900 : 1500);
+}
+function renderResultado() {
+  const r = rodada;
+  const liberou = PERFIS.filter(p => interesseOk(p) && p.nivel <= S.nivel && p.nivel > S.nivel - r.pontos);
+  const g = proximoGrupo();
+  tela.innerHTML = `
+  <div class="pilha entra" style="padding-top:8px">
+    <div class="resultado">
+      <span class="rotulo">${esc(r.nome)}</span>
+      <div class="grande">+${r.pontos}</div>
+      <p style="margin:0">${r.acertos} de ${r.n} certas. Agora você está no <b>nível ${S.nivel}</b>.</p>
+      ${liberou.length ? `<p style="margin:0;color:var(--gold)">Novas pessoas desbloqueadas: ${liberou.map(p => esc(p.nome)).join(", ")}</p>` : ""}
+      ${g ? `<p class="muted" style="margin:0;font-size:14px">${textoFalta(g)}.</p>` : ""}
+    </div>
+    <button class="btn bloco ${r.dobro ? "ouro" : ""}" type="button" id="denovo">Jogar de novo</button>
+    <div class="acoes" style="margin-top:0">
+      <button class="btn sec" type="button" id="outra">Trocar assuntos</button>
+      <button class="btn sec" type="button" id="ver">Ver pessoas</button>
+    </div>
+  </div>`;
+  const ids = r.ids, dobro = r.dobro;
+  $("#denovo").addEventListener("click", () => r.arquivo ? iniciarArquivo(r.fonte, dobro, r.cats[0]) : iniciarRodada(ids, dobro));
+  $("#outra").addEventListener("click", () => { rodada = null; render(); });
+  $("#ver").addEventListener("click", () => irPara("descobrir"));
+}
+
+// ---------- Quiz do arquivo (perguntas criadas pelo Claude) ----------
+let sampleFn = null, modoServidor = false, aceitaImagens = false, maxImagens = 1, diagClaude = "código: verificando";
+async function prepararClaude() {
+  try {
+    if (!window.claude || !window.claude.use) {
+      diagClaude = "código: servidor"; modoServidor = true; aceitaImagens = true; maxImagens = 5;
+      if (aba === "quiz" && !rodada && S.perfil) render();
+      return;
+    }
+    const s = await window.claude.use("sample");
+    if (!s) { diagClaude = "código: sample-null"; return; }
+    diagClaude = "ok";
+    sampleFn = s;
+    const lim = await s.limits().catch(() => null);
+    aceitaImagens = !!(lim && lim.images);
+    maxImagens = aceitaImagens ? Math.max(1, lim.images.maxCount || 1) : 1;
+    if (aba === "quiz" && !rodada && S.perfil) render();
+  } catch {}
+}
+const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+let pdfPronto = null;
+function carregarScript(src) {
+  return new Promise((ok, falha) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => falha(new Error("script")); document.head.appendChild(s); });
+}
+function pdfjs() {
+  if (!pdfPronto) pdfPronto = (async () => { await carregarScript(PDFJS + "pdf.worker.min.js"); await carregarScript(PDFJS + "pdf.min.js"); return window.pdfjsLib; })();
+  return pdfPronto;
+}
+const LIMITE_TEXTO = 40000;
+async function textoDoPdf(f) {
+  const lib = await pdfjs();
+  const doc = await lib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+  let t = "";
+  for (let p = 1; p <= Math.min(doc.numPages, 80) && t.length < LIMITE_TEXTO; p++) {
+    const pg = await doc.getPage(p);
+    const c = await pg.getTextContent();
+    t += c.items.map(i => i.str).join(" ") + "\n";
+  }
+  return t;
+}
+async function lerArquivos(lista) {
+  const fs = [...lista];
+  const imgs = fs.filter(f => f.type.startsWith("image/"));
+  if (imgs.length && imgs.length === fs.length) {
+    if (!aceitaImagens) throw new Error("Fotos não estão disponíveis aqui. Envie um PDF ou um arquivo de texto.");
+    return { nome: imgs.length === 1 ? imgs[0].name : imgs.length + " fotos", imagens: imgs.slice(0, maxImagens), texto: "" };
+  }
+  const f = fs.find(x => !x.type.startsWith("image/"));
+  let texto;
+  if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+    try { texto = await textoDoPdf(f); } catch { throw new Error("Não consegui abrir esse PDF."); }
+    if (texto.replace(/\s/g, "").length < 200) throw new Error("Esse PDF parece ser só imagem. Tire fotos das páginas e envie as fotos.");
+  } else if (/\.(docx?|xlsx?|pptx?)$/i.test(f.name)) {
+    throw new Error("Arquivos do Office ainda não são lidos. Salve como PDF e envie de novo.");
+  } else {
+    texto = await f.text();
+  }
+  texto = texto.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, LIMITE_TEXTO);
+  if (texto.length < 200) throw new Error("O arquivo tem pouco texto para criar perguntas.");
+  return { nome: f.name, texto, imagens: [] };
+}
+function promptPerguntas(fonte, dobro, n, evitar) {
+  return [
+    "Crie perguntas de quiz em português do Brasil baseadas SOMENTE no conteúdo " + (fonte.imagens.length ? "das imagens anexadas (fotos de um material de estudo)" : "abaixo") + ".",
+    "Regras:",
+    `- ${n} perguntas, ${dobro ? "difíceis: cobre detalhes, números, nomes e relações do conteúdo" : "de dificuldade fácil a média, sobre as ideias principais"}.`,
+    "- Enunciado curto, até 90 caracteres. Respostas curtas, até 40 caracteres.",
+    "- Exatamente 3 opções por pergunta: a primeira é a correta e as outras duas são erradas mas plausíveis. As três devem ser diferentes.",
+    "- A resposta correta precisa estar clara no conteúdo. Não invente fatos que não estejam nele.",
+    "- Se o conteúdo não render tantas perguntas, crie menos.",
+    evitar.length ? "- Não repita nem reformule estas perguntas já feitas:\n" + evitar.map(q => "  • " + q).join("\n") : "",
+    'Responda apenas com JSON, neste formato: {"titulo": "assunto em até 4 palavras", "perguntas": [["enunciado", "correta", "errada 1", "errada 2"]]}',
+    fonte.texto ? "\nCONTEÚDO:\n\"\"\"\n" + fonte.texto + "\n\"\"\"" : ""
+  ].filter(Boolean).join("\n");
+}
+const CHAVE_CODIGO = "mente.codigo";
+function lerCodigo() { try { return localStorage.getItem(CHAVE_CODIGO) || ""; } catch { return ""; } }
+function salvarCodigo(c) { try { localStorage.setItem(CHAVE_CODIGO, c); } catch {} }
+function imagemBase64(f) {
+  return new Promise((ok, falha) => {
+    const url = URL.createObjectURL(f), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1568 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      ok(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); falha(new Error("Não consegui abrir uma das fotos.")); };
+    img.src = url;
+  });
+}
+async function perguntasDoServidor(fonte, dobro, evitar, signal) {
+  const corpo = { dobro, evitar, texto: fonte.texto || "", imagens: await Promise.all(fonte.imagens.map(imagemBase64)), codigo: lerCodigo() };
+  let r;
+  try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal }); }
+  catch (e) { throw (e && e.name === "AbortError") ? { code: "cancelled" } : { code: "rede" }; }
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) throw { code: "codigo", message: j.erro };
+  if (r.status === 429) throw { code: "rate_limited" };
+  if (!r.ok) throw { code: "servidor", message: j.erro };
+  return j;
+}
+async function gerarPerguntas(fonte, dobro, evitar, signal) {
+  const opts = { modelTier: dobro ? "default" : "quick" };
+  if (signal) opts.signal = signal;
+  if (fonte.imagens.length) opts.images = fonte.imagens;
+  const res = sampleFn ? await sampleFn.json(promptPerguntas(fonte, dobro, 20, evitar), opts) : await perguntasDoServidor(fonte, dobro, evitar, signal);
+  const vistos = new Set(evitar.map(q => q.toLowerCase()));
+  const lista = (res && Array.isArray(res.perguntas) ? res.perguntas : []).filter(p =>
+    Array.isArray(p) && p.length === 4 && p.every(x => typeof x === "string" && x.trim()) &&
+    new Set(p.slice(1).map(x => x.trim().toLowerCase())).size === 3 && !vistos.has(p[0].trim().toLowerCase())
+  ).map(p => p.map(x => x.trim()));
+  return { titulo: (res && typeof res.titulo === "string" && res.titulo.trim()) ? res.titulo.trim().slice(0, 40) : "Seu arquivo", perguntas: lista };
+}
+function mensagemErroClaude(e) {
+  const c = e && e.code;
+  if (c === "servidor") return e.message || "O servidor falhou. Tente de novo.";
+  if (c === "rede") return "Sem conexão com o servidor. Verifique a internet e tente de novo.";
+  if (c === "codigo") return "Código de acesso inválido.";
+  if (c === "not_granted" || c === "sampling_disabled" || c === "not_declared" || c === "capability_disabled" || c === "capability_removed") return "O uso do Claude não foi permitido nesta página.";
+  if (c === "rate_limited") return "Muitos pedidos agora. Tente de novo em alguns minutos.";
+  if (c === "session_expired") return "Sua sessão no Claude expirou. Entre de novo e tente outra vez.";
+  if (c === "prompt_too_large") return "O arquivo é grande demais. Tente um trecho menor.";
+  if (c === "image_rejected" || c === "images_unavailable") return "Não consegui usar essas fotos. Tente outras ou envie um PDF.";
+  if (c === "refused") return "O Claude não gerou perguntas com esse conteúdo. Tente outro arquivo.";
+  if (c === "invalid_json" || c === "empty_completion") return "Não consegui montar perguntas com esse arquivo. Tente de novo ou use outro.";
+  return (e && e.message && !c) ? e.message : "Falha ao criar as perguntas. Tente de novo.";
+}
+async function quizDoArquivo(lista) {
+  const dobro = S.modo === "dobro";
+  const ctl = new AbortController();
+  const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2 id="arqTitulo">Lendo o arquivo…</h2>
+    <p class="muted" style="margin:0" id="arqMsg">Isso leva alguns segundos.</p>
+    <div class="trilho"><i class="carregando"></i></div>
+    <button class="link" type="button" id="arqCancelar">Cancelar</button>`);
+  let cancelado = false;
+  v.querySelector("#arqCancelar").addEventListener("click", () => { cancelado = true; ctl.abort(); v.remove(); });
+  const erro = msg => {
+    if (cancelado) return;
+    v.querySelector(".folha").innerHTML = `<span class="rotulo">Quiz do seu arquivo</span><h2>Não deu certo</h2><p style="margin:0">${esc(msg)}</p><button class="btn bloco" type="button" id="arqOk">Entendi</button>`;
+    v.querySelector("#arqOk").addEventListener("click", () => v.remove());
+  };
+  let fonte;
+  try { fonte = await lerArquivos(lista); } catch (e) { return erro(e.message); }
+  if (cancelado) return;
+  v.querySelector("#arqTitulo").textContent = "Criando perguntas…";
+  v.querySelector("#arqMsg").textContent = `O Mente está lendo ${fonte.nome} e montando ${dobro ? "perguntas difíceis" : "as perguntas"}. Pode levar até um minuto.${sampleFn ? " Na primeira vez o Claude pede sua permissão." : ""}`;
+  let lote;
+  try { lote = await gerarPerguntas(fonte, dobro, [], ctl.signal); } catch (e) {
+    if (e && e.code === "cancelled") return;
+    if (e && e.code === "codigo" && !cancelado) {
+      const fl = v.querySelector(".folha");
+      fl.innerHTML = `<span class="rotulo">Quiz do seu arquivo</span><h2>Código de acesso</h2>
+        <p class="muted" style="margin:0">${lerCodigo() ? "Esse código não confere." : "Este recurso usa a conta do dono do app. Peça o código para ele."}</p>
+        <div class="campo"><label for="cAcesso">Código</label><input id="cAcesso" autocomplete="off"></div>
+        <button class="btn bloco" type="button" id="cOk">Continuar</button><button class="link" type="button" id="cNao">Cancelar</button>`;
+      fl.querySelector("#cNao").addEventListener("click", () => v.remove());
+      fl.querySelector("#cOk").addEventListener("click", () => { const c = fl.querySelector("#cAcesso").value.trim(); if (!c) return; salvarCodigo(c); v.remove(); quizDoArquivo(lista); });
+      return;
+    }
+    return erro(mensagemErroClaude(e));
+  }
+  if (cancelado) return;
+  if (lote.perguntas.length < 3) return erro("O arquivo não rendeu perguntas suficientes. Tente um material com mais conteúdo.");
+  v.remove();
+  iniciarArquivo(fonte, dobro, { id: "arquivo", nome: lote.titulo, arquivo: true, q: lote.perguntas });
+}
+function iniciarArquivo(fonte, dobro, cat) {
+  rodada = { nome: cat.nome + (dobro ? " · Dobro nível" : ""), ids: [], dobro, cats: [cat], arquivo: true, fonte, usadas: new Set(), gerando: false, esgotou: false,
+    n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
+  tela.scrollTop = 0; render();
+}
+async function gerarMais(r) {
+  if (r.gerando || r.esgotou || (!sampleFn && !modoServidor)) return;
+  r.gerando = true;
+  const cat = r.cats[0];
+  try {
+    const lote = await gerarPerguntas(r.fonte, r.dobro, cat.q.map(p => p[0]).slice(-80));
+    if (lote.perguntas.length) cat.q.push(...lote.perguntas); else r.esgotou = true;
+  } catch { r.esgotou = true; }
+  r.gerando = false;
+  if (rodada === r && !r.atual && !r.fim && aba === "quiz") render();
+}
+
+// ---------- Descobrir ----------
+const pulados = new Set();
+function fila() {
+  const fora = new Set([...S.curtidos, ...S.passados, ...pulados]);
+  const pool = PERFIS.filter(p => interesseOk(p) && !fora.has(p.id));
+  const livres = pool.filter(desbloqueado).sort((a, b) => b.nivel - a.nivel);
+  const presos = pool.filter(p => !desbloqueado(p)).sort((a, b) => a.nivel - b.nivel);
+  const out = [];
+  while (livres.length || presos.length) {
+    if (livres.length) out.push(livres.shift());
+    if (livres.length) out.push(livres.shift());
+    if (presos.length) out.push(presos.shift());
+  }
+  return out;
+}
+function renderDescobrir() {
+  const p = fila()[0];
+  if (!p) {
+    const g = proximoGrupo();
+    tela.innerHTML = `<div class="vazio entra"><h2>Por enquanto é só</h2>
+      <p class="muted" style="margin:0">Você já viu todo mundo disponível. Responda mais perguntas para subir de nível e desbloquear novas pessoas.</p>
+      ${g ? `<p class="muted" style="margin:0">${textoFalta(g)}.</p>` : ""}
+      <button class="btn" type="button" id="irQuiz">Jogar um quiz</button>
+      ${pulados.size ? `<button class="link" type="button" id="rever">Rever perfis bloqueados</button>` : ""}</div>`;
+    $("#irQuiz").addEventListener("click", () => irPara("quiz"));
+    const rv = $("#rever"); if (rv) rv.addEventListener("click", () => { pulados.clear(); render(); });
+    return;
+  }
+  const livre = desbloqueado(p);
+  tela.innerHTML = `
+  <div class="entra">
+    <article class="cartao ${livre ? "" : "bloqueado"}">
+      <div class="foto" style="background:${fundo(p)}">${esc(iniciais(p.nome))}${livre ? `<span class="nivel-tag">nível ${p.nivel}</span>` : ""}</div>
+      <div class="info">
+        <div class="nome">${esc(livre ? p.nome : "••••••")} <span>${p.idade}</span></div>
+        <div class="muted">${esc(p.prof)} · ${esc(p.cidade)}</div>
+        ${livre ? `<p class="bio">${esc(p.bio)}</p>` : ""}
+      </div>
+      ${livre ? "" : `<div class="cadeado">
+        <span class="rotulo">Perfil bloqueado</span>
+        <div class="grande">nível ${p.nivel}</div>
+        <p style="margin:0">Faltam ${p.nivel - S.nivel} acertos para desbloquear.</p>
+        ${p.passe ? `<button class="btn ouro" type="button" id="passe">Passe Direto · ${brl(p.passe)}</button>` : `<span class="muted" style="font-size:13px">Este perfil não aceita Passe Direto.</span>`}
+      </div>`}
+    </article>
+    <div class="acoes">
+      ${livre ? `<button class="btn sec" type="button" id="passar">Passar</button><button class="btn" type="button" id="curtir">Curtir</button>`
+              : `<button class="btn sec" type="button" id="pular" style="grid-column:1/-1">Ver próximo</button>`}
+    </div>
+  </div>`;
+  if (livre) {
+    $("#passar").addEventListener("click", () => { S.passados.push(p.id); salvar(); render(); });
+    $("#curtir").addEventListener("click", () => curtir(p));
+  } else {
+    $("#pular").addEventListener("click", () => { pulados.add(p.id); render(); });
+    const bp = $("#passe"); if (bp) bp.addEventListener("click", () => abrirPasse(p));
+  }
+}
+function abrirPasse(p) {
+  const v = folha(`
+    <span class="rotulo">Passe Direto</span>
+    <h2>Apareça para ${esc(p.nome)}, nível ${p.nivel}</h2>
+    <p class="muted" style="margin:0">${esc(p.nome)} definiu ${brl(p.passe)} para ser vista por quem está abaixo do nível dela. Pagar libera o perfil e mostra você para ela. O match continua sendo escolha dela.</p>
+    <div class="caixa" style="flex-direction:row;justify-content:space-between;align-items:center"><span>Valor</span><b style="font-family:var(--f-mono);color:var(--gold);font-size:20px">${brl(p.passe)}</b></div>
+    <button class="btn ouro bloco" type="button" id="pagar">Pagar ${brl(p.passe)} (simulação)</button>
+    <button class="link" type="button" id="cancelar">Agora não</button>
+    <p class="aviso">Protótipo: nenhum valor é cobrado.</p>`);
+  v.querySelector("#cancelar").addEventListener("click", () => v.remove());
+  v.querySelector("#pagar").addEventListener("click", () => { S.passes.push(p.id); salvar(); v.remove(); toast("Perfil desbloqueado"); render(); });
+}
+function curtir(p) {
+  S.curtidos.push(p.id);
+  const chance = S.passes.includes(p.id) ? 0.4 : 0.6;
+  const deu = (hash(p.id + S.perfil.nome) % 100) / 100 < chance;
+  if (deu) { S.matches.unshift(p.id); S.novos.push(p.id); S.chats[p.id] = []; }
+  salvar();
+  if (!deu) { toast("Curtida enviada"); return render(); }
+  const m = document.createElement("div"); m.className = "match-tela entra";
+  m.innerHTML = `<div class="duo">${avatarHTML("eu", 104)}${avatarHTML(p, 104)}</div><h1>Deu match!</h1>
+    <p style="margin:0;max-width:30ch">Você e ${esc(p.nome)} curtiram um ao outro.</p>
+    <button class="btn bloco" style="max-width:320px" type="button" id="mChat">Mandar mensagem</button>
+    <button class="link" type="button" id="mVoltar">Continuar descobrindo</button>`;
+  document.body.appendChild(m);
+  m.querySelector("#mChat").addEventListener("click", () => { m.remove(); aba = "matches"; abrirChat(p.id); });
+  m.querySelector("#mVoltar").addEventListener("click", () => { m.remove(); render(); });
+}
+
+// ---------- Matches e chat ----------
+function renderMatches() {
+  if (!S.matches.length) {
+    tela.innerHTML = `<div class="vazio entra"><h2>Nenhum match ainda</h2><p class="muted" style="margin:0">Curta pessoas em Descobrir. Quando for recíproco, a conversa aparece aqui.</p><button class="btn" type="button" id="irD">Descobrir pessoas</button></div>`;
+    $("#irD").addEventListener("click", () => irPara("descobrir"));
+    return;
+  }
+  tela.innerHTML = `<div class="pilha entra" style="gap:6px"><h2>Matches</h2><div class="lista">${S.matches.map(id => {
+    const p = PERFIL[id], ch = S.chats[id] || [], ult = ch[ch.length - 1], novo = S.novos.includes(id);
+    return `<button class="item" type="button" data-id="${id}">${avatarHTML(p, 52)}<div class="txt"><strong>${esc(p.nome)}${novo ? ` <span style="display:inline;color:var(--accent);font-size:12px">· novo</span>` : ""}</strong><span>${ult ? esc((ult.de === "eu" ? "Você: " : "") + ult.t) : esc(p.prof) + " · nível " + p.nivel}</span></div></button>`;
+  }).join("")}</div></div>`;
+  tela.querySelectorAll(".item").forEach(b => b.addEventListener("click", () => abrirChat(b.dataset.id)));
+}
+function abrirChat(id) { chatAberto = id; S.novos = S.novos.filter(x => x !== id); salvar(); render(); }
+let digitando = null;
+function renderChat() {
+  const p = PERFIL[chatAberto], ch = S.chats[chatAberto] || (S.chats[chatAberto] = []);
+  tela.innerHTML = `
+  <div class="chat">
+    <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button>${avatarHTML(p, 40)}<div><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc(p.prof)} · nível ${p.nivel}</div></div></div>
+    <div class="msgs" id="msgs">${ch.length ? ch.map(m => `<div class="msg ${m.de === "eu" ? "eu" : "ela"}">${esc(m.t)}</div>`).join("") : `<p class="muted" style="text-align:center;margin:auto 0">Diga oi para ${esc(p.nome)}. Uma pergunta do quiz é um bom começo.</p>`}
+      ${digitando === chatAberto ? `<div class="digitando">${esc(p.nome)} está digitando…</div>` : ""}</div>
+    <form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>
+  </div>`;
+  const ms = $("#msgs"); ms.scrollTop = ms.scrollHeight;
+  $("#voltar").addEventListener("click", () => { chatAberto = null; render(); });
+  $("#fMsg").addEventListener("submit", e => {
+    e.preventDefault();
+    const t = $("#txtMsg").value.trim(); if (!t) return;
+    ch.push({ de: "eu", t }); salvar();
+    const alvo = chatAberto; digitando = alvo; render(); $("#txtMsg").focus();
+    setTimeout(() => {
+      const c = S.chats[alvo]; const n = c.filter(m => m.de !== "eu").length;
+      c.push({ de: "ela", t: RESPOSTAS[(hash(alvo) + n) % RESPOSTAS.length] });
+      digitando = null; salvar();
+      if (chatAberto === alvo && aba === "matches") render();
+      else if (!S.novos.includes(alvo)) { S.novos.push(alvo); salvar(); render(); }
+    }, 1400 + Math.random() * 1600);
+  });
+}
+
+// ---------- Perfil ----------
+function renderPerfil() {
+  const pf = S.perfil;
+  const acertos = Object.values(S.porCat).reduce((s, c) => s + c.a, 0);
+  const pct = S.respondidas ? Math.round(acertos / S.respondidas * 100) : 0;
+  const melhor = Object.entries(S.porCat).filter(([, c]) => c.r >= 5).sort((a, b) => b[1].a / b[1].r - a[1].a / a[1].r)[0];
+  const melhorNome = melhor ? CATS.find(c => c.id === melhor[0]).nome : "—";
+  tela.innerHTML = `
+  <div class="pilha entra">
+    <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${esc([pf.prof, pf.cidade].filter(Boolean).join(" · ") || "Complete seu perfil")}</div></div></div>
+    ${pf.bio ? `<p style="margin:0">${esc(pf.bio)}</p>` : ""}
+    <div class="stats">
+      <div class="stat"><b style="color:var(--gold)">${S.nivel}</b><span>nível</span></div>
+      <div class="stat"><b>${S.respondidas}</b><span>respondidas</span></div>
+      <div class="stat"><b>${pct}%</b><span>de acerto</span></div>
+    </div>
+    <div class="caixa"><div class="chave"><div><strong>Melhor categoria</strong><div class="muted" style="font-size:13px">Com pelo menos 5 respostas</div></div><b>${esc(melhorNome)}</b></div></div>
+    <div class="caixa">
+      <div class="chave"><div><strong>Meu Passe Direto</strong><div class="muted" style="font-size:13px">Quem está abaixo do seu nível pode pagar para aparecer para você.</div></div>
+        <button class="toggle" type="button" role="switch" id="tPasse" aria-checked="${S.meuPasse.ativo}" aria-label="Aceitar Passe Direto"></button></div>
+      <div class="campo" ${S.meuPasse.ativo ? "" : "hidden"} id="cPasse"><label for="vPasse">Valor (R$)</label><input id="vPasse" type="number" inputmode="numeric" min="10" step="10" value="${S.meuPasse.valor}"></div>
+    </div>
+    <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados</div></div><b style="font-family:var(--f-mono)">${S.matches.length}</b></div></div>
+    <button class="btn sec bloco" type="button" id="editar">Editar perfil</button>
+    <button class="link" type="button" id="zerar">Recomeçar do zero</button>
+  </div>`;
+  $("#tPasse").addEventListener("click", () => { S.meuPasse.ativo = !S.meuPasse.ativo; salvar(); render(); });
+  const vp = $("#vPasse"); if (vp) vp.addEventListener("change", () => { const n = Math.max(10, Math.round(Number(vp.value) || 0)); S.meuPasse.valor = n; vp.value = n; salvar(); toast("Valor salvo"); });
+  $("#editar").addEventListener("click", () => renderCadastro(true));
+  $("#zerar").addEventListener("click", () => {
+    const v = folha(`<h2>Recomeçar do zero?</h2><p class="muted" style="margin:0">Seu nível, matches e conversas serão apagados. Isso não pode ser desfeito.</p>
+      <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar e recomeçar</button><button class="link" type="button" id="nao">Cancelar</button>`);
+    v.querySelector("#nao").addEventListener("click", () => v.remove());
+    v.querySelector("#sim").addEventListener("click", () => { v.remove(); S = PADRAO(); rascunho = { nome: "", idade: "", sexo: "", interesse: "", prof: "", cidade: "", bio: "", foto: null }; pulados.clear(); selecao = null; salvar(); aba = "quiz"; render(); });
+  });
+}
+
+// ---------- Início ----------
+render();
+conectarNuvem();
+prepararClaude();
+})();
+</script>
