@@ -218,6 +218,10 @@ h2 { font-size: 21px; line-height: 1.2; }
 
 @keyframes entra { from { opacity: 0.4; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .entra { animation: entra .25s ease-out; }
+.placar-desafio { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+.placar-desafio div { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.placar-desafio b { font-family: var(--f-mono); font-size: 40px; line-height: 1; color: var(--gold); }
+.placar-desafio span { font-size: 13px; color: var(--muted); }
 .seg.quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .seg.quatro button { padding-inline: 2px; font-size: 13px; }
 .aba.desligada { opacity: .4; }
@@ -413,7 +417,7 @@ const CIDADES = {
   "São Carlos": [-22.0175, -47.8909], "São José dos Campos": [-23.1896, -45.8841], "São Paulo": [-23.5505, -46.6333],
   "Vitória": [-20.3155, -40.3128]
 };
-const semAcento = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+const semAcento = t => String(t || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
 const COORD = Object.fromEntries(Object.entries(CIDADES).map(([n, c]) => [semAcento(n), c]));
 const RAIOS = [5, 10, 25, 50, 100, 250, 500, null];
 function meuLocal() {
@@ -497,18 +501,24 @@ function renderSemMatch() {
 }
 
 // ---------- Navegação ----------
-let aba = "quiz", rodada = null, chatAberto = null;
+let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
 function irPara(a) { aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
 $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
 
 function render() {
   pararTimer();
-  if (!S.perfil) { $("#abas").hidden = true; $("#chipNivel").hidden = true; return renderCadastro(); }
+  if (!S.perfil) {
+    $("#abas").hidden = true; $("#chipNivel").hidden = !(rodada && rodada.desafio); $("#chipNum").textContent = S.nivel;
+    if (desafioAberto) return renderDesafioIntro();
+    if (rodada && rodada.desafio) return renderPergunta();
+    return renderCadastro();
+  }
   $("#abas").hidden = false; $("#chipNivel").hidden = false;
   $("#chipNum").textContent = S.nivel;
   document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-current", b.dataset.aba === aba ? "page" : "false"));
   document.querySelectorAll('.aba[data-aba="descobrir"], .aba[data-aba="matches"]').forEach(b => b.classList.toggle("desligada", semMatch()));
   const nb = $("#badgeMatches"); nb.hidden = !S.novos.length || semMatch(); nb.textContent = S.novos.length;
+  if (desafioAberto && !rodada) return renderDesafioIntro();
   if ((aba === "descobrir" || aba === "matches") && semMatch()) return renderSemMatch();
   if (aba === "quiz") return rodada ? renderPergunta() : renderQuizInicio();
   if (aba === "descobrir") return renderDescobrir();
@@ -527,7 +537,7 @@ function renderCadastro(editando) {
     ${editando ? `<h2>Editar perfil</h2>` : `<div class="pilha" style="gap:8px;padding-top:8px">
       <span class="rotulo">Primeiro a mente. Depois o match.</span>
       <h1>Responda, suba de nível e conheça quem pensa no seu ritmo.</h1>
-      <p class="muted" style="margin:0">Você começa no nível 0. Cada resposta certa vale +1 nível e desbloqueia pessoas do mesmo nível.</p>
+      <p class="muted" style="margin:0">${S.nivel ? `Você já está no nível ${S.nivel}.` : "Você começa no nível 0."} Cada resposta certa vale +1 nível e desbloqueia pessoas do mesmo nível.</p>
     </div>`}
     <div class="linha" style="gap:14px">
       <div id="fotoPrev">${r.foto ? `<div class="avatar" style="width:72px;height:72px;background-image:url(${r.foto})"></div>` : `<div class="avatar" style="width:72px;height:72px;font-size:30px;background:var(--surface-2);color:var(--muted)">+</div>`}</div>
@@ -548,7 +558,7 @@ function renderCadastro(editando) {
     <div class="campo"><label for="fProf">Profissão</label><input id="fProf" value="${esc(r.prof)}" maxlength="40"></div>
     <div class="campo"><label for="fBio">Sobre você</label><textarea id="fBio" maxlength="140" placeholder="Uma frase que puxe conversa">${esc(r.bio)}</textarea></div>
     <div class="erro" id="fErro"></div>
-    <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : "Começar no nível 0"}</button>
+    <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : `Começar no nível ${S.nivel}`}</button>
     ${editando ? `<button class="link" type="button" id="fCancelar">Cancelar</button>` : `<p class="aviso">Protótipo: os outros perfis são fictícios e seus dados ficam só com você.</p>`}
   </form>`;
   const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, cidade: $("#fCidade").value.trim(), prof: $("#fProf").value.trim(), bio: $("#fBio").value.trim() });
@@ -675,13 +685,17 @@ function iniciarRodada(ids, mult) {
 }
 // Sorteia a próxima pergunta: alterna os assuntos e não repete até esgotar o banco escolhido.
 function sortearPergunta(r) {
+  if (r.desafio) {
+    const pd = r.fila[r.pos++];
+    return pd ? { cat: pd.cat, idx: pd.idx, chave: null, ref: pd.ref, q: pd.q, certa: pd.certa, ops: embaralhar([pd.certa, ...pd.erradas]) } : null;
+  }
   if (r.arquivo) {
     const c = r.cats[0];
     const livres = c.q.map((_, i) => i).filter(i => !r.usadas.has(i));
     if (!livres.length) return null;
     const i = livres[Math.floor(Math.random() * livres.length)]; r.usadas.add(i);
     const [q, certa, ...e] = c.q[i];
-    return { cat: c, idx: i, chave: null, q, certa, ops: embaralhar([certa, ...e]) };
+    return { cat: c, idx: i, chave: null, ref: c.q[i], q, certa, ops: embaralhar([certa, ...e]) };
   }
   const banco = c => r.mult === 3 ? (MDIF[c.id] || []) : r.mult === 2 ? (DIF[c.id] || []) : c.q;
   const chave = c => r.mult === 3 ? c.id + ":t" : r.mult === 2 ? c.id + ":d" : c.id;
@@ -694,7 +708,7 @@ function sortearPergunta(r) {
   const i = x.idx[Math.floor(Math.random() * x.idx.length)];
   const [q, certa, ...e] = banco(x.c)[i];
   r.ultimaCat = x.c;
-  return { cat: x.c, idx: i, chave: chave(x.c), q, certa, ops: embaralhar([certa, ...e]) };
+  return { cat: x.c, idx: i, chave: chave(x.c), ref: [x.c.id, i], q, certa, ops: embaralhar([certa, ...e]) };
 }
 const segundosPara = q => Math.min(15, Math.max(10, Math.round(10 + (q.length - 35) / 10)));
 let raf = 0, fimTempo = 0, durTempo = 0;
@@ -715,7 +729,7 @@ function renderPergunta() {
   durTempo = segundosPara(it.q) * 1000;
   tela.innerHTML = `
   <div class="rodada entra">
-    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.mult > 1 ? ` <span class="tag-dobro">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
+    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.mult > 1 ? ` <span class="tag-dobro">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1}${r.desafio ? " de " + r.fila.length : ""} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
     <div class="tempo" id="tempo"><i id="barra"></i></div>
     <div class="enunciado">${esc(it.q)}</div>
     <div class="opcoes">${it.ops.map((o, k) => `<button class="opcao" type="button" data-k="${k}"><kbd>${"ABC"[k]}</kbd><span>${esc(o)}</span></button>`).join("")}</div>
@@ -752,7 +766,8 @@ function responder(k) {
     fb.className = "feedback ok"; fb.textContent = "Certo! Nível " + S.nivel; animarNivel(pts);
   } else { fb.className = "feedback no"; fb.textContent = k < 0 ? "Tempo esgotado" : "Errou"; }
   r.n++; S.respondidas++;
-  if (!r.arquivo) {
+  (r.hist || (r.hist = [])).push(it.ref);
+  if (!r.arquivo && !r.desafio) {
     const pc = S.porCat[it.cat.id] || (S.porCat[it.cat.id] = { r: 0, a: 0 }); pc.r++; if (certo) pc.a++;
     (S.vistas[it.chave] || (S.vistas[it.chave] = [])).push(it.idx);
   }
@@ -761,6 +776,7 @@ function responder(k) {
 }
 function renderResultado() {
   const r = rodada;
+  if (r.desafio) return renderResultadoDesafio();
   const liberou = PERFIS.filter(p => elegivel(p) && p.nivel <= S.nivel && p.nivel > S.nivel - r.pontos);
   const g = proximoGrupo();
   tela.innerHTML = `
@@ -773,6 +789,7 @@ function renderResultado() {
       ${g ? `<p class="muted" style="margin:0;font-size:14px">${textoFalta(g)}.</p>` : ""}
     </div>
     <button class="btn bloco ${r.mult > 1 ? "ouro" : ""}" type="button" id="denovo">Jogar de novo</button>
+    ${r.n ? `<button class="btn sec bloco" type="button" id="desafiar">Desafiar um amigo</button>` : ""}
     <div class="acoes" style="margin-top:0">
       <button class="btn sec" type="button" id="outra">Trocar assuntos</button>
       <button class="btn sec" type="button" id="ver">Ver pessoas</button>
@@ -782,7 +799,122 @@ function renderResultado() {
   $("#denovo").addEventListener("click", () => r.arquivo ? iniciarArquivo(r.fonte, mult, r.cats[0]) : iniciarRodada(ids, mult));
   $("#outra").addEventListener("click", () => { rodada = null; render(); });
   $("#ver").addEventListener("click", () => irPara("descobrir"));
+  const bd = $("#desafiar"); if (bd) bd.addEventListener("click", () => compartilharDesafio(r));
 }
+
+// ---------- Desafio por link ----------
+// O link leva as perguntas respondidas (referência ao banco, ou o texto no quiz do arquivo) e a nota de quem desafiou.
+function codificar(obj) {
+  let bin = "";
+  new TextEncoder().encode(JSON.stringify(obj)).forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function decodificar(txt) {
+  const b = txt.replace(/-/g, "+").replace(/_/g, "/");
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b + "===".slice((b.length + 3) % 4)), c => c.charCodeAt(0))));
+}
+const textoCurto = (x, n) => typeof x === "string" ? x.trim().slice(0, n) : "";
+function resolverDesafio(d) {
+  if (d.f) {
+    const cat = { id: "arquivo", nome: d.f };
+    return d.q.map(p => Array.isArray(p) && p.length === 4 ? p.map(x => textoCurto(x, 200)) : null)
+      .filter(p => p && p.every(Boolean) && new Set(p.slice(1)).size === 3)
+      .map(p => ({ cat, idx: null, ref: p, q: p[0], certa: p[1], erradas: p.slice(2) }));
+  }
+  const banco = d.m === 3 ? MDIF : d.m === 2 ? DIF : null;
+  return d.q.map(x => {
+    if (!Array.isArray(x)) return null;
+    const [cid, i] = x, c = CATS.find(k => k.id === cid);
+    const pg = c && Number.isInteger(i) && (banco ? (banco[cid] || [])[i] : c.q[i]);
+    return pg ? { cat: c, idx: i, ref: [cid, i], q: pg[0], certa: pg[1], erradas: pg.slice(2) } : null;
+  }).filter(Boolean);
+}
+function lerDesafio() {
+  const m = location.hash.match(/^#desafio=([A-Za-z0-9_-]+)$/);
+  if (!m) return null;
+  try {
+    const d = decodificar(m[1]);
+    if (!d || !Array.isArray(d.q)) return null;
+    const mult = [1, 2, 3].includes(d.m) ? d.m : 1;
+    const fila = resolverDesafio({ m: mult, f: textoCurto(d.f, 40), q: d.q.slice(0, 40) });
+    if (!fila.length) return null;
+    const t = Math.min(Math.max(0, d.t | 0), 999);
+    return { nome: textoCurto(d.n, 30) || "Alguém", m: mult, f: textoCurto(d.f, 40), t, a: Math.min(Math.max(0, d.a | 0), t), fila };
+  } catch { return null; }
+}
+function limparLinkDesafio() { try { history.replaceState(null, "", location.pathname + location.search); } catch {} }
+async function compartilharDesafio(r) {
+  const titulo = r.arquivo ? r.cats[0].nome : r.desafio && r.desafio.f;
+  const d = { v: 1, n: S.perfil ? S.perfil.nome : "Um amigo", m: r.mult, a: r.acertos, t: r.n, q: r.hist };
+  if (titulo) d.f = titulo;
+  const url = location.href.split("#")[0] + "#desafio=" + codificar(d);
+  const texto = `${d.n} fez ${r.acertos} de ${r.n} no Mente${sufixo(r.mult)}. Duvido você bater!`;
+  if (navigator.share) {
+    try { await navigator.share({ title: "Desafio no Mente", text: texto, url }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const v = folha(`<span class="rotulo">Desafiar um amigo</span><h2>Mande este link</h2>
+    <p class="muted" style="margin:0">${esc(texto)}</p>
+    <div class="campo"><input id="linkD" readonly value="${esc(url)}" aria-label="Link do desafio"></div>
+    <button class="btn bloco" type="button" id="copiarD">Copiar link</button>
+    <button class="link" type="button" id="fecharD">Fechar</button>`);
+  const campo = v.querySelector("#linkD");
+  v.querySelector("#fecharD").addEventListener("click", () => v.remove());
+  v.querySelector("#copiarD").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(texto + " " + url); toast("Link copiado"); }
+    catch { campo.select(); try { document.execCommand("copy"); toast("Link copiado"); } catch { toast("Selecione e copie o link"); } }
+  });
+}
+function renderDesafioIntro() {
+  const d = desafioAberto;
+  const nomes = [...new Set(d.fila.map(x => x.cat.nome))];
+  const assunto = d.f || (nomes.length === 1 ? nomes[0] : "assuntos variados");
+  tela.innerHTML = `
+  <div class="pilha entra" style="padding-top:8px">
+    <div class="resultado">
+      <span class="rotulo">Desafio${d.m > 1 ? " · " + modoDe(d.m).nome : ""}</span>
+      <h1>${esc(d.nome)} te desafiou</h1>
+      <div class="grande">${d.a}/${d.t}</div>
+      <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${d.m} ${d.m === 1 ? "nível" : "níveis"}.</p>
+    </div>
+    <button class="btn bloco ${d.m > 1 ? "ouro" : ""}" type="button" id="aceitarD">Aceitar desafio</button>
+    <button class="link" type="button" id="recusarD">Agora não</button>
+  </div>`;
+  $("#aceitarD").addEventListener("click", () => iniciarDesafio(d));
+  $("#recusarD").addEventListener("click", () => { desafioAberto = null; limparLinkDesafio(); render(); });
+}
+function iniciarDesafio(d) {
+  desafioAberto = null; limparLinkDesafio();
+  aba = "quiz";
+  rodada = { nome: "Desafio de " + d.nome + sufixo(d.m), ids: [], mult: d.m, desafio: d, fila: d.fila, pos: 0, cats: [], hist: [],
+    n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
+  tela.scrollTop = 0; render();
+}
+function renderResultadoDesafio() {
+  const r = rodada, d = r.desafio;
+  const veredito = r.acertos > d.a ? "Você venceu!" : r.acertos === d.a ? "Empatou!" : `${d.nome} venceu`;
+  tela.innerHTML = `
+  <div class="pilha entra" style="padding-top:8px">
+    <div class="resultado">
+      <span class="rotulo">${esc(r.nome)}</span>
+      <h1>${esc(veredito)}</h1>
+      <div class="placar-desafio"><div><b>${r.acertos}/${r.n}</b><span>você</span></div><div><b>${d.a}/${d.t}</b><span>${esc(d.nome)}</span></div></div>
+      <p style="margin:0">Você ganhou <b>+${r.pontos}</b> ${r.pontos === 1 ? "nível" : "níveis"} e está no nível ${S.nivel}.</p>
+      ${r.n < d.fila.length ? `<p class="muted" style="margin:0;font-size:14px">Você encerrou antes do fim: respondeu ${r.n} de ${d.fila.length}.</p>` : ""}
+    </div>
+    ${S.perfil ? `${r.n ? `<button class="btn bloco" type="button" id="devolver">Desafiar de volta</button>` : ""}
+      <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="outra">Jogar um quiz</button><button class="btn sec" type="button" id="ver">Ver pessoas</button></div>`
+    : `<button class="btn bloco" type="button" id="criar">Criar perfil e guardar ${S.nivel} ${S.nivel === 1 ? "nível" : "níveis"}</button>`}
+  </div>`;
+  const dv = $("#devolver"); if (dv) dv.addEventListener("click", () => compartilharDesafio(r));
+  if (S.perfil) {
+    $("#outra").addEventListener("click", () => { rodada = null; render(); });
+    $("#ver").addEventListener("click", () => irPara("descobrir"));
+  } else {
+    $("#criar").addEventListener("click", () => { rodada = null; render(); });
+  }
+}
+
 
 // ---------- Quiz do arquivo (perguntas criadas pelo Claude) ----------
 let sampleFn = null, modoServidor = false, aceitaImagens = false, maxImagens = 1, diagClaude = "código: verificando";
@@ -1149,6 +1281,7 @@ function renderPerfil() {
 }
 
 // ---------- Início ----------
+desafioAberto = lerDesafio();
 render();
 conectarNuvem();
 prepararClaude();
