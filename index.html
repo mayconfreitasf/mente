@@ -34,14 +34,14 @@
   :root:not([data-theme="dark"]) {
     --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
     --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-    --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(160deg, #efedec 0%, #b9b3b0 55%, #dcd8d5 100%); --prata-cor: #a9a3a0; --prata-fg: #2a2322; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+    --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(160deg, #a19ea0 0%, #6f6c6e 55%, #8c898b 100%); --prata-cor: #5f5c5e; --prata-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
   --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-  --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(160deg, #efedec 0%, #b9b3b0 55%, #dcd8d5 100%); --prata-cor: #a9a3a0; --prata-fg: #2a2322; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(160deg, #a19ea0 0%, #6f6c6e 55%, #8c898b 100%); --prata-cor: #5f5c5e; --prata-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
   color-scheme: light;
 }
 
@@ -96,7 +96,7 @@ h2 { font-size: 21px; line-height: 1.2; }
 .btn.sec { background: var(--surface-2); color: var(--fg); }
 .btn.ouro { background: var(--gold); color: #1d1206; }
 .btn.triplo { background: var(--triplo); color: var(--triplo-fg); }
-.btn.prata { background: var(--prata); color: var(--prata-fg); box-shadow: inset 0 0 0 1px var(--prata-cor), inset 0 1px 0 #ffffffb3; }
+.btn.prata { background: var(--prata); color: var(--prata-fg); box-shadow: inset 0 0 0 1px var(--prata-cor), inset 0 1px 0 #ffffff66; text-shadow: 0 1px 1px #00000040; }
 .btn.mini { padding: 9px 14px; flex: none; }
 .btn.bloco { width: 100%; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
@@ -1250,7 +1250,7 @@ function htmlBlocoCat() {
   else if (lotado) status = `<span class="muted" style="font-size:12px">${esc(textoLimite())}</span>`;
   return `<div><strong>Criar categoria</strong><div class="muted" style="font-size:13px">Digite um tema e o Mente cria um quiz.</div></div>
     <div class="seg pequeno" id="difCat">${DIFICULDADES.map(d => `<button type="button" data-dif="${d.id}" aria-pressed="${d.id === difCat}">${d.nome}</button>`).join("")}</div>
-    <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Harry Potter" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
+    <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Hollywood" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
     ${status}`;
 }
 function ligarBlocoCat() {
