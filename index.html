@@ -1,7 +1,7 @@
-<title>Mente</title>
+<title>Jingar</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Mente">
+<meta name="apple-mobile-web-app-title" content="Jingar">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
@@ -283,7 +283,7 @@ a.btn { text-decoration: none; }
       <path class="m-dobra" d="M20 9.5v23M13 14c2 .4 3.2 1.8 3.4 3.8M27 14c-2 .4-3.2 1.8-3.4 3.8M10.5 22.5c1.8-.6 3.6-.2 4.8 1.2M29.5 22.5c-1.8-.6-3.6-.2-4.8 1.2"/>
       <path class="m-coracao" d="M20 27.2s-5.6-3.4-5.6-7.1c0-1.8 1.4-3.1 3-3.1 1.1 0 2 .6 2.6 1.5.6-.9 1.5-1.5 2.6-1.5 1.6 0 3 1.3 3 3.1 0 3.7-5.6 7.1-5.6 7.1z"/>
       <path class="m-mini" d="M33 4.6s-2.6-1.6-2.6-3.3c0-.8.6-1.4 1.4-1.4.5 0 .9.3 1.2.7.3-.4.7-.7 1.2-.7.8 0 1.4.6 1.4 1.4 0 1.7-2.6 3.3-2.6 3.3z" transform="translate(1 3)"/>
-    </svg><span>mente<b>.</b></span></div>
+    </svg><span>jingar<b>.</b></span></div>
     <div class="chip-nivel" id="chipNivel" hidden><small>nível</small><strong id="chipNum">0</strong></div>
   </header>
   <main id="tela"></main>
@@ -422,6 +422,30 @@ async function conectarNuvem() {
 
 // ---------- Utilidades ----------
 const $ = s => document.querySelector(s);
+// ---------- App nativo (Capacitor) ----------
+// No app de iPhone e Android, as telas vêm do pacote e o servidor fica em JINGAR_API (definido no build do app).
+// No site, JINGAR_API fica vazio e tudo continua no mesmo endereço.
+const nativo = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const API = String(window.JINGAR_API || "").replace(/\/$/, "");
+const comApi = u => typeof u === "string" && u.startsWith("/api/") ? API + u : u;
+const plugin = nome => nativo && window.Capacitor.Plugins ? window.Capacitor.Plugins[nome] || null : null;
+// No app, a sessão é um token guardado no armazenamento do próprio app (o site usa cookie).
+let tokenApp = null, pushToken = null, semConexao = false;
+async function carregarTokenApp() {
+  const P = plugin("Preferences"); if (!P) return;
+  try { tokenApp = (await P.get({ key: "jingar.token" })).value || null; } catch {}
+}
+function guardarTokenApp(t) {
+  tokenApp = t || null;
+  const P = plugin("Preferences"); if (!P) return;
+  (t ? P.set({ key: "jingar.token", value: t }) : P.remove({ key: "jingar.token" })).catch(() => {});
+}
+function cabecalhos() {
+  const h = { "Content-Type": "application/json" };
+  if (nativo) h["X-Jingar-App"] = "1";
+  if (tokenApp) h.Authorization = "Bearer " + tokenApp;
+  return h;
+}
 const tela = $("#tela");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const arred = n => Math.round(n * 10) / 10;
@@ -435,7 +459,7 @@ function avatarHTML(p, tam) {
   const eu = p === "eu";
   const foto = eu ? S.perfil.foto : p.foto || null;
   const nome = eu ? S.perfil.nome : p.nome;
-  const bg = foto ? `background-image:url(${foto})` : `background:${eu ? "linear-gradient(150deg, var(--accent), #4a1022)" : fundo(p)}`;
+  const bg = foto ? `background-image:url(${comApi(foto)})` : `background:${eu ? "linear-gradient(150deg, var(--accent), #4a1022)" : fundo(p)}`;
   return `<div class="avatar" style="width:${tam}px;height:${tam}px;font-size:${Math.round(tam * 0.42)}px;${bg}">${foto ? "" : esc(iniciais(nome))}</div>`;
 }
 function toast(txt) {
@@ -561,6 +585,7 @@ $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); 
 
 function render() {
   pararTimer();
+  if (semConexao) return renderSemConexao();
   if (!contaPronta) { $("#abas").hidden = true; $("#chipNivel").hidden = true; tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Carregando…</p></div>`; return; }
   if (!semServidor && !modoTeste) {
     const jogandoDesafio = desafioAberto || (rodada && rodada.desafio);
@@ -602,7 +627,7 @@ function renderCadastro(editando, manter) {
       <p class="muted" style="margin:0">${S.nivel ? `Você já está no nível ${fmtNivel(S.nivel)}.` : "Você começa no nível 0."} Cada resposta certa vale +1 nível e desbloqueia pessoas do mesmo nível.</p>
     </div>`}
     <div class="linha" style="gap:14px">
-      <div id="fotoPrev">${r.foto ? `<div class="avatar" style="width:72px;height:72px;background-image:url(${r.foto})"></div>` : `<div class="avatar" style="width:72px;height:72px;font-size:30px;background:var(--surface-2);color:var(--muted)">+</div>`}</div>
+      <div id="fotoPrev">${r.foto ? `<div class="avatar" style="width:72px;height:72px;background-image:url(${comApi(r.foto)})"></div>` : `<div class="avatar" style="width:72px;height:72px;font-size:30px;background:var(--surface-2);color:var(--muted)">+</div>`}</div>
       <div class="pilha" style="gap:4px">
         <label class="btn sec" for="fFoto" style="padding:10px 14px">${r.foto ? "Trocar foto" : "Adicionar foto"}</label>
         <input id="fFoto" type="file" accept="image/*" hidden>
@@ -645,7 +670,7 @@ function renderCadastro(editando, manter) {
     const idade = parseInt(rascunho.idade, 10);
     let erro = "";
     if (!rascunho.nome) erro = "Informe seu nome.";
-    else if (!(idade >= 18 && idade <= 99)) erro = "O Mente é só para maiores de 18 anos.";
+    else if (!(idade >= 18 && idade <= 99)) erro = "O Jingar é só para maiores de 18 anos.";
     else if (!rascunho.sexo) erro = "Escolha como você se identifica.";
     else if (!rascunho.interesse) erro = "Escolha quem você quer conhecer.";
     if (erro) { $("#fErro").textContent = erro; return; }
@@ -743,7 +768,7 @@ function renderQuizInicio() {
     if (!sampleFn && !modoServidor) await prepararClaude();
     if (!sampleFn && !modoServidor) {
       const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Claude indisponível aqui</h2>
-        <p style="margin:0">Para criar perguntas do seu arquivo, o app precisa falar com o Claude, e esta tela não liberou isso. Abra o Mente pelo claude.ai ou pelo app do Claude, logado na sua conta, e tente de novo.</p>
+        <p style="margin:0">Para criar perguntas do seu arquivo, o app precisa falar com o Claude, e esta tela não liberou isso. Abra o Jingar pelo claude.ai ou pelo app do Claude, logado na sua conta, e tente de novo.</p>
         <p class="aviso" style="margin:0">${esc(diagClaude)}</p><button class="btn bloco" type="button" id="okC">Entendi</button>`);
       v.querySelector("#okC").addEventListener("click", () => v.remove());
       return;
@@ -793,7 +818,7 @@ function renderPergunta() {
   const it = r.atual || (r.atual = sortearPergunta(r));
   if (!it) {
     if (r.arquivo && r.gerando) {
-      tela.innerHTML = `<div class="vazio entra"><h2>Criando mais perguntas…</h2><p class="muted" style="margin:0">O Mente está preparando outra leva sobre ${esc(r.cats[0].nome)}.</p><div class="trilho" style="width:100%"><i class="carregando"></i></div><button class="btn sec" type="button" id="encerrar">Encerrar quiz</button></div>`;
+      tela.innerHTML = `<div class="vazio entra"><h2>Criando mais perguntas…</h2><p class="muted" style="margin:0">O Jingar está preparando outra leva sobre ${esc(r.cats[0].nome)}.</p><div class="trilho" style="width:100%"><i class="carregando"></i></div><button class="btn sec" type="button" id="encerrar">Encerrar quiz</button></div>`;
       $("#encerrar").addEventListener("click", () => { rodada.fim = true; render(); });
       return;
     }
@@ -922,10 +947,11 @@ async function compartilharDesafio(r) {
   const d = { v: 1, n: S.perfil ? S.perfil.nome : "Um amigo", m: r.mult, a: r.acertos, t: r.n, q: r.hist };
   if (titulo) d.f = titulo;
   if (r.peso != null) d.p = r.peso;
-  const url = location.href.split("#")[0] + "#desafio=" + codificar(d);
-  const texto = `${d.n} fez ${r.acertos} de ${r.n} no Mente${r.peso != null ? " · " + titulo : sufixo(r.mult)}. Duvido você bater!`;
+  // No app, o link do desafio aponta para o site (o endereço do servidor), que abre no navegador de quem recebe.
+  const url = (nativo ? API + "/" : location.href.split("#")[0]) + "#desafio=" + codificar(d);
+  const texto = `${d.n} fez ${r.acertos} de ${r.n} no Jingar${r.peso != null ? " · " + titulo : sufixo(r.mult)}. Duvido você bater!`;
   if (navigator.share) {
-    try { await navigator.share({ title: "Desafio no Mente", text: texto, url }); return; }
+    try { await navigator.share({ title: "Desafio no Jingar", text: texto, url }); return; }
     catch (e) { if (e && e.name === "AbortError") return; }
   }
   const v = folha(`<span class="rotulo">Desafiar um amigo</span><h2>Mande este link</h2>
@@ -1085,7 +1111,7 @@ function imagemBase64(f) {
 async function perguntasDoServidor(fonte, mult, evitar, signal) {
   const corpo = { mult, evitar, texto: fonte.texto || "", imagens: await Promise.all(fonte.imagens.map(imagemBase64)), codigo: lerCodigo() };
   let r;
-  try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal }); }
+  try { r = await fetch(API + "/api/perguntas", { method: "POST", headers: cabecalhos(), body: JSON.stringify(corpo), signal }); }
   catch (e) { throw (e && e.name === "AbortError") ? { code: "cancelled" } : { code: "rede" }; }
   const j = await r.json().catch(() => ({}));
   if (r.status === 401) throw { code: "codigo", message: j.erro };
@@ -1137,7 +1163,7 @@ async function quizDoArquivo(lista) {
   try { fonte = await lerArquivos(lista); } catch (e) { return erro(e.message); }
   if (cancelado) return;
   v.querySelector("#arqTitulo").textContent = "Criando perguntas…";
-  v.querySelector("#arqMsg").textContent = `O Mente está lendo ${fonte.nome} e montando ${modoDe(mult).texto}. Pode levar até um minuto.${sampleFn ? " Na primeira vez o Claude pede sua permissão." : ""}`;
+  v.querySelector("#arqMsg").textContent = `O Jingar está lendo ${fonte.nome} e montando ${modoDe(mult).texto}. Pode levar até um minuto.${sampleFn ? " Na primeira vez o Claude pede sua permissão." : ""}`;
   let lote;
   try { lote = await gerarPerguntas(fonte, mult, [], ctl.signal); } catch (e) {
     if (e && e.code === "cancelled") return;
@@ -1169,7 +1195,7 @@ const DIFICULDADES = [
 const difDe = id => DIFICULDADES.find(d => d.id === id) || DIFICULDADES[0];
 function promptAvaliar(tema, dificuldade) {
   return [
-    "Você cria categorias de quiz para o app Mente, em português do Brasil.",
+    "Você cria categorias de quiz para o app Jingar, em português do Brasil.",
     'Tema pedido pelo usuário: """' + tema + '"""',
     "Dificuldade escolhida pelo usuário: " + difDe(dificuldade).nome + ".",
     "Avalie o tema. Recuse se ele:",
@@ -1186,7 +1212,7 @@ function promptAvaliar(tema, dificuldade) {
 }
 function promptSubtema(tema, subtema, dificuldade, evitar) {
   return [
-    "Crie perguntas de quiz em português do Brasil para o app Mente.",
+    "Crie perguntas de quiz em português do Brasil para o app Jingar.",
     'Tema: """' + tema + '""". Subtema desta parte: """' + subtema + '""".',
     "Regras:",
     `- 22 perguntas ${difDe(dificuldade).dif}, só sobre o subtema, variadas, sobre fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;`,
@@ -1220,7 +1246,7 @@ function textoLimite() {
 async function pedirCategoria(corpo) {
   if (sampleFn) return sampleFn.json(corpo.subtema ? promptSubtema(corpo.tema, corpo.subtema, corpo.dificuldade, corpo.evitar) : promptAvaliar(corpo.tema, corpo.dificuldade), { modelTier: "default" });
   let r;
-  try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corpo, codigo: lerCodigo() }) }); }
+  try { r = await fetch(API + "/api/perguntas", { method: "POST", headers: cabecalhos(), body: JSON.stringify({ ...corpo, codigo: lerCodigo() }) }); }
   catch { throw { code: "rede" }; }
   const j = await r.json().catch(() => ({}));
   if (r.status === 401) throw { code: "codigo", message: j.erro };
@@ -1262,7 +1288,7 @@ function htmlBlocoCat() {
   else if (t && t.etapa === "recusada") status = `<div class="status-cat"><span><b>Tema recusado.</b> ${esc(t.texto)}</span>${t.sugestoes.length ? `<div class="linha" style="gap:6px">${t.sugestoes.map((x, k) => `<button class="btn sec mini" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}<button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
   else if (t && t.etapa === "erro") status = `<div class="status-cat"><span class="erro" style="min-height:0">${esc(t.texto)}</span><button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
   else if (lotado) status = `<span class="muted" style="font-size:12px">${esc(textoLimite())}</span>`;
-  return `<div><strong>Criar categoria</strong><div class="muted" style="font-size:13px">Digite um tema e o Mente cria um quiz.</div></div>
+  return `<div><strong>Criar categoria</strong><div class="muted" style="font-size:13px">Digite um tema e o Jingar cria um quiz.</div></div>
     <div class="seg pequeno" id="difCat">${DIFICULDADES.map(d => `<button type="button" data-dif="${d.id}" aria-pressed="${d.id === difCat}">${d.nome}</button>`).join("")}</div>
     <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Hollywood" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
     ${status}`;
@@ -1401,7 +1427,7 @@ let filaReal = null, filaEm = 0, carregandoFila = false, resumoReal = null, carr
 let matchesReal = null, msgsReal = {}, timerChat = 0, timerMatches = 0;
 async function chamarSocial(corpo) {
   let r;
-  try { r = await fetch("/api/social", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(corpo) }); }
+  try { r = await fetch(API + "/api/social", { method: "POST", headers: cabecalhos(), credentials: "same-origin", body: JSON.stringify(corpo) }); }
   catch { throw { rede: true, erro: "Sem conexão. Verifique a internet e tente de novo." }; }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign({}, j, { status: r.status, erro: j.erro || `Erro no servidor (código ${r.status}).` });
@@ -1437,6 +1463,7 @@ function pintarBadge() {
 function iniciarAcompanhamento() {
   clearInterval(timerMatches);
   if (!modoReal()) return;
+  if (nativo) registrarPushApp();
   carregarMatches(); atualizarResumo();
   timerMatches = setInterval(carregarMatches, 20000);
 }
@@ -1489,7 +1516,7 @@ function renderDescobrir() {
     return;
   }
   const livre = p.real ? p.livre : desbloqueado(p);
-  const foto = livre && p.foto ? `background:${fundo(p)};background-image:url(${p.foto});background-size:cover;background-position:center` : `background:${fundo(p)}`;
+  const foto = livre && p.foto ? `background:${fundo(p)};background-image:url(${comApi(p.foto)});background-size:cover;background-position:center` : `background:${fundo(p)}`;
   tela.innerHTML = `
   <div class="entra">
     <div class="linha" style="justify-content:space-between;flex-wrap:nowrap;margin-bottom:12px"><span class="muted" style="font-size:13px;min-width:0">${resumoFiltros()}</span><button class="btn sec" type="button" id="filtros" style="padding:8px 14px;flex:none">Filtros</button></div>
@@ -1602,7 +1629,7 @@ function htmlMsg(m, i) {
   const lado = m.de === "eu" ? "eu" : "ela", ref = m.ref ?? i;
   if (m.apagada) return `<div class="msg ${lado} apagada">${lado === "eu" ? "Você apagou esta mensagem" : "Mensagem apagada"}</div>`;
   const audio = typeof m.audio === "string" && (m.audio.startsWith("data:audio/") || m.audio.startsWith("/api/midia?id="));
-  const corpo = audio ? `<audio controls preload="metadata" src="${esc(m.audio)}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t);
+  const corpo = audio ? `<audio controls preload="metadata" src="${esc(comApi(m.audio))}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t);
   return lado === "eu" ? `<div class="msg eu${audio ? " audio" : ""}" data-i="${ref}" tabindex="0" title="Toque para apagar">${corpo}</div>` : `<div class="msg ela${audio ? " audio" : ""}">${corpo}</div>`;
 }
 function mensagensDoChat() {
@@ -1636,7 +1663,7 @@ function enviarMsg(alvo, msg) {
 async function gravarAudio() {
   if (gravacao) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") { toast("Este navegador não grava áudio"); return; }
-  if (!(await explicarPermissao("avisoMic", "Usar o microfone", "O Mente usa o microfone só para gravar os áudios que você envia no chat. Nada é gravado sem você tocar no botão."))) return;
+  if (!(await explicarPermissao("avisoMic", "Usar o microfone", "O Jingar usa o microfone só para gravar os áudios que você envia no chat. Nada é gravado sem você tocar no botão."))) return;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch { toast("Permita o uso do microfone para gravar"); return; }
@@ -1815,13 +1842,15 @@ let confirmacao = null, timerReenvio = 0;
 let timerConta = 0, avisouTamanho = false, googlePronto = false, applePronto = false;
 async function chamarConta(corpo) {
   let r;
-  try { r = await fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(corpo) }); }
+  try { r = await fetch(API + "/api/conta", { method: "POST", headers: cabecalhos(), credentials: "same-origin", body: JSON.stringify(corpo) }); }
   catch { throw { rede: true, erro: "Sem conexão. Verifique a internet e tente de novo." }; }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign({}, j, { status: r.status, erro: j.erro || `Erro no servidor (código ${r.status}).` });
+  if (j.token) guardarTokenApp(j.token);
   return j;
 }
 async function iniciarConta() {
+  await carregarTokenApp();
   try {
     cfgConta = await chamarConta({ acao: "config" });
     if (!cfgConta.banco) semServidor = true;
@@ -1829,7 +1858,10 @@ async function iniciarConta() {
       try { aplicarConta(await chamarConta({ acao: "eu" })); }
       catch (e) { if (e.status !== 401 && e.status !== 403) throw e; if (e.status === 403) toast(e.erro); }
     }
-  } catch { semServidor = true; }
+  } catch (e) {
+    // No app, falta de internet mostra a tela "Sem conexão": o modo de demonstração (perfis fictícios) é só do site.
+    if (nativo && e && e.rede) semConexao = true; else semServidor = true;
+  }
   contaPronta = true; render();
 }
 // Ao entrar, o progresso salvo na conta substitui o do aparelho; conta sem progresso recebe o do aparelho.
@@ -1854,14 +1886,14 @@ function salvarConta() {
   });
 }
 function limparAparelho() {
-  pararAcompanhamento();
+  pararAcompanhamento(); guardarTokenApp(null);
   conta = null; S = PADRAO(); telaConta = "entrar"; confirmacao = null;
   rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null };
   try { localStorage.removeItem(CHAVE); } catch {}
   aba = "quiz"; rodada = null; chatAberto = null; selecao = null; pulados.clear();
   render();
 }
-function sairDaConta() { chamarConta({ acao: "sair" }).catch(() => {}); limparAparelho(); }
+function sairDaConta() { chamarConta({ acao: "sair", pushToken }).catch(() => {}); limparAparelho(); }
 function excluirConta() {
   const comSenha = conta && conta.temSenha;
   const v = folha(`<h2>Excluir sua conta?</h2>
@@ -1940,7 +1972,7 @@ function renderConta() {
   let corpo = "";
   if (t === "criar") corpo = `
     ${campo("cUsuario", "Usuário", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"')}
-    ${dica(DICA_U + " Ele é único no Mente.")}
+    ${dica(DICA_U + " Ele é único no Jingar.")}
     ${campo("cContato", "E-mail ou celular", 'autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"')}
     <div class="sugestoes-email" id="sugEmail" hidden></div>
     ${dica("Enviamos um código para confirmar. Celular com DDD.")}
@@ -1986,7 +2018,7 @@ function renderConta() {
     <div class="pilha" style="gap:8px;padding-top:8px"><span class="rotulo">Primeiro a mente. Depois o match.</span><h1>${titulos[t]}</h1></div>
     ${social}${corpo}
     ${t === "entrar" || t === "criar" ? `<button class="btn sec bloco" type="button" id="testar">Testar sem login</button>` : ""}
-    <p class="aviso">O Mente é só para maiores de 18 anos. <a href="termos.html" target="_blank" rel="noopener">Termos</a> · <a href="privacidade.html" target="_blank" rel="noopener">Privacidade</a></p>
+    <p class="aviso">O Jingar é só para maiores de 18 anos. <a href="termos.html" target="_blank" rel="noopener">Termos</a> · <a href="privacidade.html" target="_blank" rel="noopener">Privacidade</a></p>
   </form>`;
   const bt = $("#testar"); if (bt) bt.addEventListener("click", () => { modoTeste = true; try { sessionStorage.setItem("mente.teste", "1"); } catch {} render(); });
   tela.querySelectorAll("[data-ir]").forEach(b => b.addEventListener("click", () => { telaConta = b.dataset.ir; if (b.dataset.ir === "entrar") confirmacao = null; render(); }));
@@ -2011,7 +2043,7 @@ function renderConta() {
       if (!USUARIO_OK.test(val("cUsuario"))) { erro.textContent = "O usuário precisa ter " + DICA_U.charAt(0).toLowerCase() + DICA_U.slice(1); return; }
       if (!val("cContato").trim()) { erro.textContent = "Digite seu e-mail ou celular."; return; }
       if (!val("cNasc")) { erro.textContent = "Informe sua data de nascimento."; return; }
-      if (val("cNasc") > dataMaxima18()) { erro.textContent = "O Mente é só para maiores de 18 anos."; return; }
+      if (val("cNasc") > dataMaxima18()) { erro.textContent = "O Jingar é só para maiores de 18 anos."; return; }
       if (!$("#cAceite").checked) { erro.textContent = "Aceite os Termos de Uso e a Política de Privacidade para continuar."; return; }
     }
     if ((t === "criar" || t === "redefinir") && !senhaForte(val("cSenha"))) { erro.textContent = "A senha precisa ter " + DICA_SENHA.charAt(0).toLowerCase() + DICA_SENHA.slice(1); return; }
@@ -2040,7 +2072,7 @@ function renderEscolherUsuario() {
   tela.innerHTML = `
   <form class="pilha entra" id="fUsuario" novalidate style="padding-top:8px">
     <h1>Escolha seu nome de usuário</h1>
-    <p class="muted" style="margin:0">É como você entra e aparece no Mente. Ele é único.</p>
+    <p class="muted" style="margin:0">É como você entra e aparece no Jingar. Ele é único.</p>
     <div class="campo"><label for="cUsuario">Usuário</label><input id="cUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"></div>
     <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_U}</span>
     <div class="erro" id="contaErro"></div>
@@ -2063,6 +2095,52 @@ function explicarPermissao(chave, titulo, texto) {
       <button class="btn bloco" type="button" id="pSim">Continuar</button><button class="link" type="button" id="pNao">Agora não</button>`);
     v.querySelector("#pSim").addEventListener("click", () => { S[chave] = true; salvar(); v.remove(); ok(true); });
     v.querySelector("#pNao").addEventListener("click", () => { v.remove(); ok(false); });
+  });
+}
+
+// ---------- Recursos do app nativo ----------
+function renderSemConexao() {
+  $("#abas").hidden = true; $("#chipNivel").hidden = true;
+  tela.innerHTML = `<div class="vazio entra"><h2>Sem conexão</h2><p class="muted" style="margin:0">Não foi possível falar com o Jingar. Verifique a internet e tente de novo.</p>
+    <button class="btn" type="button" id="tentar">Tentar de novo</button></div>`;
+  $("#tentar").addEventListener("click", () => { semConexao = false; contaPronta = false; render(); iniciarConta(); });
+}
+async function registrarPushApp() {
+  const P = plugin("PushNotifications"); if (!P || !conta) return;
+  try {
+    if (!registrarPushApp.ligado) {
+      registrarPushApp.ligado = true;
+      P.addListener("registration", t => { pushToken = t.value; chamarSocial({ acao: "registrarPush", token: t.value, plataforma: window.Capacitor.getPlatform() }).catch(() => {}); });
+      P.addListener("pushNotificationReceived", () => carregarMatches());
+      P.addListener("pushNotificationActionPerformed", a => {
+        const d = (a && a.notification && a.notification.data) || {};
+        aba = "matches"; chatAberto = null; matchesReal = null; render();
+        carregarMatches().then(() => { if (d.match) abrirChat(Number(d.match)); });
+      });
+    }
+    let perm = await P.checkPermissions();
+    if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
+      if (!(await explicarPermissao("avisoPush", "Receber avisos", "Avisamos quando alguém der match com você ou mandar uma mensagem."))) return;
+      perm = await P.requestPermissions();
+    }
+    if (perm.receive === "granted") await P.register();
+  } catch {}
+}
+// Botão voltar do Android e links das páginas de Termos e Privacidade dentro do app.
+function ligarNativo() {
+  if (!nativo) return;
+  const App = plugin("App");
+  if (App) App.addListener("backButton", () => {
+    const veu = document.querySelector(".veu"); if (veu) return veu.remove();
+    const match = document.querySelector(".match-tela"); if (match) { match.remove(); return render(); }
+    if (chatAberto != null) { pararGravacao(true); clearInterval(timerChat); chatAberto = null; return render(); }
+    if (rodada) return;
+    if (S.perfil && aba !== "quiz") return irPara("quiz");
+    App.minimizeApp();
+  });
+  document.addEventListener("click", e => {
+    const a = e.target.closest('a[target="_blank"]');
+    if (a && /\.html$/.test(a.getAttribute("href") || "")) { e.preventDefault(); location.href = a.getAttribute("href"); }
   });
 }
 
@@ -2124,6 +2202,7 @@ function renderPerfil() {
 // Link de teste: zera o limite de criação de categorias e libera 10 criações extras neste navegador.
 if (location.hash === "#liberar-teste") { S.criacoes = []; S.extraCriacoes = 10; salvar(); limparLinkDesafio(); setTimeout(() => toast("Limite zerado: +10 categorias"), 300); }
 desafioAberto = lerDesafio();
+ligarNativo();
 render();
 iniciarConta();
 conectarNuvem();

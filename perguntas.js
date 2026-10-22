@@ -1,4 +1,4 @@
-// Banco de perguntas do Mente.
+// Banco de perguntas do Jingar.
 // Formato de cada pergunta: [enunciado, resposta certa, errada 1, errada 2]
 // As opções são embaralhadas na hora do quiz.
 window.MENTE_CATEGORIAS = [

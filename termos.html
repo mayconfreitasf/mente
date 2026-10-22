@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mente · Termos de Uso</title>
+<title>Jingar · Termos de Uso</title>
 <style>
 :root { --bg: #f6efec; --surface: #fffaf8; --line: #e2d0cb; --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root { --bg: #150d11; --surface: #21151a; --line: #3e2931; --fg: #f4ebe7; --muted: #b39ca4; --accent: #e06a86; color-scheme: dark; } }
@@ -18,11 +18,11 @@ li { margin: 4px 0; }
 </head>
 <body>
 <main>
-<p><a href="/">← Voltar ao Mente</a></p>
+<p><a href="/">← Voltar ao Jingar</a></p>
 <h1>Termos de Uso</h1>
 <p class="muted">Última atualização: 23 de outubro de 2026.</p>
 
-<p>Ao criar uma conta ou usar o <strong>Mente</strong>, você concorda com estes termos e com a <a href="privacidade.html">Política de Privacidade</a>. Se não concordar, não use o app.</p>
+<p>Ao criar uma conta ou usar o <strong>Jingar</strong>, você concorda com estes termos e com a <a href="privacidade.html">Política de Privacidade</a>. Se não concordar, não use o app.</p>
 
 <h2>1. Quem pode usar</h2>
 <ul>
@@ -58,7 +58,7 @@ li { margin: 4px 0; }
 <p>Recursos pagos, quando existirem, terão preço e condições informados antes da compra. Compras feitas pela App Store ou Google Play seguem também as regras dessas lojas, inclusive para reembolso.</p>
 
 <h2>8. Encontros fora do app</h2>
-<p>O Mente não verifica antecedentes dos usuários. Tenha cuidado ao conversar e ao marcar encontros: prefira lugares públicos e avise alguém de confiança. Não nos responsabilizamos pela conduta de usuários fora do app.</p>
+<p>O Jingar não verifica antecedentes dos usuários. Tenha cuidado ao conversar e ao marcar encontros: prefira lugares públicos e avise alguém de confiança. Não nos responsabilizamos pela conduta de usuários fora do app.</p>
 
 <h2>9. Limitação de responsabilidade</h2>
 <p>O app é oferecido como está. Fazemos o possível para mantê-lo funcionando e seguro, mas não garantimos que estará sempre disponível ou livre de erros, dentro dos limites da lei.</p>
@@ -67,7 +67,7 @@ li { margin: 4px 0; }
 <p>Podemos atualizar estes termos e avisaremos no app quando a mudança for relevante. Estes termos seguem as leis do Brasil, e fica eleito o foro do domicílio do usuário.</p>
 </main>
 <script>
-fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"acao":"config"}' })
+fetch((window.JINGAR_API || "") + "/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"acao":"config"}' })
   .then(r => r.json()).then(c => { if (c.contato) document.querySelectorAll("[data-contato]").forEach(a => { a.href = "mailto:" + c.contato; a.textContent = c.contato; }); })
   .catch(() => {});
 </script>

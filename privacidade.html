@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mente · Política de Privacidade</title>
+<title>Jingar · Política de Privacidade</title>
 <style>
 :root { --bg: #f6efec; --surface: #fffaf8; --line: #e2d0cb; --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root { --bg: #150d11; --surface: #21151a; --line: #3e2931; --fg: #f4ebe7; --muted: #b39ca4; --accent: #e06a86; color-scheme: dark; } }
@@ -18,14 +18,14 @@ li { margin: 4px 0; }
 </head>
 <body>
 <main>
-<p><a href="/">← Voltar ao Mente</a></p>
+<p><a href="/">← Voltar ao Jingar</a></p>
 <h1>Política de Privacidade</h1>
 <p class="muted">Última atualização: 23 de outubro de 2026.</p>
 
-<p>Esta política explica quais dados o aplicativo <strong>Mente</strong> coleta, para que usa, com quem compartilha e como você exerce seus direitos, conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018, LGPD).</p>
+<p>Esta política explica quais dados o aplicativo <strong>Jingar</strong> coleta, para que usa, com quem compartilha e como você exerce seus direitos, conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018, LGPD).</p>
 
 <h2>1. Quem é o responsável</h2>
-<p>O responsável (controlador) pelos dados é o responsável pelo aplicativo Mente. Para qualquer assunto de privacidade, inclusive falar com o encarregado de dados, escreva para <a data-contato href="#">o e-mail de contato</a>.</p>
+<p>O responsável (controlador) pelos dados é o responsável pelo aplicativo Jingar. Para qualquer assunto de privacidade, inclusive falar com o encarregado de dados, escreva para <a data-contato href="#">o e-mail de contato</a>.</p>
 
 <h2>2. Dados que coletamos</h2>
 <ul>
@@ -68,13 +68,13 @@ li { margin: 4px 0; }
 <p>Usamos conexão criptografada, senhas com hash, códigos de verificação com validade curta e bloqueio após várias tentativas erradas. Nenhum sistema é 100% seguro; se ocorrer um incidente relevante, avisaremos você e a ANPD conforme a lei.</p>
 
 <h2>8. Menores de idade</h2>
-<p>O Mente é só para maiores de 18 anos. Não coletamos dados de menores de propósito. Se identificarmos uma conta de menor, ela será excluída.</p>
+<p>O Jingar é só para maiores de 18 anos. Não coletamos dados de menores de propósito. Se identificarmos uma conta de menor, ela será excluída.</p>
 
 <h2>9. Mudanças nesta política</h2>
 <p>Podemos atualizar esta política. Quando a mudança for relevante, avisaremos no app antes de ela valer.</p>
 </main>
 <script>
-fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"acao":"config"}' })
+fetch((window.JINGAR_API || "") + "/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"acao":"config"}' })
   .then(r => r.json()).then(c => { if (c.contato) document.querySelectorAll("[data-contato]").forEach(a => { a.href = "mailto:" + c.contato; a.textContent = c.contato; }); })
   .catch(() => {});
 </script>

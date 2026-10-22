@@ -1,0 +1,13 @@
+{
+  "appId": "br.com.jingar.app",
+  "appName": "Jingar",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

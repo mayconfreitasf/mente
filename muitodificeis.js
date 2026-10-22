@@ -1,4 +1,4 @@
-// Perguntas muito difíceis do Mente, usadas no modo Triplo nível (+3 por acerto).
+// Perguntas muito difíceis do Jingar, usadas no modo Triplo nível (+3 por acerto).
 // Formato: [enunciado, resposta certa, errada 1, errada 2]
 window.MENTE_MUITO_DIFICEIS = {
   direito: [

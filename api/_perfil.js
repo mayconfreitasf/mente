@@ -1,8 +1,13 @@
 // Perfil público de cada pessoa, montado a partir do progresso salvo pelo app.
+import crypto from "node:crypto";
 import { sql } from "./_banco.js";
 
 const MAX_FOTO = 400000, MAX_AUDIO = 300000;
-export const urlMidia = id => id ? "/api/midia?id=" + id : null;
+// Endereços de fotos e áudios levam uma assinatura: quem não recebeu o endereço do servidor não consegue montar outro.
+// Assim o app nativo carrega a mídia direto numa <img> ou <audio>, sem cookie.
+const SEGREDO = process.env.MIDIA_SEGREDO || crypto.createHash("sha256").update("jingar-midia:" + (process.env.DATABASE_URL || process.env.POSTGRES_URL || "")).digest("hex");
+export const assinaturaMidia = id => crypto.createHmac("sha256", SEGREDO).update(String(id)).digest("base64url").slice(0, 32);
+export const urlMidia = id => id ? `/api/midia?id=${id}&s=${assinaturaMidia(id)}` : null;
 const curto = (x, max) => typeof x === "string" ? x.trim().slice(0, max) : null;
 const numero = (x, min, max, padrao) => { const n = Number(x); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : padrao; };
 

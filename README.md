@@ -1,4 +1,4 @@
-# Mente
+# Jingar
 
 App de relacionamento em que você sobe de nível respondendo quizzes e desbloqueia pessoas do mesmo nível. Protótipo (versão 1): os outros perfis são fictícios e o progresso fica salvo no navegador.
 

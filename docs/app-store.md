@@ -1,4 +1,4 @@
-# Mente na App Store: o que preencher
+# Jingar na App Store: o que preencher
 
 Guia para as partes da Apple que não ficam no código.
 
@@ -7,7 +7,7 @@ Guia para as partes da Apple que não ficam no código.
 | Variável | Para quê |
 |---|---|
 | `DATABASE_URL` | Banco Neon (já configurado). |
-| `RESEND_API_KEY` e `EMAIL_REMETENTE` | Enviar o código por e-mail. `EMAIL_REMETENTE` precisa ser de um domínio verificado no Resend, por exemplo `Mente <nao-responda@seudominio.com>`. |
+| `RESEND_API_KEY` e `EMAIL_REMETENTE` | Enviar o código por e-mail. `EMAIL_REMETENTE` precisa ser de um domínio verificado no Resend, por exemplo `Jingar <nao-responda@seudominio.com>`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` e `TWILIO_FROM` (ou `TWILIO_MESSAGING_SERVICE_SID`) | Enviar o código por SMS. |
 | `CONTATO_EMAIL` | E-mail de contato publicado no app, nos Termos e na Política de Privacidade. |
 | `ADMIN_TOKEN` | Senha do painel de moderação (`/moderacao.html`). Use 16 caracteres ou mais, aleatórios. |
@@ -29,7 +29,7 @@ No questionário da App Store Connect, marque o app como de relacionamento ("Unr
 
 Responda "Sim, coletamos dados". Todos abaixo são **vinculados à identidade** e **não usados para rastreamento**:
 
-| Tipo na Apple | O que é no Mente | Finalidade |
+| Tipo na Apple | O que é no Jingar | Finalidade |
 |---|---|---|
 | Contact Info → Email Address, Phone Number | E-mail ou celular do cadastro | App Functionality |
 | User Content → Photos, Audio, Other User Content, Customer Support | Foto do perfil, áudios e mensagens do chat, arquivos do quiz, denúncias | App Functionality |
@@ -48,7 +48,7 @@ Quando o app for empacotado com Capacitor, use estes textos:
 
 ```xml
 <key>NSMicrophoneUsageDescription</key>
-<string>O Mente usa o microfone só para gravar os áudios que você envia no chat.</string>
+<string>O Jingar usa o microfone só para gravar os áudios que você envia no chat.</string>
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>Usamos sua localização só para calcular a distância até outras pessoas. Ela não aparece para ninguém.</string>
 <key>NSPhotoLibraryUsageDescription</key>

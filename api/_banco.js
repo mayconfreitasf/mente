@@ -48,6 +48,9 @@ export function prepararBanco() {
       id bigserial PRIMARY KEY, match_id bigint NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
       de_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, texto text, midia_id uuid, dur int,
       apagada boolean NOT NULL DEFAULT false, lida boolean NOT NULL DEFAULT false, criado_em timestamptz NOT NULL DEFAULT now())`;
+    await sql`CREATE TABLE IF NOT EXISTS dispositivos (
+      token text PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      plataforma text NOT NULL, atualizado_em timestamptz NOT NULL DEFAULT now())`;
     await sql`CREATE TABLE IF NOT EXISTS bloqueios (
       usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, alvo text NOT NULL,
       criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (usuario_id, alvo))`;

@@ -1,4 +1,4 @@
-// Perguntas difíceis do Mente, usadas no modo Dobro nível (+2 por acerto).
+// Perguntas difíceis do Jingar, usadas no modo Dobro nível (+2 por acerto).
 // Formato: [enunciado, resposta certa, errada 1, errada 2]
 window.MENTE_DIFICEIS = {
   direito: [

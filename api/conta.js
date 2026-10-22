@@ -1,12 +1,12 @@
-// Contas do Mente: cadastro com usuário, e-mail ou celular e senha, confirmado por código; login com Google ou Apple,
+// Contas do Jingar: cadastro com usuário, e-mail ou celular e senha, confirmado por código; login com Google ou Apple,
 // sessão por cookie, progresso salvo, denúncias, bloqueios e exclusão de conta.
 // Precisa de um banco Postgres (DATABASE_URL ou POSTGRES_URL, por exemplo Neon pela Vercel).
 // Envio de códigos: RESEND_API_KEY + EMAIL_REMETENTE (e-mail) e TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN +
 // TWILIO_FROM ou TWILIO_MESSAGING_SERVICE_SID (SMS). Opcionais: GOOGLE_CLIENT_ID, APPLE_CLIENT_ID, CONTATO_EMAIL.
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
-import { lerCookie, gravarCookie, usuarioDaSessao, falha } from "./_sessao.js";
-import { sincronizarPerfil } from "./_perfil.js";
+import { lerToken, gravarCookie, usuarioDaSessao, falha, cors } from "./_sessao.js";
+import { sincronizarPerfil, urlMidia } from "./_perfil.js";
 import { hashSenha, confereSenha, novoToken, hashToken, usuarioValido, emailValido, senhaValida, verificaTokenProvedor, normalizaTelefone, novoCodigo } from "./_auth.js";
 
 const DIAS_SESSAO = 30, MAX_ESTADO = 1500000, MAX_FALHAS = 5;
@@ -44,6 +44,7 @@ async function criarSessao(res, id) {
   const t = novoToken();
   await sql`INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (${hashToken(t)}, ${id}, now() + make_interval(days => ${DIAS_SESSAO}))`;
   gravarCookie(res, t, DIAS_SESSAO * 86400);
+  res.tokenSessao = t;
 }
 function estadoAceito(e) {
   if (!e || typeof e !== "object" || Array.isArray(e)) return null;
@@ -71,12 +72,12 @@ async function enviarCodigo(u, destino, finalidade) {
   const codigo = novoCodigo();
   await sql`DELETE FROM codigos WHERE usuario_id = ${u.id} AND finalidade = ${finalidade} AND criado_em < now() - interval '1 hour'`;
   await sql`INSERT INTO codigos (usuario_id, finalidade, codigo_hash, expira_em) VALUES (${u.id}, ${finalidade}, ${hashToken(u.id + ":" + codigo)}, now() + interval '10 minutes')`;
-  const msg = `Seu código do Mente é ${codigo}. Ele vale por 10 minutos. Não compartilhe com ninguém.`;
+  const msg = `Seu código do Jingar é ${codigo}. Ele vale por 10 minutos. Não compartilhe com ninguém.`;
   let r;
   if (destino.tipo === "email") {
     r = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: process.env.EMAIL_REMETENTE, to: destino.valor, subject: `${codigo} é seu código do Mente`, text: msg })
+      body: JSON.stringify({ from: process.env.EMAIL_REMETENTE, to: destino.valor, subject: `${codigo} é seu código do Jingar`, text: msg })
     }).catch(() => null);
   } else {
     const corpo = new URLSearchParams({ To: destino.valor, Body: msg });
@@ -115,7 +116,7 @@ async function cadastrar(b, res) {
   if (!senhaValida(b.senha)) throw falha(400, "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo.");
   const nasc = /^\d{4}-\d{2}-\d{2}$/.test(String(b.nascimento || "")) ? b.nascimento : null, idade = idadeDe(nasc);
   if (idade == null || isNaN(idade) || idade > 120) throw falha(400, "Informe sua data de nascimento.");
-  if (idade < 18) throw falha(403, "O Mente é só para maiores de 18 anos.");
+  if (idade < 18) throw falha(403, "O Jingar é só para maiores de 18 anos.");
   if (b.aceite !== true) throw falha(400, "Aceite os Termos de Uso e a Política de Privacidade para continuar.");
   // Cadastros não confirmados há mais de 15 minutos liberam o usuário, e-mail ou celular para quem confirmar primeiro.
   await sql`DELETE FROM usuarios WHERE verificado = false AND criado_em < now() - interval '15 minutes'
@@ -149,7 +150,7 @@ async function entrar(b, res) {
     return res.status(403).json({ precisaCodigo: true, login: u.usuario, destino, erro: "Confirme sua conta com o código enviado." });
   }
   await criarSessao(res, u.id);
-  return res.status(200).json({ conta: publico(u), estado: u.estado });
+  return res.status(200).json({ conta: publico(u), estado: await estadoAtual(u) });
 }
 
 async function verificar(b, res) {
@@ -158,7 +159,7 @@ async function verificar(b, res) {
   await conferirCodigo(u, "verificar", b.codigo);
   const [n] = await sql`UPDATE usuarios SET verificado = true WHERE id = ${u.id} RETURNING *`;
   await criarSessao(res, n.id);
-  return res.status(200).json({ conta: publico(n), estado: n.estado });
+  return res.status(200).json({ conta: publico(n), estado: await estadoAtual(n) });
 }
 
 async function reenviar(b, res) {
@@ -190,7 +191,7 @@ async function redefinir(b, res) {
   await sql`DELETE FROM sessoes WHERE usuario_id = ${n.id}`;
   if (n.banido) throw falha(403, SUSPENSA);
   await criarSessao(res, n.id);
-  return res.status(200).json({ conta: publico(n), estado: n.estado });
+  return res.status(200).json({ conta: publico(n), estado: await estadoAtual(n) });
 }
 
 // Google e Apple: a conta é achada pelo identificador do provedor. Não liga com contas de senha pelo e-mail.
@@ -210,7 +211,7 @@ async function social(b, res) {
   }
   if (u.banido) throw falha(403, SUSPENSA);
   await criarSessao(res, u.id);
-  return res.status(200).json({ conta: publico(u), estado: u.estado });
+  return res.status(200).json({ conta: publico(u), estado: await estadoAtual(u) });
 }
 
 // Denunciar ou bloquear uma pessoa real desfaz o match e impede que ela volte a aparecer.
@@ -223,8 +224,24 @@ async function desfazerContato(meuId, alvo) {
 
 const MOTIVOS = ["Perfil falso", "Fotos ou conteúdo impróprio", "Assédio ou ofensa", "Golpe ou spam", "Parece menor de idade", "Outro motivo"];
 
+// O progresso guarda o endereço da foto; ao entrar, o endereço é refeito para valer com a assinatura atual.
+async function estadoAtual(u) {
+  const e = u.estado;
+  if (e && e.perfil && typeof e.perfil.foto === "string" && e.perfil.foto.startsWith("/api/midia")) {
+    const [p] = await sql`SELECT foto_id FROM perfis WHERE usuario_id = ${u.id}`;
+    e.perfil.foto = p && p.foto_id ? urlMidia(p.foto_id) : null;
+  }
+  return e;
+}
+
 export default async function handler(req, res) {
+  if (cors(req, res)) return;
   res.setHeader("Cache-Control", "no-store");
+  // No app, a resposta de login também traz o token da sessão (o app guarda e envia no cabeçalho Authorization).
+  if (req.headers["x-jingar-app"] === "1") {
+    const json = res.json.bind(res);
+    res.json = obj => json(res.tokenSessao && obj && typeof obj === "object" ? { ...obj, token: res.tokenSessao } : obj);
+  }
   if (req.method !== "POST") return res.status(405).json({ erro: "Use POST." });
   const b = req.body || {};
   if (b.acao === "config") {
@@ -242,15 +259,17 @@ export default async function handler(req, res) {
     if (b.acao === "recuperar") return await recuperar(b, res);
     if (b.acao === "redefinir") return await redefinir(b, res);
     if (b.acao === "sair") {
-      const t = lerCookie(req);
+      const t = lerToken(req);
       if (t) await sql`DELETE FROM sessoes WHERE token_hash = ${hashToken(t)}`;
+      // Ao sair no app, o aparelho deixa de receber notificações desta conta.
+      if (typeof b.pushToken === "string" && b.pushToken) await sql`DELETE FROM dispositivos WHERE token = ${b.pushToken.slice(0, 4096)}`;
       gravarCookie(res, "", 0);
       return res.status(200).json({ ok: true });
     }
     const u = await usuarioDaSessao(req);
     if (!u) return res.status(401).json({ erro: "Entre na sua conta." });
     if (u.banido) { await sql`DELETE FROM sessoes WHERE usuario_id = ${u.id}`; gravarCookie(res, "", 0); return res.status(403).json({ erro: SUSPENSA }); }
-    if (b.acao === "eu") return res.status(200).json({ conta: publico(u), estado: u.estado });
+    if (b.acao === "eu") return res.status(200).json({ conta: publico(u), estado: await estadoAtual(u) });
     if (b.acao === "definirUsuario") {
       if (u.usuario) throw falha(400, "Você já tem um nome de usuário.");
       const usuario = texto(b.usuario, 40);

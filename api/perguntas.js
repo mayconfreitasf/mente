@@ -1,6 +1,7 @@
 // Função de servidor (Vercel) que cria as perguntas do "Quiz do seu arquivo".
 // Usa a chave ANTHROPIC_API_KEY configurada no projeto da Vercel; ela nunca vai para o navegador.
 import Anthropic from "@anthropic-ai/sdk";
+import { cors } from "./_sessao.js";
 
 const client = new Anthropic();
 const MODELO = process.env.MODELO || "claude-opus-5-5";
@@ -41,7 +42,7 @@ const DIFICULDADE_TEMA = {
 const NOME_DIFICULDADE = { facil: "Fácil", dificil: "Difícil", expert: "Expert" };
 function instrucoesAvaliar(tema, dificuldade) {
   return [
-    "Você cria categorias de quiz para o app Mente, em português do Brasil.",
+    "Você cria categorias de quiz para o app Jingar, em português do Brasil.",
     'Tema pedido pelo usuário: """' + tema + '"""',
     "Dificuldade escolhida pelo usuário: " + NOME_DIFICULDADE[dificuldade] + ".",
     "Avalie o tema. Recuse se ele:",
@@ -58,7 +59,7 @@ function instrucoesAvaliar(tema, dificuldade) {
 }
 function instrucoesSubtema(tema, subtema, dificuldade, evitar) {
   return [
-    "Crie perguntas de quiz em português do Brasil para o app Mente.",
+    "Crie perguntas de quiz em português do Brasil para o app Jingar.",
     'Tema: """' + tema + '""". Subtema desta parte: """' + subtema + '""".',
     "Regras:",
     `- 22 perguntas ${DIFICULDADE_TEMA[dificuldade]}, só sobre o subtema, variadas, sobre fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;`,
@@ -77,6 +78,7 @@ function extrairJson(txt) {
 }
 
 export default async function handler(req, res) {
+  if (cors(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ erro: "Use POST." });
   const b = req.body || {};
 

@@ -1,6 +1,7 @@
 // Pessoas reais: Descobrir, curtir e passar, matches e chat.
 import { sql, prepararBanco } from "./_banco.js";
-import { usuarioDaSessao, falha } from "./_sessao.js";
+import { usuarioDaSessao, falha, cors } from "./_sessao.js";
+import { avisar } from "./_push.js";
 import { guardarMidia, urlMidia } from "./_perfil.js";
 
 const MAX_TEXTO = 300;
@@ -69,6 +70,7 @@ const mensagemPublica = (m, meuId) => ({
 });
 
 export default async function handler(req, res) {
+  if (cors(req, res)) return;
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") return res.status(405).json({ erro: "Use POST." });
   if (!sql) return res.status(503).json({ erro: "Servidor sem banco configurado." });
@@ -124,6 +126,7 @@ export default async function handler(req, res) {
       const [a, z] = [u.id, b.alvo].sort();
       await sql`INSERT INTO matches (a_id, b_id) VALUES (${a}, ${z}) ON CONFLICT (a_id, b_id) DO NOTHING`;
       const [m] = await sql`SELECT id FROM matches WHERE a_id = ${a} AND b_id = ${z}`;
+      await avisar(b.alvo, "Deu match!", `Você e ${eu.nome || "alguém"} curtiram um ao outro.`, { tipo: "match", match: String(m.id) });
       return res.status(200).json({ match: true, matchId: Number(m.id) });
     }
 
@@ -162,6 +165,7 @@ export default async function handler(req, res) {
         if (!texto) throw falha(400, "Mensagem vazia.");
       }
       const [x] = await sql`INSERT INTO mensagens (match_id, de_id, texto, midia_id, dur) VALUES (${m.id}, ${u.id}, ${texto}, ${midia}, ${dur}) RETURNING *`;
+      await avisar(m.a_id === u.id ? m.b_id : m.a_id, eu && eu.nome ? eu.nome : "Nova mensagem", texto ? texto.slice(0, 120) : "Enviou um áudio", { tipo: "mensagem", match: String(m.id) });
       return res.status(200).json({ mensagem: mensagemPublica(x, u.id) });
     }
 
@@ -176,8 +180,18 @@ export default async function handler(req, res) {
     if (b.acao === "desfazer") {
       const m = await matchDoUsuario(u, b.match);
       const outro = m.a_id === u.id ? m.b_id : m.a_id;
+      // Os áudios da conversa somem junto, para os endereços antigos deixarem de funcionar.
+      for (const x of await sql`SELECT midia_id FROM mensagens WHERE match_id = ${m.id} AND midia_id IS NOT NULL`) await sql`DELETE FROM midias WHERE id = ${x.midia_id}`;
       await sql`DELETE FROM matches WHERE id = ${m.id}`;
       await sql`INSERT INTO avaliacoes (de_id, para_id, tipo) VALUES (${u.id}, ${outro}, 'passar') ON CONFLICT (de_id, para_id) DO UPDATE SET tipo = 'passar'`;
+      return res.status(200).json({ ok: true });
+    }
+
+    if (b.acao === "registrarPush") {
+      const token = typeof b.token === "string" ? b.token.trim().slice(0, 4096) : "";
+      if (!token || !["ios", "android"].includes(b.plataforma)) throw falha(400, "Aparelho inválido.");
+      await sql`INSERT INTO dispositivos (token, usuario_id, plataforma) VALUES (${token}, ${u.id}, ${b.plataforma})
+        ON CONFLICT (token) DO UPDATE SET usuario_id = EXCLUDED.usuario_id, plataforma = EXCLUDED.plataforma, atualizado_em = now()`;
       return res.status(200).json({ ok: true });
     }
 

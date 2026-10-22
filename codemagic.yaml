@@ -1,0 +1,60 @@
+# Build do Jingar na nuvem (Codemagic): gera o app de Android (.aab) e de iPhone (.ipa) sem precisar de Mac.
+# No painel do Codemagic, crie o grupo de variáveis "jingar" com API_URL (endereço do site, por exemplo
+# https://jingar.com.br), envie a chave de assinatura do Android ("jingar_keystore") e ligue a integração
+# com o App Store Connect ("Jingar"). O passo a passo está em docs/publicar-app.md.
+workflows:
+  android:
+    name: Jingar Android
+    instance_type: linux_x2
+    environment:
+      groups:
+        - jingar
+      android_signing:
+        - jingar_keystore
+      node: 22
+      java: 21
+    scripts:
+      - name: Instalar dependências
+        script: npm ci
+      - name: Montar as telas com o endereço do servidor
+        script: node build.js
+      - name: Copiar para o projeto Android
+        script: npx cap sync android
+      - name: Gerar o pacote da Play Store
+        script: cd android && ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/bundle/release/*.aab
+
+  ios:
+    name: Jingar iPhone
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Jingar
+    environment:
+      groups:
+        - jingar
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: br.com.jingar.app
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Instalar dependências
+        script: npm ci
+      - name: Montar as telas com o endereço do servidor
+        script: node build.js
+      - name: Copiar para o projeto iPhone
+        script: npx cap sync ios
+      - name: Usar o perfil de assinatura
+        script: xcode-project use-profiles
+      - name: Número da versão
+        script: agvtool new-version -all $BUILD_NUMBER
+        working_directory: ios/App
+      - name: Gerar o .ipa
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme App
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
