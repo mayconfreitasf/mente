@@ -553,7 +553,7 @@ $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); 
 function render() {
   pararTimer();
   if (!contaPronta) { $("#abas").hidden = true; $("#chipNivel").hidden = true; tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Carregando…</p></div>`; return; }
-  if (!semServidor) {
+  if (!semServidor && !modoTeste) {
     const jogandoDesafio = desafioAberto || (rodada && rodada.desafio);
     if (tokenRedefinir || (!conta && !jogandoDesafio)) return renderConta();
     if (conta && !conta.usuario) return renderEscolherUsuario();
@@ -1618,6 +1618,13 @@ function renderChat() {
 
 // ---------- Conta: usuário, e-mail e senha, ou Google e Apple ----------
 // Sem servidor de contas (protótipo local ou banco ainda não configurado), o app funciona sem login.
+// Regras de usuário e senha (as mesmas do servidor, em api/_auth.js).
+const USUARIO_OK = /^[a-z]{4,15}$/, DICA_U = "De 4 a 15 letras minúsculas, sem números nem símbolos.";
+const DICA_SENHA = "Pelo menos 6 caracteres, com letra, número e símbolo.";
+const senhaForte = x => x.length >= 6 && /[A-Za-z]/.test(x) && /\d/.test(x) && /[^A-Za-z0-9]/.test(x);
+const limpaUsuario = x => x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z]/g, "");
+// "Testar sem login" vale até fechar a aba: o progresso fica só neste aparelho.
+let modoTeste = (() => { try { return sessionStorage.getItem("mente.teste") === "1"; } catch { return false; } })();
 let conta = null, contaPronta = false, semServidor = false, cfgConta = {}, telaConta = "entrar", tokenRedefinir = null;
 let timerConta = 0, avisouTamanho = false, googlePronto = false, applePronto = false;
 async function chamarConta(corpo) {
@@ -1643,7 +1650,8 @@ async function iniciarConta() {
 }
 // Ao entrar, o progresso salvo na conta substitui o do aparelho; conta sem progresso recebe o do aparelho.
 function aplicarConta(j) {
-  conta = j.conta;
+  conta = j.conta; modoTeste = false;
+  try { sessionStorage.removeItem("mente.teste"); } catch {}
   if (j.estado && typeof j.estado === "object") {
     S = Object.assign(PADRAO(), j.estado);
     try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {}
@@ -1697,10 +1705,11 @@ function renderConta() {
   const campo = (id, rotulo, extra) => `<div class="campo"><label for="${id}">${rotulo}</label><input id="${id}" ${extra}></div>`;
   let corpo = "";
   if (t === "criar") corpo = `
-    ${campo("cUsuario", "Usuário", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20"')}
-    <span class="muted" style="font-size:12px;margin-top:-10px">De 3 a 20 caracteres: letras minúsculas, números, ponto ou _. Ele é único no Mente.</span>
+    ${campo("cUsuario", "Usuário", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"')}
+    <span class="muted" style="font-size:12px;margin-top:-10px">De 4 a 15 letras minúsculas, sem números nem símbolos. Ele é único no Mente.</span>
     ${campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"')}
     ${campo("cSenha", "Senha", 'type="password" autocomplete="new-password" maxlength="128"')}
+    <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_SENHA}</span>
     ${campo("cSenha2", "Repita a senha", 'type="password" autocomplete="new-password" maxlength="128"')}
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Criar conta</button>
@@ -1711,6 +1720,7 @@ function renderConta() {
     <button class="link" type="button" data-ir="entrar">Voltar</button>`;
   else if (t === "redefinir") corpo = `
     ${campo("cSenha", "Nova senha", 'type="password" autocomplete="new-password" maxlength="128"')}
+    <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_SENHA}</span>
     ${campo("cSenha2", "Repita a nova senha", 'type="password" autocomplete="new-password" maxlength="128"')}
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Salvar nova senha</button>`;
@@ -1724,14 +1734,18 @@ function renderConta() {
   <form class="pilha entra" id="fConta" novalidate>
     <div class="pilha" style="gap:8px;padding-top:8px"><span class="rotulo">Primeiro a mente. Depois o match.</span><h1>${titulos[t]}</h1></div>
     ${social}${corpo}
+    ${t === "entrar" || t === "criar" ? `<button class="btn sec bloco" type="button" id="testar">Testar sem login</button>` : ""}
     <p class="aviso">Ao continuar, você confirma que tem 18 anos ou mais.</p>
   </form>`;
+  const bt = $("#testar"); if (bt) bt.addEventListener("click", () => { modoTeste = true; try { sessionStorage.setItem("mente.teste", "1"); } catch {} render(); });
   tela.querySelectorAll("[data-ir]").forEach(b => b.addEventListener("click", () => { telaConta = b.dataset.ir; render(); }));
-  const u = $("#cUsuario"); if (u) u.addEventListener("input", () => { u.value = u.value.toLowerCase().replace(/\s/g, ""); });
+  const u = $("#cUsuario"); if (u) u.addEventListener("input", () => { u.value = limpaUsuario(u.value); });
   const f = $("#fConta"), erro = $("#contaErro"), botao = f.querySelector('button[type="submit"]');
   f.addEventListener("submit", async e => {
     e.preventDefault(); if (!botao || botao.disabled) return;
     const val = id => { const x = $("#" + id); return x ? x.value : ""; };
+    if (t === "criar" && !USUARIO_OK.test(val("cUsuario"))) { erro.textContent = "O usuário precisa ter " + DICA_U.charAt(0).toLowerCase() + DICA_U.slice(1); return; }
+    if ((t === "criar" || t === "redefinir") && !senhaForte(val("cSenha"))) { erro.textContent = "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo."; return; }
     if ((t === "criar" || t === "redefinir") && val("cSenha") !== val("cSenha2")) { erro.textContent = "As senhas não são iguais."; return; }
     const texto = botao.textContent; botao.disabled = true; botao.textContent = "Aguarde…"; erro.textContent = "";
     try {
@@ -1750,13 +1764,13 @@ function renderEscolherUsuario() {
   <form class="pilha entra" id="fUsuario" novalidate style="padding-top:8px">
     <h1>Escolha seu nome de usuário</h1>
     <p class="muted" style="margin:0">É como você entra e aparece no Mente. Ele é único.</p>
-    <div class="campo"><label for="cUsuario">Usuário</label><input id="cUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20"></div>
-    <span class="muted" style="font-size:12px;margin-top:-10px">De 3 a 20 caracteres: letras minúsculas, números, ponto ou _.</span>
+    <div class="campo"><label for="cUsuario">Usuário</label><input id="cUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"></div>
+    <span class="muted" style="font-size:12px;margin-top:-10px">De 4 a 15 letras minúsculas, sem números nem símbolos.</span>
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Continuar</button>
     <button class="link" type="button" id="sairU">Sair</button>
   </form>`;
-  const u = $("#cUsuario"); u.addEventListener("input", () => { u.value = u.value.toLowerCase().replace(/\s/g, ""); });
+  const u = $("#cUsuario"); u.addEventListener("input", () => { u.value = limpaUsuario(u.value); });
   $("#sairU").addEventListener("click", sairDaConta);
   $("#fUsuario").addEventListener("submit", async e => {
     e.preventDefault();
@@ -1793,6 +1807,7 @@ function renderPerfil() {
       <div class="campo" ${S.meuPasse.ativo ? "" : "hidden"} id="cPasse"><label for="vPasse">Valor (R$)</label><input id="vPasse" type="number" inputmode="numeric" min="10" step="10" value="${S.meuPasse.valor}"></div>
     </div>
     <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados</div></div><b style="font-family:var(--f-mono)">${S.matches.length}</b></div></div>
+    ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
     ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>@${esc(conta.usuario)}</strong><div class="muted" style="font-size:13px">${esc(conta.email || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div></div>` : ""}
     <button class="btn sec bloco" type="button" id="editar">Editar perfil</button>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>
@@ -1806,6 +1821,7 @@ function renderPerfil() {
   const vp = $("#vPasse"); if (vp) vp.addEventListener("change", () => { const n = Math.max(10, Math.round(Number(vp.value) || 0)); S.meuPasse.valor = n; vp.value = n; salvar(); toast("Valor salvo"); });
   $("#editar").addEventListener("click", () => renderCadastro(true));
   const sc = $("#sairConta"); if (sc) sc.addEventListener("click", sairDaConta);
+  const ct = $("#criarContaTeste"); if (ct) ct.addEventListener("click", () => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = "criar"; render(); });
   $("#zerar").addEventListener("click", () => {
     const v = folha(`<h2>Recomeçar do zero?</h2><p class="muted" style="margin:0">Seu nível, matches e conversas serão apagados. Isso não pode ser desfeito.</p>
       <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar e recomeçar</button><button class="link" type="button" id="nao">Cancelar</button>`);

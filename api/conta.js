@@ -59,9 +59,9 @@ const ERRO_LOGIN = "Usuário ou senha incorretos.";
 
 async function cadastrar(b, res) {
   const usuario = texto(b.usuario, 40), email = texto(b.email, 200);
-  if (!usuarioValido(usuario)) return res.status(400).json({ erro: "O usuário precisa ter de 3 a 20 caracteres: letras minúsculas, números, ponto ou _." });
+  if (!usuarioValido(usuario)) return res.status(400).json({ erro: "O usuário precisa ter de 4 a 15 letras minúsculas, sem números nem símbolos." });
   if (!emailValido(email)) return res.status(400).json({ erro: "Digite um e-mail válido." });
-  if (!senhaValida(b.senha)) return res.status(400).json({ erro: "A senha precisa ter pelo menos 8 caracteres." });
+  if (!senhaValida(b.senha)) return res.status(400).json({ erro: "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo." });
   const [u] = await sql`INSERT INTO usuarios (usuario, email, senha_hash, estado) VALUES (${usuario}, ${email}, ${hashSenha(b.senha)}, ${estadoAceito(b.estado)}::jsonb) RETURNING *`;
   await criarSessao(res, u.id);
   return res.status(200).json({ conta: publico(u), estado: u.estado });
@@ -127,7 +127,7 @@ async function recuperar(b, req, res) {
 }
 
 async function redefinir(b, res) {
-  if (!senhaValida(b.senha)) return res.status(400).json({ erro: "A senha precisa ter pelo menos 8 caracteres." });
+  if (!senhaValida(b.senha)) return res.status(400).json({ erro: "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo." });
   const [r] = typeof b.token === "string" ? await sql`SELECT usuario_id FROM recuperacoes WHERE token_hash = ${hashToken(b.token)} AND expira_em > now()` : [];
   if (!r) return res.status(400).json({ erro: "Esse link expirou ou já foi usado. Peça outro." });
   const [u] = await sql`UPDATE usuarios SET senha_hash = ${hashSenha(b.senha)}, falhas = 0, bloqueado_ate = NULL WHERE id = ${r.usuario_id} RETURNING *`;
@@ -164,7 +164,7 @@ export default async function handler(req, res) {
     if (b.acao === "definirUsuario") {
       if (u.usuario) return res.status(400).json({ erro: "Você já tem um nome de usuário." });
       const usuario = texto(b.usuario, 40);
-      if (!usuarioValido(usuario)) return res.status(400).json({ erro: "O usuário precisa ter de 3 a 20 caracteres: letras minúsculas, números, ponto ou _." });
+      if (!usuarioValido(usuario)) return res.status(400).json({ erro: "O usuário precisa ter de 4 a 15 letras minúsculas, sem números nem símbolos." });
       const [n] = await sql`UPDATE usuarios SET usuario = ${usuario} WHERE id = ${u.id} RETURNING *`;
       return res.status(200).json({ conta: publico(n) });
     }

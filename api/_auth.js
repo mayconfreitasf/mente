@@ -22,9 +22,9 @@ export function confereSenha(senha, guardado) {
 export const novoToken = () => crypto.randomBytes(32).toString("base64url");
 export const hashToken = t => crypto.createHash("sha256").update(String(t)).digest("hex");
 
-export const usuarioValido = u => /^[a-z0-9_.]{3,20}$/.test(u) && !/^[._]|[._]$/.test(u);
+export const usuarioValido = u => /^[a-z]{4,15}$/.test(u);
 export const emailValido = e => e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
-export const senhaValida = s => typeof s === "string" && s.length >= 8 && s.length <= 128;
+export const senhaValida = s => typeof s === "string" && s.length >= 6 && s.length <= 128 && /[A-Za-z]/.test(s) && /\d/.test(s) && /[^A-Za-z0-9]/.test(s);
 
 // Tokens do "Entrar com Google" e "Entrar com Apple": JWT RS256 assinado com as chaves públicas do provedor.
 const PROVEDORES = {
