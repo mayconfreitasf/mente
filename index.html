@@ -433,7 +433,7 @@ function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) 
 function fundo(p) { return `linear-gradient(150deg, hsl(${p.hue} 45% 38%), hsl(${(p.hue + 40) % 360} 50% 22%))`; }
 function avatarHTML(p, tam) {
   const eu = p === "eu";
-  const foto = eu ? S.perfil.foto : null;
+  const foto = eu ? S.perfil.foto : p.foto || null;
   const nome = eu ? S.perfil.nome : p.nome;
   const bg = foto ? `background-image:url(${foto})` : `background:${eu ? "linear-gradient(150deg, var(--accent), #4a1022)" : fundo(p)}`;
   return `<div class="avatar" style="width:${tam}px;height:${tam}px;font-size:${Math.round(tam * 0.42)}px;${bg}">${foto ? "" : esc(iniciais(nome))}</div>`;
@@ -481,7 +481,8 @@ function posPerfil(p) {
   return { lat: la + km / 111 * Math.sin(ang), lng: lo + km / (111 * Math.cos(la * Math.PI / 180)) * Math.cos(ang) };
 }
 function distanciaKm(p) {
-  const a = meuLocal(); if (!a) return null;
+  if (p.real) return p.distancia;
+  const a = meuLocal(); if (!a || !CIDADES[p.cidade]) return null;
   const b = posPerfil(p), r = Math.PI / 180;
   const x = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
   return Math.round(12742 * Math.asin(Math.sqrt(x)));
@@ -537,7 +538,9 @@ function abrirFiltros() {
     const verMin = num("#fVer"), visMin = num("#fVis");
     if (![verMin, visMin].every(n => n >= 0 && n <= S.nivel)) { v.querySelector("#filtroErro").textContent = `Os níveis precisam ficar entre 0 e o seu nível, ${fmtNivel(S.nivel)}.`; return; }
     S.filtros = { verMin, visMin, raio: raio.disabled ? null : RAIOS[raio.value] };
-    salvar(); v.remove(); toast("Filtros salvos"); render();
+    salvar(); v.remove(); toast("Filtros salvos");
+    // Pessoas reais: os filtros valem no servidor, então salva agora e busca a fila de novo.
+    if (modoReal()) { clearTimeout(timerConta); filaReal = null; resumoReal = null; salvarConta().then(render); } else render();
   });
 }
 function renderSemMatch() {
@@ -553,7 +556,7 @@ function renderSemMatch() {
 
 // ---------- Navegação ----------
 let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
-function irPara(a) { pararGravacao(true); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
+function irPara(a) { pararGravacao(true); clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
 $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
 
 function render() {
@@ -574,9 +577,10 @@ function render() {
   $("#chipNum").textContent = fmtNivel(S.nivel);
   document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-current", b.dataset.aba === aba ? "page" : "false"));
   document.querySelectorAll('.aba[data-aba="descobrir"], .aba[data-aba="matches"]').forEach(b => b.classList.toggle("desligada", semMatch()));
-  const nb = $("#badgeMatches"); nb.hidden = !S.novos.length || semMatch(); nb.textContent = S.novos.length;
+  pintarBadge();
   if (desafioAberto && !rodada) return renderDesafioIntro();
   if ((aba === "descobrir" || aba === "matches") && semMatch()) return renderSemMatch();
+  if ((aba === "descobrir" || aba === "matches") && precisaConta()) return renderPrecisaConta();
   if (aba === "quiz") return rodada ? renderPergunta() : renderQuizInicio();
   if (aba === "descobrir") return renderDescobrir();
   if (aba === "matches") return chatAberto ? renderChat() : renderMatches();
@@ -585,9 +589,10 @@ function render() {
 
 // ---------- Cadastro ----------
 let rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null };
-function renderCadastro(editando) {
-  const r = editando ? Object.assign({}, S.perfil) : rascunho;
-  if (editando) rascunho = r;
+// "manter" redesenha a edição sem voltar aos dados salvos (por exemplo, depois de escolher uma foto).
+function renderCadastro(editando, manter) {
+  const r = editando && !manter ? Object.assign({}, S.perfil) : rascunho;
+  if (editando && !manter) rascunho = r;
   const seg = (campo, ops) => `<div class="seg${ops.length === 4 ? " quatro" : ""}" data-campo="${campo}">${ops.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${r[campo] === v}">${t}</button>`).join("")}</div>`;
   tela.innerHTML = `
   <form class="pilha entra" id="fCad" novalidate>
@@ -630,7 +635,7 @@ function renderCadastro(editando) {
     rd.onload = () => { const img = new Image(); img.onload = () => {
       const lado = 320, c = document.createElement("canvas"); c.width = c.height = lado;
       const s = Math.min(img.width, img.height); c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, lado, lado);
-      ler(); rascunho.foto = c.toDataURL("image/jpeg", 0.8); renderCadastro(editando);
+      ler(); rascunho.foto = c.toDataURL("image/jpeg", 0.8); renderCadastro(editando, true);
     }; img.src = rd.result; };
     rd.readAsDataURL(f);
   });
@@ -653,6 +658,10 @@ function renderCadastro(editando) {
 // ---------- Quiz ----------
 // Próximo degrau: o menor nível acima do seu que ainda tem gente bloqueada.
 function proximoGrupo() {
+  if (!semServidor) {
+    const r = resumoReal;
+    return r && r.prox ? { nivel: r.prox.nivel, falta: arred(r.prox.nivel - S.nivel), pessoas: Array(r.prox.n).fill(null) } : null;
+  }
   const presos = PERFIS.filter(p => elegivel(p) && !desbloqueado(p));
   if (!presos.length) return null;
   const nivel = Math.min(...presos.map(p => p.nivel));
@@ -674,8 +683,9 @@ function renderQuizInicio() {
   if (!selecao) selecao = new Set(S.selecao || []);
   const mult = multAtual();
   const g = proximoGrupo();
-  const liberados = PERFIS.filter(p => elegivel(p) && desbloqueado(p)).length;
-  const anterior = PERFIS.filter(p => elegivel(p) && p.nivel <= S.nivel).reduce((m, p) => Math.max(m, p.nivel), 0);
+  if (modoReal() && !resumoReal) atualizarResumo();
+  const liberados = semServidor ? PERFIS.filter(p => elegivel(p) && desbloqueado(p)).length : resumoReal ? resumoReal.liberados : 0;
+  const anterior = semServidor ? PERFIS.filter(p => elegivel(p) && p.nivel <= S.nivel).reduce((m, p) => Math.max(m, p.nivel), 0) : resumoReal ? resumoReal.anterior : 0;
   const pct = g ? Math.round(((S.nivel - anterior) / Math.max(1, g.nivel - anterior)) * 100) : 100;
   const alea = selecao.has(ALEATORIO);
   const qtd = alea ? CATS.length : selecao.size;
@@ -690,7 +700,7 @@ function renderQuizInicio() {
       <span class="rotulo">Seu nível</span>
       <p>${liberados} ${liberados === 1 ? "pessoa liberada" : "pessoas liberadas"} para você</p>
       ${g ? `<div class="prox"><div class="trilho"><i style="width:${pct}%"></i></div>
-        <span class="muted" style="font-size:13px">${textoFalta(g)} no nível ${g.nivel}.</span></div>` : `<div class="prox muted" style="font-size:13px">${semMatch() ? "Match desligado: por enquanto você está jogando só pelo quiz." : "Você desbloqueou todo mundo. Impressionante."}</div>`}
+        <span class="muted" style="font-size:13px">${textoFalta(g)} no nível ${g.nivel}.</span></div>` : `<div class="prox muted" style="font-size:13px">${semMatch() ? "Match desligado: por enquanto você está jogando só pelo quiz." : modoReal() && !liberados ? "Ainda não há pessoas compatíveis com seus filtros. Novas pessoas entram todo dia." : "Você desbloqueou todo mundo. Impressionante."}</div>`}
     </section>
     <div class="pilha" style="gap:10px">
       <h2>Modo</h2>
@@ -840,7 +850,7 @@ function responder(k) {
 function renderResultado() {
   const r = rodada;
   if (r.desafio) return renderResultadoDesafio();
-  const liberou = PERFIS.filter(p => elegivel(p) && p.nivel <= S.nivel && p.nivel > S.nivel - r.pontos);
+  const liberou = semServidor ? PERFIS.filter(p => elegivel(p) && p.nivel <= S.nivel && p.nivel > S.nivel - r.pontos) : [];
   const g = proximoGrupo();
   tela.innerHTML = `
   <div class="pilha entra" style="padding-top:8px">
@@ -1383,7 +1393,68 @@ async function gerarMais(r) {
 
 // ---------- Descobrir ----------
 const pulados = new Set();
+// ---------- Pessoas reais (com conta) ----------
+// Com conta no servidor, Descobrir, matches e chat usam pessoas reais. Os perfis de demonstração só aparecem sem servidor.
+const modoReal = () => !!conta && !semServidor;
+const precisaConta = () => !semServidor && !conta;
+let filaReal = null, filaEm = 0, carregandoFila = false, resumoReal = null, carregandoResumo = false;
+let matchesReal = null, msgsReal = {}, timerChat = 0, timerMatches = 0;
+async function chamarSocial(corpo) {
+  let r;
+  try { r = await fetch("/api/social", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(corpo) }); }
+  catch { throw { rede: true, erro: "Sem conexão. Verifique a internet e tente de novo." }; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign({}, j, { status: r.status, erro: j.erro || `Erro no servidor (código ${r.status}).` });
+  return j;
+}
+const perfilReal = r => Object.assign({ prof: "" }, r, { nome: r.nome || "", hue: hash(r.id) % 360, real: true });
+async function carregarFila() {
+  if (carregandoFila) return;
+  carregandoFila = true;
+  try { filaReal = (await chamarSocial({ acao: "descobrir" })).perfis.map(perfilReal); } catch (e) { if (filaReal == null) filaReal = []; toast(e.erro); }
+  filaEm = Date.now(); carregandoFila = false;
+}
+async function atualizarResumo() {
+  if (!modoReal() || carregandoResumo) return;
+  carregandoResumo = true;
+  try { resumoReal = Object.assign(await chamarSocial({ acao: "resumo" }), { nivel: S.nivel }); } catch {}
+  carregandoResumo = false;
+  const digitando = document.activeElement && document.activeElement.matches("input, textarea");
+  if (aba === "quiz" && !rodada && !digitando && !document.querySelector(".veu")) render();
+}
+async function carregarMatches() {
+  if (!modoReal()) return;
+  try { matchesReal = (await chamarSocial({ acao: "matches" })).matches; } catch { return; }
+  if (aba === "matches" && !chatAberto) render();
+  else pintarBadge();
+}
+function pintarBadge() {
+  const nb = $("#badgeMatches"); if (!nb) return;
+  const n = modoReal() ? (matchesReal || []).filter(m => m.naoLidas || m.novo).length : S.novos.length;
+  nb.hidden = !n || semMatch(); nb.textContent = n;
+}
+// Enquanto a pessoa está logada, a lista de matches é conferida a cada 20 segundos (novos matches e mensagens).
+function iniciarAcompanhamento() {
+  clearInterval(timerMatches);
+  if (!modoReal()) return;
+  carregarMatches(); atualizarResumo();
+  timerMatches = setInterval(carregarMatches, 20000);
+}
+function pararAcompanhamento() {
+  clearInterval(timerMatches); clearInterval(timerChat);
+  filaReal = null; resumoReal = null; matchesReal = null; msgsReal = {};
+}
+function renderPrecisaConta() {
+  tela.innerHTML = `<div class="vazio entra"><h2>Crie uma conta para conhecer pessoas</h2>
+    <p class="muted" style="margin:0">No modo teste você joga os quizzes à vontade. Para ver perfis, curtir e conversar, entre ou crie sua conta. Seu progresso vai junto.</p>
+    <button class="btn" type="button" id="criarContaP">Criar conta</button><button class="link" type="button" id="entrarP">Já tenho conta</button></div>`;
+  const ir = tela2 => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = tela2; render(); };
+  $("#criarContaP").addEventListener("click", () => ir("criar"));
+  $("#entrarP").addEventListener("click", () => ir("entrar"));
+}
+
 function fila() {
+  if (!semServidor) return (filaReal || []).filter(p => !pulados.has(p.id) && !(S.bloqueados || []).includes(p.id));
   const fora = new Set([...S.curtidos, ...S.passados, ...(S.bloqueados || []), ...pulados]);
   const pool = PERFIS.filter(p => elegivel(p) && !fora.has(p.id));
   const livres = pool.filter(desbloqueado).sort((a, b) => b.nivel - a.nivel);
@@ -1397,11 +1468,17 @@ function fila() {
   return out;
 }
 function renderDescobrir() {
+  // Pessoas reais: busca a fila no servidor na primeira vez e de novo quando ela acaba (no máximo a cada 30 segundos).
+  if (modoReal() && (filaReal == null || (!fila().length && Date.now() - filaEm > 30000))) {
+    const primeira = filaReal == null;
+    carregarFila().then(() => { if (aba === "descobrir") render(); });
+    if (primeira) { tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Procurando pessoas…</p></div>`; return; }
+  }
   const p = fila()[0];
   if (!p) {
     const g = proximoGrupo();
     tela.innerHTML = `<div class="vazio entra"><h2>Por enquanto é só</h2>
-      <p class="muted" style="margin:0">Você já viu todo mundo disponível. Responda mais perguntas para subir de nível e desbloquear novas pessoas.</p>
+      <p class="muted" style="margin:0">${modoReal() ? "Você já viu todo mundo disponível com seus filtros. Volte mais tarde: novas pessoas entram todo dia." : "Você já viu todo mundo disponível. Responda mais perguntas para subir de nível e desbloquear novas pessoas."}</p>
       ${g ? `<p class="muted" style="margin:0">${textoFalta(g)}.</p>` : ""}
       <button class="btn" type="button" id="irQuiz">Jogar um quiz</button>
       <button class="btn sec" type="button" id="abrirF">Ajustar filtros</button>
@@ -1411,23 +1488,25 @@ function renderDescobrir() {
     const rv = $("#rever"); if (rv) rv.addEventListener("click", () => { pulados.clear(); render(); });
     return;
   }
-  const livre = desbloqueado(p);
+  const livre = p.real ? p.livre : desbloqueado(p);
+  const foto = livre && p.foto ? `background:${fundo(p)};background-image:url(${p.foto});background-size:cover;background-position:center` : `background:${fundo(p)}`;
   tela.innerHTML = `
   <div class="entra">
     <div class="linha" style="justify-content:space-between;flex-wrap:nowrap;margin-bottom:12px"><span class="muted" style="font-size:13px;min-width:0">${resumoFiltros()}</span><button class="btn sec" type="button" id="filtros" style="padding:8px 14px;flex:none">Filtros</button></div>
     <article class="cartao ${livre ? "" : "bloqueado"}">
-      <div class="foto" style="background:${fundo(p)}">${esc(iniciais(p.nome))}${livre ? `<span class="nivel-tag">nível ${p.nivel}</span>` : ""}</div>
+      <div class="foto" style="${foto}">${livre && p.foto ? "" : esc(iniciais(p.nome || "?"))}${livre ? `<span class="nivel-tag">nível ${fmtNivel(p.nivel)}</span>` : ""}</div>
       <div class="info">
-        <div class="nome">${esc(livre ? p.nome : "••••••")} <span>${p.idade}</span></div>
-        <div class="muted">${esc(p.prof)} · ${esc(p.cidade)}${distanciaKm(p) != null ? ` · a ${distanciaKm(p)} km` : ""}</div>
-        ${livre ? `<p class="bio">${esc(p.bio)}</p>` : ""}
-        ${livre && !meVe(p) ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Seu perfil não aparece para o nível ${p.nivel}. Ajuste em Filtros para ter chance de match.</p>` : ""}
+        <div class="nome">${esc(livre ? p.nome : "••••••")} <span>${p.idade || ""}</span></div>
+        <div class="muted">${esc([p.prof, p.cidade].filter(Boolean).join(" · "))}${distanciaKm(p) != null ? ` · a ${distanciaKm(p)} km` : ""}</div>
+        ${livre && p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
+        ${p.real && p.curtiuVoce ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Essa pessoa curtiu você.</p>` : ""}
+        ${livre && !p.real && !meVe(p) ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Seu perfil não aparece para o nível ${p.nivel}. Ajuste em Filtros para ter chance de match.</p>` : ""}
       </div>
       ${livre ? "" : `<div class="cadeado">
         <span class="rotulo">Perfil bloqueado</span>
-        <div class="grande">nível ${p.nivel}</div>
+        <div class="grande">nível ${fmtNivel(p.nivel)}</div>
         <p style="margin:0">Faltam ${fmtNivel(arred(p.nivel - S.nivel))} níveis para desbloquear.</p>
-        ${p.passe ? `<button class="btn ouro" type="button" id="passe">Passe Direto · ${brl(p.passe)}</button>` : `<span class="muted" style="font-size:13px">Este perfil não aceita Passe Direto.</span>`}
+        ${p.passe ? `<button class="btn ouro" type="button" id="passe">Passe Direto · ${brl(p.passe)}</button>` : p.real ? "" : `<span class="muted" style="font-size:13px">Este perfil não aceita Passe Direto.</span>`}
       </div>`}
     </article>
     <div class="acoes">
@@ -1439,7 +1518,10 @@ function renderDescobrir() {
   $("#filtros").addEventListener("click", abrirFiltros);
   $("#denunciar").addEventListener("click", () => denunciar(p, livre));
   if (livre) {
-    $("#passar").addEventListener("click", () => { S.passados.push(p.id); salvar(); render(); });
+    $("#passar").addEventListener("click", () => {
+      if (p.real) { chamarSocial({ acao: "passar", alvo: p.id }).catch(() => {}); filaReal = filaReal.filter(x => x.id !== p.id); return render(); }
+      S.passados.push(p.id); salvar(); render();
+    });
     $("#curtir").addEventListener("click", () => curtir(p));
   } else {
     $("#pular").addEventListener("click", () => { pulados.add(p.id); render(); });
@@ -1458,50 +1540,86 @@ function abrirPasse(p) {
   v.querySelector("#cancelar").addEventListener("click", () => v.remove());
   v.querySelector("#pagar").addEventListener("click", () => { S.passes.push(p.id); salvar(); v.remove(); toast("Perfil desbloqueado"); render(); });
 }
-function curtir(p) {
-  S.curtidos.push(p.id);
-  const chance = S.passes.includes(p.id) ? 0.4 : 0.6;
-  const deu = meVe(p) && (hash(p.id + S.perfil.nome) % 100) / 100 < chance;
-  if (deu) { S.matches.unshift(p.id); S.novos.push(p.id); S.chats[p.id] = []; }
-  salvar();
-  if (!deu) { toast("Curtida enviada"); return render(); }
+function mostrarMatch(p, idChat) {
   const m = document.createElement("div"); m.className = "match-tela entra";
   m.innerHTML = `<div class="duo">${avatarHTML("eu", 104)}${avatarHTML(p, 104)}</div><h1>Deu match!</h1>
     <p style="margin:0;max-width:30ch">Você e ${esc(p.nome)} curtiram um ao outro.</p>
     <button class="btn bloco" style="max-width:320px" type="button" id="mChat">Mandar mensagem</button>
     <button class="link" type="button" id="mVoltar">Continuar descobrindo</button>`;
   document.body.appendChild(m);
-  m.querySelector("#mChat").addEventListener("click", () => { m.remove(); aba = "matches"; abrirChat(p.id); });
+  m.querySelector("#mChat").addEventListener("click", () => { m.remove(); aba = "matches"; abrirChat(idChat); });
   m.querySelector("#mVoltar").addEventListener("click", () => { m.remove(); render(); });
+}
+function curtir(p) {
+  if (p.real) {
+    filaReal = (filaReal || []).filter(x => x.id !== p.id); render();
+    chamarSocial({ acao: "curtir", alvo: p.id }).then(async j => {
+      if (!j.match) { toast("Curtida enviada"); return; }
+      await carregarMatches(); mostrarMatch(p, j.matchId);
+    }).catch(e => toast(e.erro));
+    return;
+  }
+  S.curtidos.push(p.id);
+  const chance = S.passes.includes(p.id) ? 0.4 : 0.6;
+  const deu = meVe(p) && (hash(p.id + S.perfil.nome) % 100) / 100 < chance;
+  if (deu) { S.matches.unshift(p.id); S.novos.push(p.id); S.chats[p.id] = []; }
+  salvar();
+  if (!deu) { toast("Curtida enviada"); return render(); }
+  mostrarMatch(p, p.id);
 }
 
 // ---------- Matches e chat ----------
 function renderMatches() {
-  if (!S.matches.length) {
+  if (modoReal() && matchesReal == null) {
+    tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Carregando matches…</p></div>`;
+    carregarMatches();
+    return;
+  }
+  const lista = modoReal()
+    ? matchesReal.map(m => ({ id: m.id, p: perfilReal(m.perfil), novo: m.novo || m.naoLidas > 0, ult: m.ultima && { de: m.ultima.meu ? "eu" : "ela", t: m.ultima.texto, audio: m.ultima.audio, apagada: m.ultima.apagada } }))
+    : S.matches.map(id => { const ch = S.chats[id] || []; return { id, p: PERFIL[id], novo: S.novos.includes(id), ult: ch[ch.length - 1] }; });
+  if (!lista.length) {
     tela.innerHTML = `<div class="vazio entra"><h2>Nenhum match ainda</h2><p class="muted" style="margin:0">Curta pessoas em Descobrir. Quando for recíproco, a conversa aparece aqui.</p><button class="btn" type="button" id="irD">Descobrir pessoas</button></div>`;
     $("#irD").addEventListener("click", () => irPara("descobrir"));
     return;
   }
-  tela.innerHTML = `<div class="pilha entra" style="gap:6px"><h2>Matches</h2><div class="lista">${S.matches.map(id => {
-    const p = PERFIL[id], ch = S.chats[id] || [], ult = ch[ch.length - 1], novo = S.novos.includes(id);
-    return `<button class="item" type="button" data-id="${id}">${avatarHTML(p, 52)}<div class="txt"><strong>${esc(p.nome)}${novo ? ` <span style="display:inline;color:var(--accent);font-size:12px">· novo</span>` : ""}</strong><span>${ult ? esc((ult.de === "eu" ? "Você: " : "") + previa(ult)) : esc(p.prof) + " · nível " + p.nivel}</span></div></button>`;
-  }).join("")}</div></div>`;
-  tela.querySelectorAll(".item").forEach(b => b.addEventListener("click", () => abrirChat(b.dataset.id)));
+  tela.innerHTML = `<div class="pilha entra" style="gap:6px"><h2>Matches</h2><div class="lista">${lista.map(({ id, p, novo, ult }) =>
+    `<button class="item" type="button" data-id="${id}">${avatarHTML(p, 52)}<div class="txt"><strong>${esc(p.nome)}${novo ? ` <span style="display:inline;color:var(--accent);font-size:12px">· novo</span>` : ""}</strong><span>${ult ? esc((ult.de === "eu" ? "Você: " : "") + previa(ult)) : esc([p.prof, "nível " + fmtNivel(p.nivel)].filter(Boolean).join(" · "))}</span></div></button>`
+  ).join("")}</div></div>`;
+  tela.querySelectorAll(".item").forEach(b => b.addEventListener("click", () => abrirChat(modoReal() ? Number(b.dataset.id) : b.dataset.id)));
 }
-function abrirChat(id) { chatAberto = id; S.novos = S.novos.filter(x => x !== id); salvar(); render(); }
+function abrirChat(id) {
+  chatAberto = id;
+  if (!modoReal()) { S.novos = S.novos.filter(x => x !== id); salvar(); }
+  render();
+}
 let digitando = null, gravacao = null;
 const MAX_AUDIO = 10;
 const ICONE_MIC = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
 const previa = m => m.apagada ? "Mensagem apagada" : m.audio ? "Áudio" : m.t;
+// "ref" é o índice da mensagem no aparelho (demonstração) ou o id dela no servidor (pessoas reais).
 function htmlMsg(m, i) {
-  const lado = m.de === "eu" ? "eu" : "ela";
+  const lado = m.de === "eu" ? "eu" : "ela", ref = m.ref ?? i;
   if (m.apagada) return `<div class="msg ${lado} apagada">${lado === "eu" ? "Você apagou esta mensagem" : "Mensagem apagada"}</div>`;
-  const audio = typeof m.audio === "string" && m.audio.startsWith("data:audio/");
-  const corpo = audio ? `<audio controls preload="metadata" src="${m.audio}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t);
-  return lado === "eu" ? `<div class="msg eu${audio ? " audio" : ""}" data-i="${i}" tabindex="0" title="Toque para apagar">${corpo}</div>` : `<div class="msg ela${audio ? " audio" : ""}">${corpo}</div>`;
+  const audio = typeof m.audio === "string" && (m.audio.startsWith("data:audio/") || m.audio.startsWith("/api/midia?id="));
+  const corpo = audio ? `<audio controls preload="metadata" src="${esc(m.audio)}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t);
+  return lado === "eu" ? `<div class="msg eu${audio ? " audio" : ""}" data-i="${ref}" tabindex="0" title="Toque para apagar">${corpo}</div>` : `<div class="msg ela${audio ? " audio" : ""}">${corpo}</div>`;
 }
-// Envia a mensagem e simula a resposta da outra pessoa (os perfis do protótipo são fictícios).
+function mensagensDoChat() {
+  if (modoReal()) return (msgsReal[chatAberto] || []).map(x => ({ de: x.meu ? "eu" : "ela", t: x.texto, audio: x.audio, dur: x.dur, apagada: x.apagada, ref: x.id }));
+  return S.chats[chatAberto] || (S.chats[chatAberto] = []);
+}
 function enviarMsg(alvo, msg) {
+  if (modoReal()) {
+    const corpo = msg.audio ? { acao: "enviar", match: alvo, audio: msg.audio, dur: msg.dur } : { acao: "enviar", match: alvo, texto: msg.t };
+    chamarSocial(corpo).then(j => {
+      (msgsReal[alvo] = msgsReal[alvo] || []).push(j.mensagem);
+      const m = (matchesReal || []).find(x => x.id === alvo); if (m) { m.ultima = j.mensagem; m.novo = false; }
+      if (chatAberto === alvo) pintarMensagens();
+    }).catch(e => toast(e.erro));
+    return;
+  }
+  // Demonstração: guarda a mensagem e simula a resposta da outra pessoa.
   const ch = S.chats[alvo]; if (!ch) return;
   ch.push(Object.assign({ de: "eu" }, msg)); salvar();
   digitando = alvo; render();
@@ -1534,6 +1652,7 @@ async function gravarAudio() {
     const rd = new FileReader();
     rd.onload = () => {
       if (String(rd.result).length > 300000) { toast("Áudio grande demais"); render(); return; }
+      if (modoReal()) render();
       enviarMsg(g.alvo, { audio: rd.result, dur });
     };
     rd.readAsDataURL(new Blob(g.partes, { type: rec.mimeType || "audio/webm" }));
@@ -1553,14 +1672,30 @@ function mostrarGravando() {
   $("#gravCancelar").addEventListener("click", () => pararGravacao(true));
   $("#gravEnviar").addEventListener("click", () => pararGravacao(false));
 }
-function apagarMsg(i) {
-  const ch = S.chats[chatAberto]; if (!ch || !ch[i] || ch[i].de !== "eu" || ch[i].apagada) return;
+function apagarMsg(ref) {
+  const real = modoReal();
+  const ch = real ? null : S.chats[chatAberto];
+  const msg = real ? (msgsReal[chatAberto] || []).find(x => x.id === ref) : ch && ch[ref];
+  if (!msg || (real ? !msg.meu : msg.de !== "eu") || msg.apagada) return;
   const v = folha(`<h2>Apagar mensagem?</h2><p class="muted" style="margin:0">A mensagem some da conversa para vocês dois.</p>
     <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar mensagem</button><button class="link" type="button" id="nao">Cancelar</button>`);
   v.querySelector("#nao").addEventListener("click", () => v.remove());
-  v.querySelector("#sim").addEventListener("click", () => { ch[i] = { de: "eu", apagada: true }; salvar(); v.remove(); render(); });
+  v.querySelector("#sim").addEventListener("click", async () => {
+    if (real) {
+      try { await chamarSocial({ acao: "apagar", id: ref }); } catch (e) { toast(e.erro); return; }
+      Object.assign(msg, { apagada: true, texto: null, audio: null }); v.remove(); return pintarMensagens();
+    }
+    ch[ref] = { de: "eu", apagada: true }; salvar(); v.remove(); render();
+  });
 }
 function encerrarContato(id) {
+  if (modoReal()) {
+    const m = (matchesReal || []).find(x => x.perfil.id === id);
+    matchesReal = (matchesReal || []).filter(x => x.perfil.id !== id);
+    filaReal = (filaReal || []).filter(x => x.id !== id);
+    if (m && chatAberto === m.id) chatAberto = null;
+    return;
+  }
   S.matches = S.matches.filter(x => x !== id); S.novos = S.novos.filter(x => x !== id); delete S.chats[id];
   if (!S.passados.includes(id)) S.passados.push(id);
   if (chatAberto === id) chatAberto = null;
@@ -1569,7 +1704,13 @@ function desfazerMatch(p) {
   const v = folha(`<h2>Desfazer match com ${esc(p.nome)}?</h2><p class="muted" style="margin:0">A conversa será apagada e vocês não aparecem mais um para o outro.</p>
     <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Desfazer match</button><button class="link" type="button" id="nao">Cancelar</button>`);
   v.querySelector("#nao").addEventListener("click", () => v.remove());
-  v.querySelector("#sim").addEventListener("click", () => { encerrarContato(p.id); salvar(); v.remove(); toast("Match desfeito"); render(); });
+  v.querySelector("#sim").addEventListener("click", async () => {
+    if (modoReal()) {
+      const m = (matchesReal || []).find(x => x.perfil.id === p.id);
+      if (m) { try { await chamarSocial({ acao: "desfazer", match: m.id }); } catch (e) { toast(e.erro); return; } }
+    }
+    encerrarContato(p.id); salvar(); v.remove(); toast("Match desfeito"); render();
+  });
 }
 const MOTIVOS = ["Perfil falso", "Fotos ou conteúdo impróprio", "Assédio ou ofensa", "Golpe ou spam", "Parece menor de idade", "Outro motivo"];
 function denunciar(p, mostraNome) {
@@ -1579,7 +1720,7 @@ function denunciar(p, mostraNome) {
     <div class="erro" id="denErro"></div>
     <button class="btn bloco" type="button" id="denEnviar" style="background:var(--bad)">Enviar denúncia</button>
     <button class="link" type="button" id="denCancelar">Cancelar</button>
-    <p class="aviso" style="margin:0">Você não verá mais esse perfil. Protótipo: a denúncia fica salva só neste aparelho.</p>`);
+    <p class="aviso" style="margin:0">${conta ? "Você não verá mais esse perfil. Nossa equipe analisa as denúncias em até 24 horas." : "Você não verá mais esse perfil. Protótipo: a denúncia fica salva só neste aparelho."}</p>`);
   v.querySelector("#denCancelar").addEventListener("click", () => v.remove());
   v.querySelector("#denEnviar").addEventListener("click", () => {
     const k = v.querySelector('input[name="motivo"]:checked');
@@ -1599,29 +1740,64 @@ function menuChat(p) {
   v.querySelector("#mDesfazer").addEventListener("click", () => { v.remove(); desfazerMatch(p); });
   v.querySelector("#mDenunciar").addEventListener("click", () => { v.remove(); denunciar(p, true); });
 }
-function renderChat() {
-  const p = PERFIL[chatAberto], ch = S.chats[chatAberto] || (S.chats[chatAberto] = []);
-  tela.innerHTML = `
-  <div class="chat">
-    <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button>${avatarHTML(p, 40)}<div style="flex:1;min-width:0"><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc(p.prof)} · nível ${p.nivel}</div></div><button class="btn sec mini" type="button" id="opcoesChat" aria-label="Opções da conversa">⋯</button></div>
-    <div class="msgs" id="msgs">${ch.length ? ch.map(htmlMsg).join("") : `<p class="muted" style="text-align:center;margin:auto 0">Diga oi para ${esc(p.nome)}. Uma pergunta do quiz é um bom começo.</p>`}
-      ${digitando === chatAberto ? `<div class="digitando">${esc(p.nome)} está digitando…</div>` : ""}</div>
-    <form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn sec mic" type="button" id="mic" aria-label="Gravar áudio de até ${MAX_AUDIO} segundos">${ICONE_MIC}</button><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>
-  </div>`;
-  const ms = $("#msgs"); ms.scrollTop = ms.scrollHeight;
-  $("#voltar").addEventListener("click", () => { pararGravacao(true); chatAberto = null; render(); });
-  $("#opcoesChat").addEventListener("click", () => menuChat(p));
-  $("#mic").addEventListener("click", gravarAudio);
+// Redesenha só as mensagens, sem apagar o que a pessoa está digitando.
+function pintarMensagens() {
+  const ms = $("#msgs"); if (!ms) return;
+  const p = perfilDoChat(), ch = mensagensDoChat();
+  const noFim = ms.scrollHeight - ms.scrollTop - ms.clientHeight < 60;
+  ms.innerHTML = (ch.length ? ch.map(htmlMsg).join("") : `<p class="muted" style="text-align:center;margin:auto 0">Diga oi para ${esc(p.nome)}. Uma pergunta do quiz é um bom começo.</p>`)
+    + (digitando === chatAberto ? `<div class="digitando">${esc(p.nome)} está digitando…</div>` : "");
   ms.querySelectorAll(".msg.eu[data-i]").forEach(el => {
     el.addEventListener("click", e => { if (!e.target.closest("audio")) apagarMsg(Number(el.dataset.i)); });
     el.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === el) apagarMsg(Number(el.dataset.i)); });
   });
+  if (noFim) ms.scrollTop = ms.scrollHeight;
+}
+function perfilDoChat() {
+  if (!modoReal()) return PERFIL[chatAberto];
+  const m = (matchesReal || []).find(x => x.id === chatAberto);
+  return m ? perfilReal(m.perfil) : null;
+}
+// Pessoas reais: busca mensagens novas a cada 4 segundos enquanto a conversa está aberta.
+async function atualizarChat(id) {
+  if (chatAberto !== id || aba !== "matches" || !modoReal()) { clearInterval(timerChat); return; }
+  const atual = msgsReal[id] || [], depois = atual.length ? atual[atual.length - 1].id : 0;
+  try {
+    const j = await chamarSocial({ acao: "mensagens", match: id, depois });
+    if (chatAberto !== id) return;
+    const primeira = !msgsReal[id];
+    msgsReal[id] = atual.concat(j.mensagens);
+    const m = (matchesReal || []).find(x => x.id === id); if (m) { m.naoLidas = 0; m.novo = !msgsReal[id].length; }
+    if (j.mensagens.length || primeira) { pintarMensagens(); if (primeira) { const ms = $("#msgs"); if (ms) ms.scrollTop = ms.scrollHeight; } }
+  } catch (e) { if (e.status === 404) { clearInterval(timerChat); chatAberto = null; matchesReal = null; render(); } }
+}
+function renderChat() {
+  const p = perfilDoChat();
+  if (!p) { chatAberto = null; return renderMatches(); }
+  tela.innerHTML = `
+  <div class="chat">
+    <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button>${avatarHTML(p, 40)}<div style="flex:1;min-width:0"><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc([p.prof, "nível " + fmtNivel(p.nivel)].filter(Boolean).join(" · "))}</div></div><button class="btn sec mini" type="button" id="opcoesChat" aria-label="Opções da conversa">⋯</button></div>
+    <div class="msgs" id="msgs"></div>
+    <form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn sec mic" type="button" id="mic" aria-label="Gravar áudio de até ${MAX_AUDIO} segundos">${ICONE_MIC}</button><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>
+  </div>`;
+  pintarMensagens();
+  const ms = $("#msgs"); ms.scrollTop = ms.scrollHeight;
+  $("#voltar").addEventListener("click", () => { pararGravacao(true); clearInterval(timerChat); chatAberto = null; render(); });
+  $("#opcoesChat").addEventListener("click", () => menuChat(p));
+  $("#mic").addEventListener("click", gravarAudio);
   $("#fMsg").addEventListener("submit", e => {
     e.preventDefault();
-    const t = $("#txtMsg").value.trim(); if (!t) return;
-    enviarMsg(chatAberto, { t }); $("#txtMsg").focus();
+    const inp = $("#txtMsg"), t = inp.value.trim(); if (!t) return;
+    if (modoReal()) inp.value = "";
+    enviarMsg(chatAberto, { t }); const novo = $("#txtMsg"); if (novo) novo.focus();
   });
   if (gravacao && gravacao.alvo === chatAberto) mostrarGravando();
+  if (modoReal()) {
+    clearInterval(timerChat);
+    const id = chatAberto;
+    atualizarChat(id);
+    timerChat = setInterval(() => atualizarChat(id), 4000);
+  }
 }
 
 // ---------- Conta: usuário, e-mail ou celular e senha, com código de verificação ----------
@@ -1659,6 +1835,7 @@ async function iniciarConta() {
 // Ao entrar, o progresso salvo na conta substitui o do aparelho; conta sem progresso recebe o do aparelho.
 function aplicarConta(j) {
   conta = j.conta; modoTeste = false; confirmacao = null;
+  setTimeout(iniciarAcompanhamento, 0);
   try { sessionStorage.removeItem("mente.teste"); } catch {}
   if (j.estado && typeof j.estado === "object") {
     S = Object.assign(PADRAO(), j.estado);
@@ -1666,13 +1843,18 @@ function aplicarConta(j) {
   } else if (S.perfil) salvarConta();
 }
 function salvarConta() {
-  if (!conta) return;
-  chamarConta({ acao: "salvarEstado", estado: S }).catch(e => {
+  if (!conta) return Promise.resolve();
+  return chamarConta({ acao: "salvarEstado", estado: S, local: meuLocal() }).then(j => {
+    // A foto enviada vira um endereço no servidor; o aparelho passa a guardar só o endereço.
+    if (j.foto && S.perfil && String(S.perfil.foto || "").startsWith("data:")) { S.perfil.foto = j.foto; try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {} }
+    if (modoReal() && (!resumoReal || resumoReal.semPerfil || resumoReal.nivel !== S.nivel)) atualizarResumo();
+  }).catch(e => {
     if (e.status === 401 || e.status === 403) { conta = null; render(); }
     else if (e.status === 413 && !avisouTamanho) { avisouTamanho = true; toast("Progresso grande demais para salvar na conta"); }
   });
 }
 function limparAparelho() {
+  pararAcompanhamento();
   conta = null; S = PADRAO(); telaConta = "entrar"; confirmacao = null;
   rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null };
   try { localStorage.removeItem(CHAVE); } catch {}
@@ -1911,7 +2093,7 @@ function renderPerfil() {
         <button class="toggle" type="button" role="switch" id="tPasse" aria-checked="${S.meuPasse.ativo}" aria-label="Aceitar Passe Direto"></button></div>
       <div class="campo" ${S.meuPasse.ativo ? "" : "hidden"} id="cPasse"><label for="vPasse">Valor (R$)</label><input id="vPasse" type="number" inputmode="numeric" min="10" step="10" value="${S.meuPasse.valor}"></div>
     </div>
-    <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados</div></div><b style="font-family:var(--f-mono)">${S.matches.length}</b></div></div>
+    <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${modoReal() ? "Pessoas com quem você deu match" : `${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados`}</div></div><b style="font-family:var(--f-mono)">${modoReal() ? (matchesReal || []).length : S.matches.length}</b></div></div>
     ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
     ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>@${esc(conta.usuario)}</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div></div>` : ""}
     <button class="btn sec bloco" type="button" id="editar">Editar perfil</button>

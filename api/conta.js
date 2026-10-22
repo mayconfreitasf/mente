@@ -5,19 +5,17 @@
 // TWILIO_FROM ou TWILIO_MESSAGING_SERVICE_SID (SMS). Opcionais: GOOGLE_CLIENT_ID, APPLE_CLIENT_ID, CONTATO_EMAIL.
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
+import { lerCookie, gravarCookie, usuarioDaSessao, falha } from "./_sessao.js";
+import { sincronizarPerfil } from "./_perfil.js";
 import { hashSenha, confereSenha, novoToken, hashToken, usuarioValido, emailValido, senhaValida, verificaTokenProvedor, normalizaTelefone, novoCodigo } from "./_auth.js";
 
-const COOKIE = "mente_sessao", DIAS_SESSAO = 30, MAX_ESTADO = 1500000, MAX_FALHAS = 5;
+const DIAS_SESSAO = 30, MAX_ESTADO = 1500000, MAX_FALHAS = 5;
 // Hash de uma senha qualquer: comparar com ele quando o usuário não existe deixa o tempo de resposta igual.
 const HASH_FALSO = hashSenha(novoToken());
 const temEmail = () => !!(process.env.RESEND_API_KEY && process.env.EMAIL_REMETENTE);
 const temSms = () => !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_FROM || process.env.TWILIO_MESSAGING_SERVICE_SID));
 
-const lerCookie = req => { const m = (req.headers.cookie || "").match(/(?:^|;\s*)mente_sessao=([A-Za-z0-9_-]+)/); return m ? m[1] : null; };
-const gravarCookie = (res, valor, segundos) => res.setHeader("Set-Cookie", `${COOKIE}=${valor}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${segundos}`);
 const texto = (x, max) => typeof x === "string" ? x.trim().toLowerCase().slice(0, max) : "";
-// Erro com status HTTP, devolvido como { erro } pelo handler.
-const falha = (status, erro, extra) => Object.assign(new Error(erro), { status, erro, extra });
 
 function idadeDe(nasc) {
   if (!nasc) return null;
@@ -46,12 +44,6 @@ async function criarSessao(res, id) {
   const t = novoToken();
   await sql`INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (${hashToken(t)}, ${id}, now() + make_interval(days => ${DIAS_SESSAO}))`;
   gravarCookie(res, t, DIAS_SESSAO * 86400);
-}
-async function usuarioDaSessao(req) {
-  const t = lerCookie(req);
-  if (!t) return null;
-  const r = await sql`SELECT u.* FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ${hashToken(t)} AND s.expira_em > now()`;
-  return r[0] || null;
 }
 function estadoAceito(e) {
   if (!e || typeof e !== "object" || Array.isArray(e)) return null;
@@ -221,6 +213,14 @@ async function social(b, res) {
   return res.status(200).json({ conta: publico(u), estado: u.estado });
 }
 
+// Denunciar ou bloquear uma pessoa real desfaz o match e impede que ela volte a aparecer.
+async function desfazerContato(meuId, alvo) {
+  if (!/^[0-9a-f-]{36}$/.test(alvo)) return;
+  await sql`DELETE FROM matches WHERE (a_id = ${meuId} AND b_id::text = ${alvo}) OR (b_id = ${meuId} AND a_id::text = ${alvo})`;
+  await sql`INSERT INTO avaliacoes (de_id, para_id, tipo) SELECT ${meuId}, id, 'passar' FROM usuarios WHERE id::text = ${alvo}
+    ON CONFLICT (de_id, para_id) DO UPDATE SET tipo = 'passar'`;
+}
+
 const MOTIVOS = ["Perfil falso", "Fotos ou conteúdo impróprio", "Assédio ou ofensa", "Golpe ou spam", "Parece menor de idade", "Outro motivo"];
 
 export default async function handler(req, res) {
@@ -259,10 +259,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ conta: publico(n) });
     }
     if (b.acao === "salvarEstado") {
-      const json = estadoAceito(b.estado);
-      if (!json) throw falha(413, "Progresso grande demais para salvar na conta.");
-      await sql`UPDATE usuarios SET estado = ${json}::jsonb WHERE id = ${u.id}`;
-      return res.status(200).json({ ok: true });
+      if (!estadoAceito(b.estado)) throw falha(413, "Progresso grande demais para salvar na conta.");
+      // O perfil público acompanha o progresso; a foto enviada vira mídia e o progresso guarda só o endereço dela.
+      const r = await sincronizarPerfil(u, b.estado, b.local);
+      if (r.foto) b.estado.perfil.foto = r.foto;
+      await sql`UPDATE usuarios SET estado = ${JSON.stringify(b.estado)}::jsonb WHERE id = ${u.id}`;
+      return res.status(200).json({ ok: true, ...r });
     }
     if (b.acao === "denunciar") {
       const alvo = typeof b.alvo === "string" ? b.alvo.slice(0, 64) : "";
@@ -270,12 +272,14 @@ export default async function handler(req, res) {
       const detalhe = typeof b.texto === "string" ? b.texto.trim().slice(0, 300) : "";
       await sql`INSERT INTO denuncias (denunciante_id, alvo, motivo, texto) VALUES (${u.id}, ${alvo}, ${b.motivo}, ${detalhe})`;
       await sql`INSERT INTO bloqueios (usuario_id, alvo) VALUES (${u.id}, ${alvo}) ON CONFLICT DO NOTHING`;
+      await desfazerContato(u.id, alvo);
       return res.status(200).json({ ok: true });
     }
     if (b.acao === "bloquear") {
       const alvo = typeof b.alvo === "string" ? b.alvo.slice(0, 64) : "";
       if (!alvo) throw falha(400, "Perfil inválido.");
       await sql`INSERT INTO bloqueios (usuario_id, alvo) VALUES (${u.id}, ${alvo}) ON CONFLICT DO NOTHING`;
+      await desfazerContato(u.id, alvo);
       return res.status(200).json({ ok: true });
     }
     // Excluir conta apaga o usuário e, em cascata, sessões, códigos e bloqueios. Denúncias feitas ficam sem autor.
