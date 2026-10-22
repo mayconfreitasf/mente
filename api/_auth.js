@@ -23,6 +23,13 @@ export const novoToken = () => crypto.randomBytes(32).toString("base64url");
 export const hashToken = t => crypto.createHash("sha256").update(String(t)).digest("hex");
 
 export const usuarioValido = u => /^[a-z]{4,15}$/.test(u);
+// Celular brasileiro: DDD + 9 + 8 dígitos, guardado como +55DDD9XXXXXXXX.
+export function normalizaTelefone(x) {
+  let d = String(x || "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length >= 12) d = d.slice(2);
+  return /^[1-9]{2}9\d{8}$/.test(d) ? "+55" + d : null;
+}
+export const novoCodigo = () => String(crypto.randomInt(0, 1000000)).padStart(6, "0");
 export const emailValido = e => e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 export const senhaValida = s => typeof s === "string" && s.length >= 6 && s.length <= 128 && /[A-Za-z]/.test(s) && /\d/.test(s) && /[^A-Za-z0-9]/.test(s);
 

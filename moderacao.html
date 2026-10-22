@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mente · Moderação</title>
+<style>
+:root { --bg: #f6efec; --surface: #fffaf8; --line: #e2d0cb; --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --bad: #c23a52; color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+h1 { margin: 0; font-size: 24px; }
+.caixa { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
+button { border: 0; border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 700; background: var(--accent); color: #fff; cursor: pointer; }
+button.sec { background: #f1e5e1; color: var(--fg); }
+button.perigo { background: var(--bad); }
+.muted { color: var(--muted); font-size: 13px; }
+.erro { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Moderação de denúncias</h1>
+  <p class="muted" style="margin:0">A Apple exige agir sobre denúncias em até 24 horas. Revise esta página todos os dias.</p>
+  <div class="caixa">
+    <div class="linha"><input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off"><button id="entrar">Carregar</button></div>
+    <span class="erro" id="erro"></span>
+  </div>
+  <div id="lista"></div>
+</main>
+<script>
+(() => {
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const $ = s => document.querySelector(s);
+  let token = "";
+  try { token = sessionStorage.getItem("mente.admin") || ""; } catch {}
+  $("#token").value = token;
+  async function api(metodo, corpo) {
+    const r = await fetch("/api/moderacao", { method: metodo, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.erro || "Erro " + r.status);
+    return j;
+  }
+  async function carregar() {
+    $("#erro").textContent = "";
+    try {
+      const { denuncias } = await api("GET");
+      $("#lista").innerHTML = denuncias.length ? denuncias.map(d => `
+        <div class="caixa" data-id="${d.id}">
+          <strong>${esc(d.motivo)}</strong>
+          <span class="muted">Denunciado: ${d.alvo_usuario ? "@" + esc(d.alvo_usuario) : "perfil de teste (" + esc(d.alvo) + ")"} · por ${d.denunciante ? "@" + esc(d.denunciante) : "conta excluída"} · ${new Date(d.criado_em).toLocaleString("pt-BR")}</span>
+          ${d.texto ? `<p style="margin:0">${esc(d.texto)}</p>` : ""}
+          <div class="linha"><button class="sec" data-acao="resolver">Marcar como resolvida</button>${d.alvo_usuario && !d.alvo_banido ? `<button class="perigo" data-acao="banir">Banir usuário</button>` : ""}</div>
+        </div>`).join("") : `<p class="muted">Nenhuma denúncia aberta.</p>`;
+    } catch (e) { $("#erro").textContent = e.message; }
+  }
+  $("#entrar").addEventListener("click", () => { token = $("#token").value.trim(); try { sessionStorage.setItem("mente.admin", token); } catch {} carregar(); });
+  $("#lista").addEventListener("click", async e => {
+    const b = e.target.closest("[data-acao]"); if (!b) return;
+    if (b.dataset.acao === "banir" && !confirm("Banir este usuário? Ele perde o acesso ao app.")) return;
+    try { await api("POST", { id: Number(b.closest("[data-id]").dataset.id), acao: b.dataset.acao }); carregar(); }
+    catch (x) { $("#erro").textContent = x.message; }
+  });
+  if (token) carregar();
+})();
+</script>
+</body>
+</html>

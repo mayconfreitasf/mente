@@ -1,36 +1,46 @@
-// Contas do Mente: cadastro com usuário, e-mail e senha, login com Google ou Apple, sessão por cookie e progresso salvo.
+// Contas do Mente: cadastro com usuário, e-mail ou celular e senha, confirmado por código; login com Google ou Apple,
+// sessão por cookie, progresso salvo, denúncias, bloqueios e exclusão de conta.
 // Precisa de um banco Postgres (DATABASE_URL ou POSTGRES_URL, por exemplo Neon pela Vercel).
-// Opcionais: GOOGLE_CLIENT_ID, APPLE_CLIENT_ID, RESEND_API_KEY + EMAIL_REMETENTE (recuperar senha) e APP_URL.
-import { neon } from "@neondatabase/serverless";
-import { hashSenha, confereSenha, novoToken, hashToken, usuarioValido, emailValido, senhaValida, verificaTokenProvedor } from "./_auth.js";
+// Envio de códigos: RESEND_API_KEY + EMAIL_REMETENTE (e-mail) e TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN +
+// TWILIO_FROM ou TWILIO_MESSAGING_SERVICE_SID (SMS). Opcionais: GOOGLE_CLIENT_ID, APPLE_CLIENT_ID, CONTATO_EMAIL.
+import crypto from "node:crypto";
+import { sql, prepararBanco } from "./_banco.js";
+import { hashSenha, confereSenha, novoToken, hashToken, usuarioValido, emailValido, senhaValida, verificaTokenProvedor, normalizaTelefone, novoCodigo } from "./_auth.js";
 
-const URL_BANCO = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-const sql = URL_BANCO ? neon(URL_BANCO) : null;
 const COOKIE = "mente_sessao", DIAS_SESSAO = 30, MAX_ESTADO = 1500000, MAX_FALHAS = 5;
 // Hash de uma senha qualquer: comparar com ele quando o usuário não existe deixa o tempo de resposta igual.
 const HASH_FALSO = hashSenha(novoToken());
-
-let pronto = null;
-function prepararBanco() {
-  if (!pronto) pronto = (async () => {
-    await sql`CREATE TABLE IF NOT EXISTS usuarios (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      usuario text UNIQUE, email text UNIQUE, senha_hash text,
-      google_sub text UNIQUE, apple_sub text UNIQUE,
-      estado jsonb, falhas int NOT NULL DEFAULT 0, bloqueado_ate timestamptz,
-      criado_em timestamptz NOT NULL DEFAULT now())`;
-    await sql`CREATE TABLE IF NOT EXISTS sessoes (
-      token_hash text PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, expira_em timestamptz NOT NULL)`;
-    await sql`CREATE TABLE IF NOT EXISTS recuperacoes (
-      token_hash text PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, expira_em timestamptz NOT NULL)`;
-  })().catch(e => { pronto = null; throw e; });
-  return pronto;
-}
+const temEmail = () => !!(process.env.RESEND_API_KEY && process.env.EMAIL_REMETENTE);
+const temSms = () => !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_FROM || process.env.TWILIO_MESSAGING_SERVICE_SID));
 
 const lerCookie = req => { const m = (req.headers.cookie || "").match(/(?:^|;\s*)mente_sessao=([A-Za-z0-9_-]+)/); return m ? m[1] : null; };
 const gravarCookie = (res, valor, segundos) => res.setHeader("Set-Cookie", `${COOKIE}=${valor}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${segundos}`);
-const publico = u => ({ usuario: u.usuario, email: u.email, temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub });
 const texto = (x, max) => typeof x === "string" ? x.trim().toLowerCase().slice(0, max) : "";
+// Erro com status HTTP, devolvido como { erro } pelo handler.
+const falha = (status, erro, extra) => Object.assign(new Error(erro), { status, erro, extra });
+
+function idadeDe(nasc) {
+  if (!nasc) return null;
+  const d = new Date(nasc), h = new Date();
+  let i = h.getUTCFullYear() - d.getUTCFullYear();
+  if (h.getUTCMonth() < d.getUTCMonth() || (h.getUTCMonth() === d.getUTCMonth() && h.getUTCDate() < d.getUTCDate())) i--;
+  return i;
+}
+const mascaraEmail = e => e.replace(/^(.)[^@]*(@.*)$/, "$1***$2");
+const mascaraTelefone = t => `(${t.slice(3, 5)}) *****-${t.slice(-4)}`;
+const publico = u => ({
+  usuario: u.usuario, email: u.email, telefone: u.telefone ? mascaraTelefone(u.telefone) : null, idade: idadeDe(u.nascimento),
+  temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub
+});
+// "contato" é um e-mail ou um celular; o tipo decide o canal do código.
+function lerContato(x) {
+  const v = typeof x === "string" ? x.trim() : "";
+  if (v.includes("@")) { const e = v.toLowerCase().slice(0, 200); return emailValido(e) ? { tipo: "email", valor: e } : null; }
+  const t = normalizaTelefone(v);
+  return t ? { tipo: "telefone", valor: t } : null;
+}
+const destinoDe = u => u.email ? { tipo: "email", valor: u.email } : { tipo: "telefone", valor: u.telefone };
+const mascaraDestino = d => d.tipo === "email" ? mascaraEmail(d.valor) : mascaraTelefone(d.valor);
 
 async function criarSessao(res, id) {
   const t = novoToken();
@@ -43,7 +53,6 @@ async function usuarioDaSessao(req) {
   const r = await sql`SELECT u.* FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ${hashToken(t)} AND s.expira_em > now()`;
   return r[0] || null;
 }
-// Progresso enviado pelo app no cadastro: só objetos e até o tamanho máximo.
 function estadoAceito(e) {
   if (!e || typeof e !== "object" || Array.isArray(e)) return null;
   const json = JSON.stringify(e);
@@ -51,47 +60,154 @@ function estadoAceito(e) {
 }
 function mensagemDuplicado(e) {
   const c = String(e.constraint || e.detail || "");
+  if (c.includes("telefone")) return "Esse celular já está em uso.";
   if (c.includes("email")) return "Esse e-mail já está em uso.";
   if (c.includes("usuario")) return "Esse nome de usuário já existe.";
   return "Já existe uma conta com esses dados.";
 }
 const ERRO_LOGIN = "Usuário ou senha incorretos.";
+const SUSPENSA = "Esta conta foi suspensa por violar os Termos de Uso.";
+
+// Códigos de 6 dígitos: valem 10 minutos, 5 tentativas cada, 1 pedido por minuto e 5 por hora.
+async function enviarCodigo(u, destino, finalidade) {
+  if (destino.tipo === "email" && !temEmail()) throw falha(501, "O envio de código por e-mail ainda não está configurado.");
+  if (destino.tipo === "telefone" && !temSms()) throw falha(501, "O envio de código por SMS ainda não está configurado.");
+  const [c] = await sql`SELECT count(*) FILTER (WHERE criado_em > now() - interval '60 seconds') AS minuto,
+    count(*) FILTER (WHERE criado_em > now() - interval '1 hour') AS hora FROM codigos WHERE usuario_id = ${u.id}`;
+  if (Number(c.minuto) > 0) throw falha(429, "Aguarde 1 minuto para pedir outro código.");
+  if (Number(c.hora) >= 5) throw falha(429, "Muitos códigos pedidos. Tente de novo mais tarde.");
+  const codigo = novoCodigo();
+  await sql`DELETE FROM codigos WHERE usuario_id = ${u.id} AND finalidade = ${finalidade} AND criado_em < now() - interval '1 hour'`;
+  await sql`INSERT INTO codigos (usuario_id, finalidade, codigo_hash, expira_em) VALUES (${u.id}, ${finalidade}, ${hashToken(u.id + ":" + codigo)}, now() + interval '10 minutes')`;
+  const msg = `Seu código do Mente é ${codigo}. Ele vale por 10 minutos. Não compartilhe com ninguém.`;
+  let r;
+  if (destino.tipo === "email") {
+    r = await fetch("https://api.resend.com/emails", {
+      method: "POST", headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: process.env.EMAIL_REMETENTE, to: destino.valor, subject: `${codigo} é seu código do Mente`, text: msg })
+    }).catch(() => null);
+  } else {
+    const corpo = new URLSearchParams({ To: destino.valor, Body: msg });
+    if (process.env.TWILIO_MESSAGING_SERVICE_SID) corpo.set("MessagingServiceSid", process.env.TWILIO_MESSAGING_SERVICE_SID); else corpo.set("From", process.env.TWILIO_FROM);
+    r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+      method: "POST", headers: { Authorization: "Basic " + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+      body: corpo
+    }).catch(() => null);
+  }
+  if (!r || !r.ok) throw falha(502, "Não foi possível enviar o código. Confira o e-mail ou celular e tente de novo.");
+  return mascaraDestino(destino);
+}
+async function conferirCodigo(u, finalidade, codigo) {
+  const [c] = await sql`SELECT * FROM codigos WHERE usuario_id = ${u.id} AND finalidade = ${finalidade} AND expira_em > now() ORDER BY id DESC LIMIT 1`;
+  if (!c) throw falha(400, "Código expirado. Peça um novo.");
+  if (c.tentativas >= 5) throw falha(429, "Muitas tentativas. Peça um novo código.");
+  const esperado = Buffer.from(c.codigo_hash), recebido = Buffer.from(hashToken(u.id + ":" + String(codigo || "").trim()));
+  if (esperado.length !== recebido.length || !crypto.timingSafeEqual(esperado, recebido)) {
+    await sql`UPDATE codigos SET tentativas = tentativas + 1 WHERE id = ${c.id}`;
+    throw falha(400, "Código incorreto.");
+  }
+  await sql`DELETE FROM codigos WHERE usuario_id = ${u.id} AND finalidade = ${finalidade}`;
+}
+async function acharPorLogin(login) {
+  const l = texto(login, 200), tel = normalizaTelefone(login);
+  if (!l) return null;
+  const [u] = tel ? await sql`SELECT * FROM usuarios WHERE usuario = ${l} OR email = ${l} OR telefone = ${tel} LIMIT 1`
+    : await sql`SELECT * FROM usuarios WHERE usuario = ${l} OR email = ${l} LIMIT 1`;
+  return u || null;
+}
 
 async function cadastrar(b, res) {
-  const usuario = texto(b.usuario, 40), email = texto(b.email, 200);
-  if (!usuarioValido(usuario)) return res.status(400).json({ erro: "O usuário precisa ter de 4 a 15 letras minúsculas, sem números nem símbolos." });
-  if (!emailValido(email)) return res.status(400).json({ erro: "Digite um e-mail válido." });
-  if (!senhaValida(b.senha)) return res.status(400).json({ erro: "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo." });
-  const [u] = await sql`INSERT INTO usuarios (usuario, email, senha_hash, estado) VALUES (${usuario}, ${email}, ${hashSenha(b.senha)}, ${estadoAceito(b.estado)}::jsonb) RETURNING *`;
-  await criarSessao(res, u.id);
-  return res.status(200).json({ conta: publico(u), estado: u.estado });
+  const usuario = texto(b.usuario, 40), contato = lerContato(b.contato);
+  if (!usuarioValido(usuario)) throw falha(400, "O usuário precisa ter de 4 a 15 letras minúsculas, sem números nem símbolos.");
+  if (!contato) throw falha(400, "Digite um e-mail válido ou um celular com DDD.");
+  if (!senhaValida(b.senha)) throw falha(400, "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo.");
+  const nasc = /^\d{4}-\d{2}-\d{2}$/.test(String(b.nascimento || "")) ? b.nascimento : null, idade = idadeDe(nasc);
+  if (idade == null || isNaN(idade) || idade > 120) throw falha(400, "Informe sua data de nascimento.");
+  if (idade < 18) throw falha(403, "O Mente é só para maiores de 18 anos.");
+  if (b.aceite !== true) throw falha(400, "Aceite os Termos de Uso e a Política de Privacidade para continuar.");
+  // Cadastros não confirmados há mais de 15 minutos liberam o usuário, e-mail ou celular para quem confirmar primeiro.
+  await sql`DELETE FROM usuarios WHERE verificado = false AND criado_em < now() - interval '15 minutes'
+    AND (usuario = ${usuario} OR email = ${contato.tipo === "email" ? contato.valor : null} OR telefone = ${contato.tipo === "telefone" ? contato.valor : null})`;
+  const email = contato.tipo === "email" ? contato.valor : null, telefone = contato.tipo === "telefone" ? contato.valor : null;
+  const [u] = await sql`INSERT INTO usuarios (usuario, email, telefone, senha_hash, nascimento, verificado, estado)
+    VALUES (${usuario}, ${email}, ${telefone}, ${hashSenha(b.senha)}, ${nasc}, false, ${estadoAceito(b.estado)}::jsonb) RETURNING *`;
+  let destino;
+  try { destino = await enviarCodigo(u, contato, "verificar"); }
+  catch (e) { await sql`DELETE FROM usuarios WHERE id = ${u.id}`; throw e; }
+  return res.status(200).json({ precisaCodigo: true, login: u.usuario, destino });
 }
 
 async function entrar(b, res) {
-  const login = texto(b.login, 200), senha = typeof b.senha === "string" ? b.senha.slice(0, 128) : "";
-  const [u] = login ? await sql`SELECT * FROM usuarios WHERE usuario = ${login} OR email = ${login} LIMIT 1` : [];
-  if (!u || !u.senha_hash) { confereSenha(senha, HASH_FALSO); return res.status(401).json({ erro: ERRO_LOGIN }); }
-  if (u.bloqueado_ate && new Date(u.bloqueado_ate) > new Date()) return res.status(429).json({ erro: "Muitas tentativas erradas. Tente de novo em 15 minutos." });
+  const senha = typeof b.senha === "string" ? b.senha.slice(0, 128) : "";
+  const u = await acharPorLogin(b.login);
+  if (!u || !u.senha_hash) { confereSenha(senha, HASH_FALSO); throw falha(401, ERRO_LOGIN); }
+  if (u.bloqueado_ate && new Date(u.bloqueado_ate) > new Date()) throw falha(429, "Muitas tentativas erradas. Tente de novo em 15 minutos.");
   if (!confereSenha(senha, u.senha_hash)) {
     await sql`UPDATE usuarios SET
       bloqueado_ate = CASE WHEN falhas + 1 >= ${MAX_FALHAS} THEN now() + interval '15 minutes' ELSE bloqueado_ate END,
       falhas = CASE WHEN falhas + 1 >= ${MAX_FALHAS} THEN 0 ELSE falhas + 1 END
       WHERE id = ${u.id}`;
-    return res.status(401).json({ erro: ERRO_LOGIN });
+    throw falha(401, ERRO_LOGIN);
   }
   await sql`UPDATE usuarios SET falhas = 0, bloqueado_ate = NULL WHERE id = ${u.id}`;
+  if (u.banido) throw falha(403, SUSPENSA);
+  if (!u.verificado) {
+    let destino = mascaraDestino(destinoDe(u));
+    try { destino = await enviarCodigo(u, destinoDe(u), "verificar"); } catch (e) { if (e.status !== 429) throw e; }
+    return res.status(403).json({ precisaCodigo: true, login: u.usuario, destino, erro: "Confirme sua conta com o código enviado." });
+  }
   await criarSessao(res, u.id);
   return res.status(200).json({ conta: publico(u), estado: u.estado });
 }
 
-// Google e Apple: a conta é achada pelo identificador do provedor. Não liga com contas de senha pelo e-mail,
-// porque o e-mail do cadastro não é confirmado e alguém poderia ter cadastrado o e-mail de outra pessoa.
+async function verificar(b, res) {
+  const [u] = await sql`SELECT * FROM usuarios WHERE usuario = ${texto(b.login, 40)}`;
+  if (!u || u.verificado) throw falha(400, "Não há confirmação pendente para essa conta.");
+  await conferirCodigo(u, "verificar", b.codigo);
+  const [n] = await sql`UPDATE usuarios SET verificado = true WHERE id = ${u.id} RETURNING *`;
+  await criarSessao(res, n.id);
+  return res.status(200).json({ conta: publico(n), estado: n.estado });
+}
+
+async function reenviar(b, res) {
+  const [u] = await sql`SELECT * FROM usuarios WHERE usuario = ${texto(b.login, 40)}`;
+  if (!u || u.verificado) throw falha(400, "Não há confirmação pendente para essa conta.");
+  return res.status(200).json({ destino: await enviarCodigo(u, destinoDe(u), "verificar") });
+}
+
+// Recuperar senha: código para o e-mail ou celular da conta. A resposta não revela se a conta existe.
+async function recuperar(b, res) {
+  const contato = lerContato(b.contato);
+  if (!contato) throw falha(400, "Digite o e-mail ou o celular da sua conta.");
+  if (contato.tipo === "email" && !temEmail()) throw falha(501, "O envio de código por e-mail ainda não está configurado.");
+  if (contato.tipo === "telefone" && !temSms()) throw falha(501, "O envio de código por SMS ainda não está configurado.");
+  const [u] = contato.tipo === "email" ? await sql`SELECT * FROM usuarios WHERE email = ${contato.valor} AND verificado AND senha_hash IS NOT NULL`
+    : await sql`SELECT * FROM usuarios WHERE telefone = ${contato.valor} AND verificado AND senha_hash IS NOT NULL`;
+  if (u) { try { await enviarCodigo(u, contato, "recuperar"); } catch (e) { if (e.status === 501) throw e; } }
+  return res.status(200).json({ ok: true, destino: mascaraDestino(contato) });
+}
+
+async function redefinir(b, res) {
+  const contato = lerContato(b.contato);
+  if (!senhaValida(b.senha)) throw falha(400, "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo.");
+  const [u] = !contato ? [] : contato.tipo === "email" ? await sql`SELECT * FROM usuarios WHERE email = ${contato.valor} AND verificado`
+    : await sql`SELECT * FROM usuarios WHERE telefone = ${contato.valor} AND verificado`;
+  if (!u) throw falha(400, "Código incorreto.");
+  await conferirCodigo(u, "recuperar", b.codigo);
+  const [n] = await sql`UPDATE usuarios SET senha_hash = ${hashSenha(b.senha)}, falhas = 0, bloqueado_ate = NULL WHERE id = ${u.id} RETURNING *`;
+  await sql`DELETE FROM sessoes WHERE usuario_id = ${n.id}`;
+  if (n.banido) throw falha(403, SUSPENSA);
+  await criarSessao(res, n.id);
+  return res.status(200).json({ conta: publico(n), estado: n.estado });
+}
+
+// Google e Apple: a conta é achada pelo identificador do provedor. Não liga com contas de senha pelo e-mail.
 async function social(b, res) {
   const provedor = b.provedor === "apple" ? "apple" : b.provedor === "google" ? "google" : null;
   const aud = provedor === "apple" ? process.env.APPLE_CLIENT_ID : process.env.GOOGLE_CLIENT_ID;
-  if (!provedor || !aud) return res.status(400).json({ erro: "Login social não configurado." });
+  if (!provedor || !aud) throw falha(400, "Login social não configurado.");
   const dados = await verificaTokenProvedor(provedor, b.token, aud);
-  if (!dados) return res.status(401).json({ erro: `Não foi possível confirmar sua conta ${provedor === "apple" ? "Apple" : "Google"}.` });
+  if (!dados) throw falha(401, `Não foi possível confirmar sua conta ${provedor === "apple" ? "Apple" : "Google"}.`);
   let [u] = provedor === "apple" ? await sql`SELECT * FROM usuarios WHERE apple_sub = ${dados.sub}` : await sql`SELECT * FROM usuarios WHERE google_sub = ${dados.sub}`;
   if (!u) {
     const [usado] = dados.email ? await sql`SELECT 1 FROM usuarios WHERE email = ${dados.email}` : [];
@@ -100,57 +216,30 @@ async function social(b, res) {
       ? await sql`INSERT INTO usuarios (email, apple_sub, estado) VALUES (${email}, ${dados.sub}, ${estado}::jsonb) RETURNING *`
       : await sql`INSERT INTO usuarios (email, google_sub, estado) VALUES (${email}, ${dados.sub}, ${estado}::jsonb) RETURNING *`;
   }
+  if (u.banido) throw falha(403, SUSPENSA);
   await criarSessao(res, u.id);
   return res.status(200).json({ conta: publico(u), estado: u.estado });
 }
 
-async function recuperar(b, req, res) {
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_REMETENTE) return res.status(501).json({ erro: "A recuperação de senha ainda não está configurada." });
-  const email = texto(b.email, 200);
-  const [u] = emailValido(email) ? await sql`SELECT id, email FROM usuarios WHERE email = ${email} AND senha_hash IS NOT NULL` : [];
-  // A resposta é a mesma exista ou não a conta, para não revelar quais e-mails estão cadastrados.
-  if (u) {
-    const t = novoToken();
-    await sql`INSERT INTO recuperacoes (token_hash, usuario_id, expira_em) VALUES (${hashToken(t)}, ${u.id}, now() + interval '1 hour')`;
-    const base = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? "https://" + process.env.VERCEL_PROJECT_PRODUCTION_URL : "https://" + req.headers.host);
-    const link = `${base.replace(/\/$/, "")}/#redefinir=${t}`;
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: process.env.EMAIL_REMETENTE, to: u.email, subject: "Redefinir sua senha do Mente",
-        html: `<p>Recebemos um pedido para redefinir a senha da sua conta no Mente.</p><p><a href="${link}">Criar uma nova senha</a></p><p>O link vale por 1 hora. Se não foi você, ignore este e-mail.</p>`
-      })
-    });
-  }
-  return res.status(200).json({ ok: true });
-}
-
-async function redefinir(b, res) {
-  if (!senhaValida(b.senha)) return res.status(400).json({ erro: "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo." });
-  const [r] = typeof b.token === "string" ? await sql`SELECT usuario_id FROM recuperacoes WHERE token_hash = ${hashToken(b.token)} AND expira_em > now()` : [];
-  if (!r) return res.status(400).json({ erro: "Esse link expirou ou já foi usado. Peça outro." });
-  const [u] = await sql`UPDATE usuarios SET senha_hash = ${hashSenha(b.senha)}, falhas = 0, bloqueado_ate = NULL WHERE id = ${r.usuario_id} RETURNING *`;
-  await sql`DELETE FROM recuperacoes WHERE usuario_id = ${u.id}`;
-  await sql`DELETE FROM sessoes WHERE usuario_id = ${u.id}`;
-  await criarSessao(res, u.id);
-  return res.status(200).json({ conta: publico(u), estado: u.estado });
-}
+const MOTIVOS = ["Perfil falso", "Fotos ou conteúdo impróprio", "Assédio ou ofensa", "Golpe ou spam", "Parece menor de idade", "Outro motivo"];
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") return res.status(405).json({ erro: "Use POST." });
   const b = req.body || {};
   if (b.acao === "config") {
-    return res.status(200).json({ banco: !!sql, google: process.env.GOOGLE_CLIENT_ID || null, apple: process.env.APPLE_CLIENT_ID || null, recuperar: !!(process.env.RESEND_API_KEY && process.env.EMAIL_REMETENTE) });
+    return res.status(200).json({ banco: !!sql, google: process.env.GOOGLE_CLIENT_ID || null, apple: process.env.APPLE_CLIENT_ID || null,
+      email: temEmail(), sms: temSms(), contato: process.env.CONTATO_EMAIL || null });
   }
   if (!sql) return res.status(503).json({ erro: "O login ainda não está configurado no servidor." });
   try {
     await prepararBanco();
     if (b.acao === "cadastrar") return await cadastrar(b, res);
     if (b.acao === "entrar") return await entrar(b, res);
+    if (b.acao === "verificar") return await verificar(b, res);
+    if (b.acao === "reenviar") return await reenviar(b, res);
     if (b.acao === "social") return await social(b, res);
-    if (b.acao === "recuperar") return await recuperar(b, req, res);
+    if (b.acao === "recuperar") return await recuperar(b, res);
     if (b.acao === "redefinir") return await redefinir(b, res);
     if (b.acao === "sair") {
       const t = lerCookie(req);
@@ -160,22 +249,46 @@ export default async function handler(req, res) {
     }
     const u = await usuarioDaSessao(req);
     if (!u) return res.status(401).json({ erro: "Entre na sua conta." });
+    if (u.banido) { await sql`DELETE FROM sessoes WHERE usuario_id = ${u.id}`; gravarCookie(res, "", 0); return res.status(403).json({ erro: SUSPENSA }); }
     if (b.acao === "eu") return res.status(200).json({ conta: publico(u), estado: u.estado });
     if (b.acao === "definirUsuario") {
-      if (u.usuario) return res.status(400).json({ erro: "Você já tem um nome de usuário." });
+      if (u.usuario) throw falha(400, "Você já tem um nome de usuário.");
       const usuario = texto(b.usuario, 40);
-      if (!usuarioValido(usuario)) return res.status(400).json({ erro: "O usuário precisa ter de 4 a 15 letras minúsculas, sem números nem símbolos." });
+      if (!usuarioValido(usuario)) throw falha(400, "O usuário precisa ter de 4 a 15 letras minúsculas, sem números nem símbolos.");
       const [n] = await sql`UPDATE usuarios SET usuario = ${usuario} WHERE id = ${u.id} RETURNING *`;
       return res.status(200).json({ conta: publico(n) });
     }
     if (b.acao === "salvarEstado") {
       const json = estadoAceito(b.estado);
-      if (!json) return res.status(413).json({ erro: "Progresso grande demais para salvar na conta." });
+      if (!json) throw falha(413, "Progresso grande demais para salvar na conta.");
       await sql`UPDATE usuarios SET estado = ${json}::jsonb WHERE id = ${u.id}`;
       return res.status(200).json({ ok: true });
     }
-    return res.status(400).json({ erro: "Ação inválida." });
+    if (b.acao === "denunciar") {
+      const alvo = typeof b.alvo === "string" ? b.alvo.slice(0, 64) : "";
+      if (!alvo || !MOTIVOS.includes(b.motivo)) throw falha(400, "Escolha um motivo.");
+      const detalhe = typeof b.texto === "string" ? b.texto.trim().slice(0, 300) : "";
+      await sql`INSERT INTO denuncias (denunciante_id, alvo, motivo, texto) VALUES (${u.id}, ${alvo}, ${b.motivo}, ${detalhe})`;
+      await sql`INSERT INTO bloqueios (usuario_id, alvo) VALUES (${u.id}, ${alvo}) ON CONFLICT DO NOTHING`;
+      return res.status(200).json({ ok: true });
+    }
+    if (b.acao === "bloquear") {
+      const alvo = typeof b.alvo === "string" ? b.alvo.slice(0, 64) : "";
+      if (!alvo) throw falha(400, "Perfil inválido.");
+      await sql`INSERT INTO bloqueios (usuario_id, alvo) VALUES (${u.id}, ${alvo}) ON CONFLICT DO NOTHING`;
+      return res.status(200).json({ ok: true });
+    }
+    // Excluir conta apaga o usuário e, em cascata, sessões, códigos e bloqueios. Denúncias feitas ficam sem autor.
+    if (b.acao === "excluirConta") {
+      if (u.senha_hash && !confereSenha(typeof b.senha === "string" ? b.senha.slice(0, 128) : "", u.senha_hash)) throw falha(401, "Senha incorreta.");
+      if (!u.senha_hash && b.confirmacao !== "EXCLUIR") throw falha(400, "Digite EXCLUIR para confirmar.");
+      await sql`DELETE FROM usuarios WHERE id = ${u.id}`;
+      gravarCookie(res, "", 0);
+      return res.status(200).json({ ok: true });
+    }
+    throw falha(400, "Ação inválida.");
   } catch (e) {
+    if (e && e.status) return res.status(e.status).json({ erro: e.erro, ...(e.extra || {}) });
     if (e && e.code === "23505") return res.status(409).json({ erro: mensagemDuplicado(e) });
     console.error(e);
     return res.status(500).json({ erro: "Erro no servidor. Tente de novo." });

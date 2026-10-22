@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mente · Termos de Uso</title>
+<style>
+:root { --bg: #f6efec; --surface: #fffaf8; --line: #e2d0cb; --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg: #150d11; --surface: #21151a; --line: #3e2931; --fg: #f4ebe7; --muted: #b39ca4; --accent: #e06a86; color-scheme: dark; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
+main { max-width: 720px; margin: 0 auto; }
+h1 { font-size: 28px; line-height: 1.2; margin: 8px 0 4px; }
+h2 { font-size: 19px; margin: 28px 0 6px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); font-size: 14px; }
+li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+<p><a href="/">← Voltar ao Mente</a></p>
+<h1>Termos de Uso</h1>
+<p class="muted">Última atualização: 23 de outubro de 2026.</p>
+
+<p>Ao criar uma conta ou usar o <strong>Mente</strong>, você concorda com estes termos e com a <a href="privacidade.html">Política de Privacidade</a>. Se não concordar, não use o app.</p>
+
+<h2>1. Quem pode usar</h2>
+<ul>
+  <li>Só pessoas com <strong>18 anos ou mais</strong>.</li>
+  <li>Uma conta por pessoa, com dados verdadeiros. Não é permitido se passar por outra pessoa.</li>
+  <li>Quem teve a conta banida não pode criar outra.</li>
+</ul>
+
+<h2>2. Sua conta</h2>
+<p>Você é responsável pela sua senha e por tudo que acontece na sua conta. Avise-nos se suspeitar de uso indevido. Você pode excluir a conta a qualquer momento em Perfil → Excluir conta.</p>
+
+<h2>3. Regras de convivência</h2>
+<p>Temos <strong>tolerância zero</strong> com conteúdo e comportamento abusivo. É proibido:</p>
+<ul>
+  <li>Assediar, ameaçar, ofender ou discriminar qualquer pessoa.</li>
+  <li>Enviar nudez, conteúdo sexual explícito, violento ou que incentive crimes ou automutilação.</li>
+  <li>Criar perfis falsos, aplicar golpes, pedir dinheiro, fazer spam ou propaganda.</li>
+  <li>Envolver menores de idade de qualquer forma.</li>
+  <li>Compartilhar dados pessoais de outras pessoas sem autorização.</li>
+  <li>Tentar burlar níveis, limites ou a segurança do app.</li>
+</ul>
+
+<h2>4. Denúncias e moderação</h2>
+<p>Você pode denunciar e bloquear qualquer perfil no app. Analisamos as denúncias em até 24 horas e podemos remover conteúdo, suspender ou banir contas que violem estes termos, sem aviso prévio. Para falar com a moderação, escreva para <a data-contato href="#">o e-mail de contato</a>.</p>
+
+<h2>5. Quizzes, níveis e conteúdo de IA</h2>
+<p>As perguntas criadas a partir de arquivos e temas são geradas por inteligência artificial e podem conter erros. Elas servem para diversão e estudo, não como fonte oficial. Os níveis medem o desempenho no app e não representam avaliação intelectual real de ninguém.</p>
+
+<h2>6. Conteúdo que você envia</h2>
+<p>Você continua dono do que envia (perfil, fotos, mensagens, áudios, arquivos). Você nos autoriza a guardar e exibir esse conteúdo apenas para o funcionamento do app. Não envie nada que você não tenha direito de compartilhar.</p>
+
+<h2>7. Recursos pagos</h2>
+<p>Recursos pagos, quando existirem, terão preço e condições informados antes da compra. Compras feitas pela App Store ou Google Play seguem também as regras dessas lojas, inclusive para reembolso.</p>
+
+<h2>8. Encontros fora do app</h2>
+<p>O Mente não verifica antecedentes dos usuários. Tenha cuidado ao conversar e ao marcar encontros: prefira lugares públicos e avise alguém de confiança. Não nos responsabilizamos pela conduta de usuários fora do app.</p>
+
+<h2>9. Limitação de responsabilidade</h2>
+<p>O app é oferecido como está. Fazemos o possível para mantê-lo funcionando e seguro, mas não garantimos que estará sempre disponível ou livre de erros, dentro dos limites da lei.</p>
+
+<h2>10. Mudanças e foro</h2>
+<p>Podemos atualizar estes termos e avisaremos no app quando a mudança for relevante. Estes termos seguem as leis do Brasil, e fica eleito o foro do domicílio do usuário.</p>
+</main>
+<script>
+fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"acao":"config"}' })
+  .then(r => r.json()).then(c => { if (c.contato) document.querySelectorAll("[data-contato]").forEach(a => { a.href = "mailto:" + c.contato; a.textContent = c.contato; }); })
+  .catch(() => {});
+</script>
+</body>
+</html>

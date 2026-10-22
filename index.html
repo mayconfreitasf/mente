@@ -188,6 +188,9 @@ h2 { font-size: 21px; line-height: 1.2; }
 .opcao-radio input { accent-color: var(--accent); }
 .sugestoes-email { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -10px; }
 .sugestoes-email button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 10px; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aceite { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.4; }
+.aceite input { width: 18px; height: 18px; margin-top: 1px; flex: none; accent-color: var(--accent); }
+a.btn { text-decoration: none; }
 .btn-google { min-height: 44px; display: flex; justify-content: center; }
 .btn-apple { background: #000; color: #fff; }
 .ou { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
@@ -519,7 +522,8 @@ function abrirFiltros() {
     <button class="link" type="button" id="cancelarF">Cancelar</button>`);
   const raio = v.querySelector("#fRaio"), locTxt = v.querySelector("#locTxt");
   raio.addEventListener("input", () => { v.querySelector("#raioTxt").textContent = txtR(RAIOS[raio.value]); });
-  v.querySelector("#usarLoc").addEventListener("click", () => {
+  v.querySelector("#usarLoc").addEventListener("click", async () => {
+    if (!(await explicarPermissao("avisoLocal", "Usar sua localização", "Usamos sua localização só para calcular a distância até outras pessoas. Ela não aparece para ninguém."))) return;
     if (!navigator.geolocation) { locTxt.textContent = "Este navegador não informa a localização."; return; }
     locTxt.textContent = "Buscando sua localização…";
     navigator.geolocation.getCurrentPosition(pos => {
@@ -557,7 +561,7 @@ function render() {
   if (!contaPronta) { $("#abas").hidden = true; $("#chipNivel").hidden = true; tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Carregando…</p></div>`; return; }
   if (!semServidor && !modoTeste) {
     const jogandoDesafio = desafioAberto || (rodada && rodada.desafio);
-    if (tokenRedefinir || (!conta && !jogandoDesafio)) return renderConta();
+    if (!conta && !jogandoDesafio) return renderConta();
     if (conta && !conta.usuario) return renderEscolherUsuario();
   }
   if (!S.perfil) {
@@ -597,12 +601,12 @@ function renderCadastro(editando) {
       <div class="pilha" style="gap:4px">
         <label class="btn sec" for="fFoto" style="padding:10px 14px">${r.foto ? "Trocar foto" : "Adicionar foto"}</label>
         <input id="fFoto" type="file" accept="image/*" hidden>
-        <span class="muted" style="font-size:12px">Opcional</span>
+        <span class="muted" style="font-size:12px">Opcional. A foto aparece no seu perfil.</span>
       </div>
     </div>
     <div class="campo"><label for="fNome">Nome</label><input id="fNome" value="${esc(r.nome)}" maxlength="30" autocomplete="given-name"></div>
     <div class="linha" style="flex-wrap:nowrap">
-      <div class="campo" style="flex:1"><label for="fIdade">Idade</label><input id="fIdade" type="number" inputmode="numeric" min="18" max="99" value="${esc(r.idade)}"></div>
+      <div class="campo" style="flex:1"><label for="fIdade">Idade</label>${conta && conta.idade ? `<input id="fIdade" type="number" value="${conta.idade}" readonly title="Calculada pela sua data de nascimento">` : `<input id="fIdade" type="number" inputmode="numeric" min="18" max="99" value="${esc(r.idade)}">`}</div>
       <div class="campo" style="flex:2"><label for="fCidade">Cidade</label><input id="fCidade" value="${esc(r.cidade)}" maxlength="40" list="listaCidades"><datalist id="listaCidades">${Object.keys(CIDADES).map(c => `<option value="${c}">`).join("")}</datalist></div>
     </div>
     <div class="campo"><label>Eu sou</label>${seg("sexo", [["F", "Mulher"], ["M", "Homem"], ["O", "Outro"]])}</div>
@@ -1514,6 +1518,7 @@ function enviarMsg(alvo, msg) {
 async function gravarAudio() {
   if (gravacao) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") { toast("Este navegador não grava áudio"); return; }
+  if (!(await explicarPermissao("avisoMic", "Usar o microfone", "O Mente usa o microfone só para gravar os áudios que você envia no chat. Nada é gravado sem você tocar no botão."))) return;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch { toast("Permita o uso do microfone para gravar"); return; }
@@ -1581,6 +1586,7 @@ function denunciar(p, mostraNome) {
     if (!k) { v.querySelector("#denErro").textContent = "Escolha um motivo."; return; }
     S.denuncias = [...(S.denuncias || []), { id: p.id, motivo: MOTIVOS[Number(k.value)], texto: v.querySelector("#denTxt").value.trim().slice(0, 300), quando: Date.now() }];
     S.bloqueados = [...new Set([...(S.bloqueados || []), p.id])];
+    if (conta) chamarConta({ acao: "denunciar", alvo: p.id, motivo: MOTIVOS[Number(k.value)], texto: v.querySelector("#denTxt").value.trim().slice(0, 300) }).catch(() => {});
     encerrarContato(p.id); salvar(); v.remove(); toast("Denúncia enviada"); render();
   });
 }
@@ -1618,7 +1624,7 @@ function renderChat() {
   if (gravacao && gravacao.alvo === chatAberto) mostrarGravando();
 }
 
-// ---------- Conta: usuário, e-mail e senha, ou Google e Apple ----------
+// ---------- Conta: usuário, e-mail ou celular e senha, com código de verificação ----------
 // Sem servidor de contas (protótipo local ou banco ainda não configurado), o app funciona sem login.
 // Regras de usuário e senha (as mesmas do servidor, em api/_auth.js).
 const USUARIO_OK = /^[a-z]{4,15}$/, DICA_U = "De 4 a 15 letras minúsculas, sem números nem símbolos.";
@@ -1627,32 +1633,32 @@ const senhaForte = x => x.length >= 6 && /[A-Za-z]/.test(x) && /\d/.test(x) && /
 const limpaUsuario = x => x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z]/g, "");
 // "Testar sem login" vale até fechar a aba: o progresso fica só neste aparelho.
 let modoTeste = (() => { try { return sessionStorage.getItem("mente.teste") === "1"; } catch { return false; } })();
-let conta = null, contaPronta = false, semServidor = false, cfgConta = {}, telaConta = "entrar", tokenRedefinir = null;
+let conta = null, contaPronta = false, semServidor = false, cfgConta = {}, telaConta = "entrar";
+// Confirmação confirmacao: { finalidade: "verificar" | "recuperar", login, contato, destino, desde }.
+let confirmacao = null, timerReenvio = 0;
 let timerConta = 0, avisouTamanho = false, googlePronto = false, applePronto = false;
 async function chamarConta(corpo) {
   let r;
   try { r = await fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(corpo) }); }
   catch { throw { rede: true, erro: "Sem conexão. Verifique a internet e tente de novo." }; }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw { status: r.status, erro: j.erro || `Erro no servidor (código ${r.status}).` };
+  if (!r.ok) throw Object.assign({}, j, { status: r.status, erro: j.erro || `Erro no servidor (código ${r.status}).` });
   return j;
 }
 async function iniciarConta() {
-  const m = location.hash.match(/^#redefinir=([A-Za-z0-9_-]+)$/);
-  if (m) { tokenRedefinir = m[1]; telaConta = "redefinir"; limparLinkDesafio(); }
   try {
     cfgConta = await chamarConta({ acao: "config" });
     if (!cfgConta.banco) semServidor = true;
     else {
       try { aplicarConta(await chamarConta({ acao: "eu" })); }
-      catch (e) { if (e.status !== 401) throw e; }
+      catch (e) { if (e.status !== 401 && e.status !== 403) throw e; if (e.status === 403) toast(e.erro); }
     }
   } catch { semServidor = true; }
   contaPronta = true; render();
 }
 // Ao entrar, o progresso salvo na conta substitui o do aparelho; conta sem progresso recebe o do aparelho.
 function aplicarConta(j) {
-  conta = j.conta; modoTeste = false;
+  conta = j.conta; modoTeste = false; confirmacao = null;
   try { sessionStorage.removeItem("mente.teste"); } catch {}
   if (j.estado && typeof j.estado === "object") {
     S = Object.assign(PADRAO(), j.estado);
@@ -1662,17 +1668,35 @@ function aplicarConta(j) {
 function salvarConta() {
   if (!conta) return;
   chamarConta({ acao: "salvarEstado", estado: S }).catch(e => {
-    if (e.status === 401) { conta = null; render(); }
+    if (e.status === 401 || e.status === 403) { conta = null; render(); }
     else if (e.status === 413 && !avisouTamanho) { avisouTamanho = true; toast("Progresso grande demais para salvar na conta"); }
   });
 }
-function sairDaConta() {
-  chamarConta({ acao: "sair" }).catch(() => {});
-  conta = null; S = PADRAO(); telaConta = "entrar";
+function limparAparelho() {
+  conta = null; S = PADRAO(); telaConta = "entrar"; confirmacao = null;
   rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null };
   try { localStorage.removeItem(CHAVE); } catch {}
   aba = "quiz"; rodada = null; chatAberto = null; selecao = null; pulados.clear();
   render();
+}
+function sairDaConta() { chamarConta({ acao: "sair" }).catch(() => {}); limparAparelho(); }
+function excluirConta() {
+  const comSenha = conta && conta.temSenha;
+  const v = folha(`<h2>Excluir sua conta?</h2>
+    <p class="muted" style="margin:0">Sua conta, perfil, níveis, matches, conversas e categorias serão apagados para sempre. Isso não pode ser desfeito.</p>
+    ${comSenha ? `<div class="campo"><label for="exSenha">Digite sua senha para confirmar</label><input id="exSenha" type="password" autocomplete="current-password" maxlength="128"></div>`
+      : `<div class="campo"><label for="exConf">Digite EXCLUIR para confirmar</label><input id="exConf" autocomplete="off" maxlength="10"></div>`}
+    <div class="erro" id="exErro"></div>
+    <button class="btn bloco" type="button" id="exSim" style="background:var(--bad)">Excluir minha conta</button>
+    <button class="link" type="button" id="exNao">Cancelar</button>`);
+  v.querySelector("#exNao").addEventListener("click", () => v.remove());
+  v.querySelector("#exSim").addEventListener("click", async () => {
+    const b = v.querySelector("#exSim"); b.disabled = true;
+    try {
+      await chamarConta(comSenha ? { acao: "excluirConta", senha: v.querySelector("#exSenha").value } : { acao: "excluirConta", confirmacao: v.querySelector("#exConf").value.trim().toUpperCase() });
+      v.remove(); toast("Conta excluída"); limparAparelho();
+    } catch (e) { v.querySelector("#exErro").textContent = e.erro; b.disabled = false; }
+  });
 }
 async function entrarSocial(provedor, token) {
   const erro = $("#contaErro");
@@ -1705,7 +1729,9 @@ function ligarSugestoesEmail(input, caixa) {
   const atualizar = () => {
     const v = input.value.trim(), i = v.indexOf("@");
     const nome = i < 0 ? v : v.slice(0, i), dom = i < 0 ? "" : v.slice(i + 1).toLowerCase();
-    const lista = nome && !/\s/.test(nome) ? DOMINIOS.filter(d => d.startsWith(dom) && d !== dom).slice(0, 5) : [];
+    // Número de celular não recebe sugestão de domínio.
+    const ehNumero = /^[\d\s()+-]+$/.test(nome);
+    const lista = nome && !ehNumero && !/\s/.test(nome) ? DOMINIOS.filter(d => d.startsWith(dom) && d !== dom).slice(0, 5) : [];
     caixa.hidden = !lista.length;
     caixa.innerHTML = lista.map(d => `<button type="button" data-dom="${d}">${esc(nome)}@${d}</button>`).join("");
   };
@@ -1714,71 +1740,116 @@ function ligarSugestoesEmail(input, caixa) {
     const b = e.target.closest("[data-dom]"); if (!b) return;
     input.value = input.value.trim().split("@")[0] + "@" + b.dataset.dom;
     caixa.hidden = true;
-    const prox = input.closest("form").querySelector('input[type="password"]');
+    const prox = input.closest("form").querySelector('input[type="date"], input[type="password"]');
     (prox || input).focus();
   });
 }
+const dataMaxima18 = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 18); return d.toISOString().slice(0, 10); };
 function renderConta() {
   $("#abas").hidden = true; $("#chipNivel").hidden = true;
+  clearInterval(timerReenvio);
   const t = telaConta;
-  const titulos = { entrar: "Entre na sua conta", criar: "Crie sua conta", recuperar: "Recuperar senha", redefinir: "Crie uma nova senha" };
+  const titulos = { entrar: "Entre na sua conta", criar: "Crie sua conta", codigo: "Digite o código", recuperar: "Recuperar senha", redefinir: "Crie uma nova senha" };
   const social = (t === "entrar" || t === "criar") && (cfgConta.google || cfgConta.apple)
     ? `<div class="pilha" style="gap:10px">${cfgConta.google ? `<div id="btnGoogle" class="btn-google"></div>` : ""}${cfgConta.apple ? `<button class="btn bloco btn-apple" type="button" id="btnApple"> Continuar com a Apple</button>` : ""}</div><div class="ou"><span>ou</span></div>` : "";
   const campo = (id, rotulo, extra) => `<div class="campo"><label for="${id}">${rotulo}</label><input id="${id}" ${extra}></div>`;
+  const dica = txt => `<span class="muted" style="font-size:12px;margin-top:-10px">${txt}</span>`;
+  const campoCodigo = campo("cCodigo", "Código de 6 dígitos", 'inputmode="numeric" autocomplete="one-time-code" maxlength="6"');
   let corpo = "";
   if (t === "criar") corpo = `
     ${campo("cUsuario", "Usuário", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"')}
-    <span class="muted" style="font-size:12px;margin-top:-10px">De 4 a 15 letras minúsculas, sem números nem símbolos. Ele é único no Mente.</span>
-    ${campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"')}
+    ${dica(DICA_U + " Ele é único no Mente.")}
+    ${campo("cContato", "E-mail ou celular", 'autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"')}
     <div class="sugestoes-email" id="sugEmail" hidden></div>
+    ${dica("Enviamos um código para confirmar. Celular com DDD.")}
+    ${campo("cNasc", "Data de nascimento", `type="date" max="${dataMaxima18()}" min="1900-01-01"`)}
     ${campo("cSenha", "Senha", 'type="password" autocomplete="new-password" maxlength="128"')}
-    <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_SENHA}</span>
+    ${dica(DICA_SENHA)}
     ${campo("cSenha2", "Repita a senha", 'type="password" autocomplete="new-password" maxlength="128"')}
+    <label class="aceite"><input type="checkbox" id="cAceite"><span>Tenho 18 anos ou mais e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Criar conta</button>
     <button class="link" type="button" data-ir="entrar">Já tenho conta</button>`;
+  else if (t === "codigo") corpo = `
+    <p class="muted" style="margin:0">Enviamos um código para <b>${esc(confirmacao.destino)}</b>. Ele vale por 10 minutos.</p>
+    ${campoCodigo}
+    <div class="erro" id="contaErro"></div>
+    <button class="btn bloco" type="submit">Confirmar</button>
+    <button class="link" type="button" id="reenviar" disabled>Reenviar código</button>
+    <button class="link" type="button" data-ir="entrar">Voltar</button>`;
   else if (t === "recuperar") corpo = `
-    <p class="muted" style="margin:0">${cfgConta.recuperar ? "Digite o e-mail da sua conta. Enviamos um link para você criar uma nova senha." : "A recuperação de senha ainda não está disponível."}</p>
-    ${cfgConta.recuperar ? campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"') + `<div class="sugestoes-email" id="sugEmail" hidden></div><div class="erro" id="contaErro"></div><button class="btn bloco" type="submit">Enviar link</button>` : ""}
+    <p class="muted" style="margin:0">Digite o e-mail ou o celular da sua conta. Enviamos um código para você criar uma nova senha.</p>
+    ${campo("cContato", "E-mail ou celular", 'autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"')}
+    <div class="sugestoes-email" id="sugEmail" hidden></div>
+    <div class="erro" id="contaErro"></div>
+    <button class="btn bloco" type="submit">Enviar código</button>
     <button class="link" type="button" data-ir="entrar">Voltar</button>`;
   else if (t === "redefinir") corpo = `
+    <p class="muted" style="margin:0">Se houver uma conta com <b>${esc(confirmacao.destino)}</b>, enviamos um código para lá.</p>
+    ${campoCodigo}
     ${campo("cSenha", "Nova senha", 'type="password" autocomplete="new-password" maxlength="128"')}
-    <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_SENHA}</span>
+    ${dica(DICA_SENHA)}
     ${campo("cSenha2", "Repita a nova senha", 'type="password" autocomplete="new-password" maxlength="128"')}
     <div class="erro" id="contaErro"></div>
-    <button class="btn bloco" type="submit">Salvar nova senha</button>`;
+    <button class="btn bloco" type="submit">Salvar nova senha</button>
+    <button class="link" type="button" data-ir="entrar">Voltar</button>`;
   else corpo = `
-    ${campo("cLogin", "Usuário ou e-mail", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120"')}
+    ${campo("cLogin", "Usuário, e-mail ou celular", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120"')}
     ${campo("cSenha", "Senha", 'type="password" autocomplete="current-password" maxlength="128"')}
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Entrar</button>
-    <div class="linha" style="justify-content:${cfgConta.recuperar ? "space-between" : "center"}">${cfgConta.recuperar ? `<button class="link" type="button" data-ir="recuperar">Esqueci a senha</button>` : ""}<button class="link" type="button" data-ir="criar">Criar conta</button></div>`;
+    <div class="linha" style="justify-content:${cfgConta.email || cfgConta.sms ? "space-between" : "center"}">${cfgConta.email || cfgConta.sms ? `<button class="link" type="button" data-ir="recuperar">Esqueci a senha</button>` : ""}<button class="link" type="button" data-ir="criar">Criar conta</button></div>`;
   tela.innerHTML = `
   <form class="pilha entra" id="fConta" novalidate>
     <div class="pilha" style="gap:8px;padding-top:8px"><span class="rotulo">Primeiro a mente. Depois o match.</span><h1>${titulos[t]}</h1></div>
     ${social}${corpo}
     ${t === "entrar" || t === "criar" ? `<button class="btn sec bloco" type="button" id="testar">Testar sem login</button>` : ""}
-    <p class="aviso">Ao continuar, você confirma que tem 18 anos ou mais.</p>
+    <p class="aviso">O Mente é só para maiores de 18 anos. <a href="termos.html" target="_blank" rel="noopener">Termos</a> · <a href="privacidade.html" target="_blank" rel="noopener">Privacidade</a></p>
   </form>`;
   const bt = $("#testar"); if (bt) bt.addEventListener("click", () => { modoTeste = true; try { sessionStorage.setItem("mente.teste", "1"); } catch {} render(); });
-  tela.querySelectorAll("[data-ir]").forEach(b => b.addEventListener("click", () => { telaConta = b.dataset.ir; render(); }));
+  tela.querySelectorAll("[data-ir]").forEach(b => b.addEventListener("click", () => { telaConta = b.dataset.ir; if (b.dataset.ir === "entrar") confirmacao = null; render(); }));
   const u = $("#cUsuario"); if (u) u.addEventListener("input", () => { u.value = limpaUsuario(u.value); });
-  const em = $("#cEmail"); if (em) ligarSugestoesEmail(em, $("#sugEmail"));
+  const cc = $("#cContato"); if (cc) ligarSugestoesEmail(cc, $("#sugEmail"));
+  const cod = $("#cCodigo"); if (cod) { cod.addEventListener("input", () => { cod.value = cod.value.replace(/\D/g, "").slice(0, 6); }); cod.focus(); }
+  const re = $("#reenviar");
+  if (re) {
+    const tick = () => { if (!confirmacao || !document.body.contains(re)) { clearInterval(timerReenvio); return; } const s = 60 - Math.floor((Date.now() - confirmacao.desde) / 1000); re.disabled = s > 0; re.textContent = s > 0 ? `Reenviar código em ${s}s` : "Reenviar código"; if (s <= 0) clearInterval(timerReenvio); };
+    tick(); timerReenvio = setInterval(tick, 1000);
+    re.addEventListener("click", async () => {
+      try { const j = await chamarConta({ acao: "reenviar", login: confirmacao.login }); confirmacao.destino = j.destino; confirmacao.desde = Date.now(); toast("Código reenviado"); render(); }
+      catch (e) { $("#contaErro").textContent = e.erro; }
+    });
+  }
   const f = $("#fConta"), erro = $("#contaErro"), botao = f.querySelector('button[type="submit"]');
+  const aguardandoCodigo = j => { confirmacao = { finalidade: "verificar", login: j.login, destino: j.destino, desde: Date.now() }; telaConta = "codigo"; render(); };
   f.addEventListener("submit", async e => {
     e.preventDefault(); if (!botao || botao.disabled) return;
     const val = id => { const x = $("#" + id); return x ? x.value : ""; };
-    if (t === "criar" && !USUARIO_OK.test(val("cUsuario"))) { erro.textContent = "O usuário precisa ter " + DICA_U.charAt(0).toLowerCase() + DICA_U.slice(1); return; }
-    if ((t === "criar" || t === "redefinir") && !senhaForte(val("cSenha"))) { erro.textContent = "A senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo."; return; }
+    if (t === "criar") {
+      if (!USUARIO_OK.test(val("cUsuario"))) { erro.textContent = "O usuário precisa ter " + DICA_U.charAt(0).toLowerCase() + DICA_U.slice(1); return; }
+      if (!val("cContato").trim()) { erro.textContent = "Digite seu e-mail ou celular."; return; }
+      if (!val("cNasc")) { erro.textContent = "Informe sua data de nascimento."; return; }
+      if (val("cNasc") > dataMaxima18()) { erro.textContent = "O Mente é só para maiores de 18 anos."; return; }
+      if (!$("#cAceite").checked) { erro.textContent = "Aceite os Termos de Uso e a Política de Privacidade para continuar."; return; }
+    }
+    if ((t === "criar" || t === "redefinir") && !senhaForte(val("cSenha"))) { erro.textContent = "A senha precisa ter " + DICA_SENHA.charAt(0).toLowerCase() + DICA_SENHA.slice(1); return; }
     if ((t === "criar" || t === "redefinir") && val("cSenha") !== val("cSenha2")) { erro.textContent = "As senhas não são iguais."; return; }
-    const texto = botao.textContent; botao.disabled = true; botao.textContent = "Aguarde…"; erro.textContent = "";
+    if ((t === "codigo" || t === "redefinir") && !/^\d{6}$/.test(val("cCodigo"))) { erro.textContent = "Digite o código de 6 dígitos."; return; }
+    const rotulo = botao.textContent; botao.disabled = true; botao.textContent = "Aguarde…"; erro.textContent = "";
     try {
-      if (t === "criar") aplicarConta(await chamarConta({ acao: "cadastrar", usuario: val("cUsuario").trim(), email: val("cEmail").trim(), senha: val("cSenha"), estado: S }));
-      else if (t === "entrar") aplicarConta(await chamarConta({ acao: "entrar", login: val("cLogin").trim(), senha: val("cSenha") }));
-      else if (t === "redefinir") { aplicarConta(await chamarConta({ acao: "redefinir", token: tokenRedefinir, senha: val("cSenha") })); tokenRedefinir = null; toast("Senha alterada"); }
-      else if (t === "recuperar") { await chamarConta({ acao: "recuperar", email: val("cEmail").trim() }); toast("Se o e-mail tiver conta, o link foi enviado"); telaConta = "entrar"; return render(); }
+      if (t === "criar") return aguardandoCodigo(await chamarConta({ acao: "cadastrar", usuario: val("cUsuario"), contato: val("cContato").trim(), nascimento: val("cNasc"), senha: val("cSenha"), aceite: true, estado: S }));
+      if (t === "entrar") aplicarConta(await chamarConta({ acao: "entrar", login: val("cLogin").trim(), senha: val("cSenha") }));
+      else if (t === "codigo") aplicarConta(await chamarConta({ acao: "verificar", login: confirmacao.login, codigo: val("cCodigo") }));
+      else if (t === "recuperar") {
+        const j = await chamarConta({ acao: "recuperar", contato: val("cContato").trim() });
+        confirmacao = { finalidade: "recuperar", contato: val("cContato").trim(), destino: j.destino, desde: Date.now() }; telaConta = "redefinir"; return render();
+      }
+      else if (t === "redefinir") { aplicarConta(await chamarConta({ acao: "redefinir", contato: confirmacao.contato, codigo: val("cCodigo"), senha: val("cSenha") })); toast("Senha alterada"); }
       telaConta = "entrar"; render();
-    } catch (x) { erro.textContent = x.erro; botao.disabled = false; botao.textContent = texto; }
+    } catch (x) {
+      if (x.precisaCodigo) return aguardandoCodigo(x);
+      erro.textContent = x.erro; botao.disabled = false; botao.textContent = rotulo;
+    }
   });
   montarSocial();
 }
@@ -1789,7 +1860,7 @@ function renderEscolherUsuario() {
     <h1>Escolha seu nome de usuário</h1>
     <p class="muted" style="margin:0">É como você entra e aparece no Mente. Ele é único.</p>
     <div class="campo"><label for="cUsuario">Usuário</label><input id="cUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"></div>
-    <span class="muted" style="font-size:12px;margin-top:-10px">De 4 a 15 letras minúsculas, sem números nem símbolos.</span>
+    <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_U}</span>
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Continuar</button>
     <button class="link" type="button" id="sairU">Sair</button>
@@ -1800,6 +1871,16 @@ function renderEscolherUsuario() {
     e.preventDefault();
     try { conta = (await chamarConta({ acao: "definirUsuario", usuario: u.value.trim() })).conta; render(); }
     catch (x) { $("#contaErro").textContent = x.erro; }
+  });
+}
+// Explica por que o app pede uma permissão antes de o navegador ou o sistema perguntar.
+function explicarPermissao(chave, titulo, texto) {
+  if (S[chave]) return Promise.resolve(true);
+  return new Promise(ok => {
+    const v = folha(`<h2>${titulo}</h2><p class="muted" style="margin:0">${texto}</p>
+      <button class="btn bloco" type="button" id="pSim">Continuar</button><button class="link" type="button" id="pNao">Agora não</button>`);
+    v.querySelector("#pSim").addEventListener("click", () => { S[chave] = true; salvar(); v.remove(); ok(true); });
+    v.querySelector("#pNao").addEventListener("click", () => { v.remove(); ok(false); });
   });
 }
 
@@ -1832,9 +1913,11 @@ function renderPerfil() {
     </div>
     <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados</div></div><b style="font-family:var(--f-mono)">${S.matches.length}</b></div></div>
     ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
-    ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>@${esc(conta.usuario)}</strong><div class="muted" style="font-size:13px">${esc(conta.email || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div></div>` : ""}
+    ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>@${esc(conta.usuario)}</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div></div>` : ""}
     <button class="btn sec bloco" type="button" id="editar">Editar perfil</button>
+    <div class="caixa"><strong>Ajuda e privacidade</strong><div class="linha" style="gap:6px"><a class="btn sec mini" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a>${cfgConta.contato ? `<a class="btn sec mini" href="mailto:${esc(cfgConta.contato)}">Contato</a>` : ""}</div></div>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>
+    ${conta ? `<button class="link" type="button" id="excluirConta" style="color:var(--bad)">Excluir conta</button>` : ""}
   </div>`;
   $("#pInteresse").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || b.dataset.v === pf.interesse) return;
@@ -1845,6 +1928,7 @@ function renderPerfil() {
   const vp = $("#vPasse"); if (vp) vp.addEventListener("change", () => { const n = Math.max(10, Math.round(Number(vp.value) || 0)); S.meuPasse.valor = n; vp.value = n; salvar(); toast("Valor salvo"); });
   $("#editar").addEventListener("click", () => renderCadastro(true));
   const sc = $("#sairConta"); if (sc) sc.addEventListener("click", sairDaConta);
+  const ex = $("#excluirConta"); if (ex) ex.addEventListener("click", excluirConta);
   const ct = $("#criarContaTeste"); if (ct) ct.addEventListener("click", () => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = "criar"; render(); });
   $("#zerar").addEventListener("click", () => {
     const v = folha(`<h2>Recomeçar do zero?</h2><p class="muted" style="margin:0">Seu nível, matches e conversas serão apagados. Isso não pode ser desfeito.</p>
