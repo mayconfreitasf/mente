@@ -200,10 +200,11 @@ h2 { font-size: 21px; line-height: 1.2; }
 @keyframes carrega { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .trilho i.carregando { animation: none; width: 100%; opacity: .5; } }
 .tag-dobro { color: var(--bg); background: var(--gold); border-radius: 6px; padding: 1px 6px; margin-left: 4px; letter-spacing: 0; }
-.modos { grid-template-columns: 1fr 1fr; }
+.modos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .modos button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; text-align: left; }
 .modos small { font-weight: 500; font-size: 12px; color: var(--muted); }
 .modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, transparent); }
+.modos button[data-modo="triplo"][aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 30%, transparent); }
 .tag-cat { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); font-weight: 700; }
 
 /* Nível subindo */
@@ -246,6 +247,7 @@ h2 { font-size: 21px; line-height: 1.2; }
 
 <script src="perguntas.js"></script>
 <script src="dificeis.js"></script>
+<script src="muitodificeis.js"></script>
 <script>
 (() => {
 "use strict";
@@ -253,6 +255,16 @@ h2 { font-size: 21px; line-height: 1.2; }
 // ---------- Dados fixos ----------
 const CATS = window.MENTE_CATEGORIAS || [];
 const DIF = window.MENTE_DIFICEIS || {};
+const MDIF = window.MENTE_MUITO_DIFICEIS || {};
+// Modos de jogo: o multiplicador é quanto cada acerto vale em níveis.
+const MODOS = [
+  { id: "normal", mult: 1, nome: "Normal", desc: "+1 por acerto", dif: "de dificuldade fácil a média, sobre as ideias principais", texto: "as perguntas" },
+  { id: "dobro", mult: 2, nome: "Dobro nível", desc: "difíceis · +2", dif: "difíceis: cobre detalhes, números, nomes e relações do conteúdo", texto: "perguntas difíceis" },
+  { id: "triplo", mult: 3, nome: "Triplo nível", desc: "muito difíceis · +3", dif: "muito difíceis: cobre exceções, dados exatos, comparações e conexões entre partes distantes do conteúdo, exigindo leitura atenta", texto: "perguntas muito difíceis" }
+];
+const modoDe = m => MODOS.find(x => x.mult === m) || MODOS[0];
+const multAtual = () => (MODOS.find(x => x.id === S.modo) || MODOS[0]).mult;
+const sufixo = m => m > 1 ? " · " + modoDe(m).nome : "";
 
 // Perfis fictícios: [id, nome, sexo, idade, profissão, cidade, nível, passe (null = não aceita), bio]
 const PERFIS = [
@@ -313,7 +325,7 @@ const PADRAO = () => ({
   v: 1, perfil: null, nivel: 0, respondidas: 0, porCat: {}, vistas: {},
   curtidos: [], passados: [], matches: [], novos: [], chats: {}, passes: [],
   meuPasse: { ativo: true, valor: 150 }, selecao: [], modo: "normal", atualizado: 0,
-  filtros: { verMin: 0, verMax: null, visMin: 0, visMax: null, raio: null }, local: null
+  filtros: { verMin: 0, visMin: 0, raio: null }, local: null
 });
 let S = carregarLocal() || PADRAO();
 let db = null, uid = null, salvarTimer = null;
@@ -420,30 +432,33 @@ function distanciaKm(p) {
   const x = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
   return Math.round(12742 * Math.asin(Math.sqrt(x)));
 }
-// Fora da faixa de nível ou do raio, o perfil não aparece. Com raio definido e sem localização, nada passa.
+// A faixa de nível vai do mínimo escolhido até o seu nível; perfis acima continuam aparecendo borrados.
+// Fora do raio o perfil não aparece. Com raio definido e sem localização, nada passa.
 function noFiltro(p) {
   const f = S.filtros;
-  if (p.nivel < f.verMin || (f.verMax != null && p.nivel > f.verMax)) return false;
+  if (p.nivel <= S.nivel && p.nivel < Math.min(f.verMin, S.nivel)) return false;
   if (f.raio == null) return true;
   const d = distanciaKm(p);
   return d != null && d <= f.raio;
 }
 const elegivel = p => noFiltro(p) && interesseOk(p);
 const semMatch = () => !!S.perfil && S.perfil.interesse === "N";
-// Quem está fora da sua faixa de visibilidade não vê você, então não dá match.
-function meVe(p) { const f = S.filtros; return p.nivel >= f.visMin && (f.visMax == null || p.nivel <= f.visMax); }
+// Quem está abaixo do nível mínimo de visibilidade não vê você, então não dá match. Do seu nível para cima, todos veem.
+function meVe(p) { return p.nivel >= Math.min(S.filtros.visMin, S.nivel); }
 function resumoFiltros() {
   const f = S.filtros;
-  return `Níveis ${f.verMin} a ${f.verMax ?? "qualquer"} · ${f.raio ? "até " + f.raio + " km" : "qualquer distância"}`;
+  return `Níveis ${Math.min(f.verMin, S.nivel)} a ${S.nivel} · ${f.raio ? "até " + f.raio + " km" : "qualquer distância"}`;
 }
 function abrirFiltros() {
   const f = S.filtros, loc = meuLocal();
   const iR = RAIOS.includes(f.raio) ? RAIOS.indexOf(f.raio) : RAIOS.length - 1;
   const txtR = r => r ? "até " + r + " km" : "qualquer distância";
-  const par = (id, a, b) => `<div class="linha" style="flex-wrap:nowrap"><input id="${id}Min" type="number" inputmode="numeric" min="0" value="${a}" aria-label="Nível inicial"><span class="muted">até</span><input id="${id}Max" type="number" inputmode="numeric" min="0" value="${b ?? ""}" placeholder="sem limite" aria-label="Nível final"></div>`;
+  const campoNivel = (id, valor) => `<div class="linha" style="flex-wrap:nowrap"><input id="${id}" type="number" inputmode="numeric" min="0" max="${S.nivel}" value="${Math.min(valor, S.nivel)}" style="max-width:110px"><span class="muted">até o seu nível, ${S.nivel}</span></div>`;
   const v = folha(`<span class="rotulo">Filtros</span><h2>Quem você vê e quem vê você</h2>
-    <div class="campo"><label>Mostrar perfis do nível</label>${par("fVer", f.verMin, f.verMax)}</div>
-    <div class="campo"><label>Aparecer para quem está do nível</label>${par("fVis", f.visMin, f.visMax)}</div>
+    <div class="campo"><label for="fVer">Mostrar perfis liberados a partir do nível</label>${campoNivel("fVer", f.verMin)}
+      <span class="muted" style="font-size:13px">Perfis acima do seu nível continuam aparecendo borrados.</span></div>
+    <div class="campo"><label for="fVis">Aparecer para quem está abaixo de você a partir do nível</label>${campoNivel("fVis", f.visMin)}
+      <span class="muted" style="font-size:13px">Quem está no seu nível ou acima sempre pode ver você.</span></div>
     <div class="campo"><label for="fRaio">Distância: <b id="raioTxt">${txtR(RAIOS[iR])}</b></label>
       <input id="fRaio" type="range" min="0" max="${RAIOS.length - 1}" step="1" value="${iR}" ${loc ? "" : "disabled"}>
       <span class="muted" style="font-size:13px" id="locTxt">${loc ? "A partir de " + esc(loc.nome) : "Para filtrar por distância, informe sua cidade no perfil ou use sua localização."}</span>
@@ -463,12 +478,10 @@ function abrirFiltros() {
   });
   v.querySelector("#cancelarF").addEventListener("click", () => v.remove());
   v.querySelector("#salvarF").addEventListener("click", () => {
-    const num = id => { const x = v.querySelector(id).value.trim(); return x === "" ? null : Math.max(0, Math.round(Number(x)) || 0); };
-    const [verMin, verMax, visMin, visMax] = ["#fVerMin", "#fVerMax", "#fVisMin", "#fVisMax"].map(num);
-    const erro = v.querySelector("#filtroErro");
-    if (verMax != null && verMax < (verMin ?? 0)) { erro.textContent = "O nível final dos perfis precisa ser maior que o inicial."; return; }
-    if (visMax != null && visMax < (visMin ?? 0)) { erro.textContent = "O nível final da visibilidade precisa ser maior que o inicial."; return; }
-    S.filtros = { verMin: verMin ?? 0, verMax, visMin: visMin ?? 0, visMax, raio: raio.disabled ? null : RAIOS[raio.value] };
+    const num = id => { const x = v.querySelector(id).value.trim(); return x === "" ? 0 : Math.round(Number(x)); };
+    const verMin = num("#fVer"), visMin = num("#fVis");
+    if (![verMin, visMin].every(n => n >= 0 && n <= S.nivel)) { v.querySelector("#filtroErro").textContent = `Os níveis precisam ficar entre 0 e o seu nível, ${S.nivel}.`; return; }
+    S.filtros = { verMin, visMin, raio: raio.disabled ? null : RAIOS[raio.value] };
     salvar(); v.remove(); toast("Filtros salvos"); render();
   });
 }
@@ -593,7 +606,7 @@ function nomeSelecao(ids) {
 }
 function renderQuizInicio() {
   if (!selecao) selecao = new Set(S.selecao || []);
-  const dobro = S.modo === "dobro";
+  const mult = multAtual();
   const g = proximoGrupo();
   const liberados = PERFIS.filter(p => elegivel(p) && desbloqueado(p)).length;
   const anterior = PERFIS.filter(p => elegivel(p) && p.nivel <= S.nivel).reduce((m, p) => Math.max(m, p.nivel), 0);
@@ -613,8 +626,7 @@ function renderQuizInicio() {
     <div class="pilha" style="gap:10px">
       <h2>Modo</h2>
       <div class="seg modos">
-        <button type="button" data-modo="normal" aria-pressed="${!dobro}"><b>Normal</b><small>+1 nível por acerto</small></button>
-        <button type="button" data-modo="dobro" aria-pressed="${dobro}"><b>Dobro nível</b><small>perguntas difíceis · +2</small></button>
+        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><b>${m.nome}</b><small>${m.desc}</small></button>`).join("")}
       </div>
     </div>
     ${true ? `<div class="caixa">
@@ -629,7 +641,7 @@ function renderQuizInicio() {
         ${CATS.map(c => { const pc = S.porCat[c.id] || { r: 0, a: 0 }; return `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="${!alea && selecao.has(c.id)}"><strong>${esc(c.nome)}</strong><span>${pc.r ? `${pc.a}/${pc.r} acertos` : "nova"}</span></button>`; }).join("")}
       </div>
       <div class="iniciar">
-        <button class="btn bloco ${dobro ? "ouro" : ""}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${dobro ? " Dobro nível" : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
+        <button class="btn bloco ${mult > 1 ? "ouro" : ""}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
         <p class="aviso" style="margin:8px 0 0">As perguntas seguem sem limite até você encerrar.</p>
       </div>
     </div>
@@ -642,7 +654,7 @@ function renderQuizInicio() {
     else { selecao.delete(ALEATORIO); selecao.has(id) ? selecao.delete(id) : selecao.add(id); }
     redesenhar();
   }));
-  $("#comecar").addEventListener("click", () => { S.selecao = [...selecao]; salvar(); iniciarRodada(S.selecao, dobro); });
+  $("#comecar").addEventListener("click", () => { S.selecao = [...selecao]; salvar(); iniciarRodada(S.selecao, mult); });
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
     const l = [...fa.files]; fa.value = ""; if (!l.length) return;
     if (!sampleFn && !modoServidor) await prepararClaude();
@@ -656,9 +668,9 @@ function renderQuizInicio() {
     quizDoArquivo(l);
   });
 }
-function iniciarRodada(ids, dobro) {
+function iniciarRodada(ids, mult) {
   const cats = ids.includes(ALEATORIO) ? CATS : CATS.filter(c => ids.includes(c.id));
-  rodada = { nome: nomeSelecao(ids) + (dobro ? " · Dobro nível" : ""), ids, dobro, cats, n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
+  rodada = { nome: nomeSelecao(ids) + sufixo(mult), ids, mult, cats, n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
   tela.scrollTop = 0; render();
 }
 // Sorteia a próxima pergunta: alterna os assuntos e não repete até esgotar o banco escolhido.
@@ -671,8 +683,8 @@ function sortearPergunta(r) {
     const [q, certa, ...e] = c.q[i];
     return { cat: c, idx: i, chave: null, q, certa, ops: embaralhar([certa, ...e]) };
   }
-  const banco = c => r.dobro ? (DIF[c.id] || []) : c.q;
-  const chave = c => r.dobro ? c.id + ":d" : c.id;
+  const banco = c => r.mult === 3 ? (MDIF[c.id] || []) : r.mult === 2 ? (DIF[c.id] || []) : c.q;
+  const chave = c => r.mult === 3 ? c.id + ":t" : r.mult === 2 ? c.id + ":d" : c.id;
   const livres = () => r.cats.map(c => { const v = new Set(S.vistas[chave(c)] || []); return { c, idx: banco(c).map((_, i) => i).filter(i => !v.has(i)) }; }).filter(x => x.idx.length);
   let disp = livres();
   if (!disp.length) { r.cats.forEach(c => { S.vistas[chave(c)] = []; }); disp = livres(); }
@@ -703,7 +715,7 @@ function renderPergunta() {
   durTempo = segundosPara(it.q) * 1000;
   tela.innerHTML = `
   <div class="rodada entra">
-    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.dobro ? ` <span class="tag-dobro">×2</span>` : ""}</span><span class="num">#${r.n + 1} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
+    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.mult > 1 ? ` <span class="tag-dobro">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
     <div class="tempo" id="tempo"><i id="barra"></i></div>
     <div class="enunciado">${esc(it.q)}</div>
     <div class="opcoes">${it.ops.map((o, k) => `<button class="opcao" type="button" data-k="${k}"><kbd>${"ABC"[k]}</kbd><span>${esc(o)}</span></button>`).join("")}</div>
@@ -735,7 +747,7 @@ function responder(k) {
   });
   const fb = $("#fb");
   if (certo) {
-    const pts = r.dobro ? 2 : 1;
+    const pts = r.mult;
     r.acertos++; r.pontos += pts; S.nivel += pts;
     fb.className = "feedback ok"; fb.textContent = "Certo! Nível " + S.nivel; animarNivel(pts);
   } else { fb.className = "feedback no"; fb.textContent = k < 0 ? "Tempo esgotado" : "Errou"; }
@@ -760,14 +772,14 @@ function renderResultado() {
       ${liberou.length ? `<p style="margin:0;color:var(--gold)">Novas pessoas desbloqueadas: ${liberou.map(p => esc(p.nome)).join(", ")}</p>` : ""}
       ${g ? `<p class="muted" style="margin:0;font-size:14px">${textoFalta(g)}.</p>` : ""}
     </div>
-    <button class="btn bloco ${r.dobro ? "ouro" : ""}" type="button" id="denovo">Jogar de novo</button>
+    <button class="btn bloco ${r.mult > 1 ? "ouro" : ""}" type="button" id="denovo">Jogar de novo</button>
     <div class="acoes" style="margin-top:0">
       <button class="btn sec" type="button" id="outra">Trocar assuntos</button>
       <button class="btn sec" type="button" id="ver">Ver pessoas</button>
     </div>
   </div>`;
-  const ids = r.ids, dobro = r.dobro;
-  $("#denovo").addEventListener("click", () => r.arquivo ? iniciarArquivo(r.fonte, dobro, r.cats[0]) : iniciarRodada(ids, dobro));
+  const ids = r.ids, mult = r.mult;
+  $("#denovo").addEventListener("click", () => r.arquivo ? iniciarArquivo(r.fonte, mult, r.cats[0]) : iniciarRodada(ids, mult));
   $("#outra").addEventListener("click", () => { rodada = null; render(); });
   $("#ver").addEventListener("click", () => irPara("descobrir"));
 }
@@ -833,11 +845,11 @@ async function lerArquivos(lista) {
   if (texto.length < 200) throw new Error("O arquivo tem pouco texto para criar perguntas.");
   return { nome: f.name, texto, imagens: [] };
 }
-function promptPerguntas(fonte, dobro, n, evitar) {
+function promptPerguntas(fonte, mult, n, evitar) {
   return [
     "Crie perguntas de quiz em português do Brasil baseadas SOMENTE no conteúdo " + (fonte.imagens.length ? "das imagens anexadas (fotos de um material de estudo)" : "abaixo") + ".",
     "Regras:",
-    `- ${n} perguntas, ${dobro ? "difíceis: cobre detalhes, números, nomes e relações do conteúdo" : "de dificuldade fácil a média, sobre as ideias principais"}.`,
+    `- ${n} perguntas, ${modoDe(mult).dif}.`,
     "- Enunciado curto, até 90 caracteres. Respostas curtas, até 40 caracteres.",
     "- Exatamente 3 opções por pergunta: a primeira é a correta e as outras duas são erradas mas plausíveis. As três devem ser diferentes.",
     "- A resposta correta precisa estar clara no conteúdo. Não invente fatos que não estejam nele.",
@@ -863,8 +875,8 @@ function imagemBase64(f) {
     img.src = url;
   });
 }
-async function perguntasDoServidor(fonte, dobro, evitar, signal) {
-  const corpo = { dobro, evitar, texto: fonte.texto || "", imagens: await Promise.all(fonte.imagens.map(imagemBase64)), codigo: lerCodigo() };
+async function perguntasDoServidor(fonte, mult, evitar, signal) {
+  const corpo = { mult, evitar, texto: fonte.texto || "", imagens: await Promise.all(fonte.imagens.map(imagemBase64)), codigo: lerCodigo() };
   let r;
   try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal }); }
   catch (e) { throw (e && e.name === "AbortError") ? { code: "cancelled" } : { code: "rede" }; }
@@ -874,11 +886,11 @@ async function perguntasDoServidor(fonte, dobro, evitar, signal) {
   if (!r.ok) throw { code: "servidor", message: j.erro };
   return j;
 }
-async function gerarPerguntas(fonte, dobro, evitar, signal) {
-  const opts = { modelTier: dobro ? "default" : "quick" };
+async function gerarPerguntas(fonte, mult, evitar, signal) {
+  const opts = { modelTier: mult > 1 ? "default" : "quick" };
   if (signal) opts.signal = signal;
   if (fonte.imagens.length) opts.images = fonte.imagens;
-  const res = sampleFn ? await sampleFn.json(promptPerguntas(fonte, dobro, 20, evitar), opts) : await perguntasDoServidor(fonte, dobro, evitar, signal);
+  const res = sampleFn ? await sampleFn.json(promptPerguntas(fonte, mult, 20, evitar), opts) : await perguntasDoServidor(fonte, mult, evitar, signal);
   const vistos = new Set(evitar.map(q => q.toLowerCase()));
   const lista = (res && Array.isArray(res.perguntas) ? res.perguntas : []).filter(p =>
     Array.isArray(p) && p.length === 4 && p.every(x => typeof x === "string" && x.trim()) &&
@@ -901,7 +913,7 @@ function mensagemErroClaude(e) {
   return (e && e.message && !c) ? e.message : "Falha ao criar as perguntas. Tente de novo.";
 }
 async function quizDoArquivo(lista) {
-  const dobro = S.modo === "dobro";
+  const mult = multAtual();
   const ctl = new AbortController();
   const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2 id="arqTitulo">Lendo o arquivo…</h2>
     <p class="muted" style="margin:0" id="arqMsg">Isso leva alguns segundos.</p>
@@ -918,9 +930,9 @@ async function quizDoArquivo(lista) {
   try { fonte = await lerArquivos(lista); } catch (e) { return erro(e.message); }
   if (cancelado) return;
   v.querySelector("#arqTitulo").textContent = "Criando perguntas…";
-  v.querySelector("#arqMsg").textContent = `O Mente está lendo ${fonte.nome} e montando ${dobro ? "perguntas difíceis" : "as perguntas"}. Pode levar até um minuto.${sampleFn ? " Na primeira vez o Claude pede sua permissão." : ""}`;
+  v.querySelector("#arqMsg").textContent = `O Mente está lendo ${fonte.nome} e montando ${modoDe(mult).texto}. Pode levar até um minuto.${sampleFn ? " Na primeira vez o Claude pede sua permissão." : ""}`;
   let lote;
-  try { lote = await gerarPerguntas(fonte, dobro, [], ctl.signal); } catch (e) {
+  try { lote = await gerarPerguntas(fonte, mult, [], ctl.signal); } catch (e) {
     if (e && e.code === "cancelled") return;
     if (e && e.code === "codigo" && !cancelado) {
       const fl = v.querySelector(".folha");
@@ -937,10 +949,10 @@ async function quizDoArquivo(lista) {
   if (cancelado) return;
   if (lote.perguntas.length < 3) return erro("O arquivo não rendeu perguntas suficientes. Tente um material com mais conteúdo.");
   v.remove();
-  iniciarArquivo(fonte, dobro, { id: "arquivo", nome: lote.titulo, arquivo: true, q: lote.perguntas });
+  iniciarArquivo(fonte, mult, { id: "arquivo", nome: lote.titulo, arquivo: true, q: lote.perguntas });
 }
-function iniciarArquivo(fonte, dobro, cat) {
-  rodada = { nome: cat.nome + (dobro ? " · Dobro nível" : ""), ids: [], dobro, cats: [cat], arquivo: true, fonte, usadas: new Set(), gerando: false, esgotou: false,
+function iniciarArquivo(fonte, mult, cat) {
+  rodada = { nome: cat.nome + sufixo(mult), ids: [], mult, cats: [cat], arquivo: true, fonte, usadas: new Set(), gerando: false, esgotou: false,
     n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
   tela.scrollTop = 0; render();
 }
@@ -949,7 +961,7 @@ async function gerarMais(r) {
   r.gerando = true;
   const cat = r.cats[0];
   try {
-    const lote = await gerarPerguntas(r.fonte, r.dobro, cat.q.map(p => p[0]).slice(-80));
+    const lote = await gerarPerguntas(r.fonte, r.mult, cat.q.map(p => p[0]).slice(-80));
     if (lote.perguntas.length) cat.q.push(...lote.perguntas); else r.esgotou = true;
   } catch { r.esgotou = true; }
   r.gerando = false;

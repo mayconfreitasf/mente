@@ -22,5 +22,5 @@ ${pagina}
 </html>
 `;
 fs.writeFileSync(`${SAIDA}/index.html`, documento);
-for (const f of ["perguntas.js", "dificeis.js", "icone.svg"]) fs.copyFileSync(f, `${SAIDA}/${f}`);
+for (const f of ["perguntas.js", "dificeis.js", "muitodificeis.js", "icone.svg"]) fs.copyFileSync(f, `${SAIDA}/${f}`);
 console.log("dist/ pronto");

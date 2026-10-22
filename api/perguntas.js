@@ -9,11 +9,18 @@ const COM_FALLBACK = new Set(["claude-opus-5-5", "claude-opus-5", "claude-sonnet
 const LIMITE_TEXTO = 40000;
 const MAX_IMAGENS = 5;
 
-function instrucoes(dobro, temImagens, evitar) {
+// Dificuldade por modo: 1 = Normal, 2 = Dobro nível, 3 = Triplo nível.
+const DIFICULDADE = {
+  1: "de dificuldade fácil a média, sobre as ideias principais",
+  2: "difíceis: cobre detalhes, números, nomes e relações do conteúdo",
+  3: "muito difíceis: cobre exceções, dados exatos, comparações e conexões entre partes distantes do conteúdo, exigindo leitura atenta"
+};
+
+function instrucoes(mult, temImagens, evitar) {
   return [
     "Crie perguntas de quiz em português do Brasil baseadas SOMENTE no conteúdo " + (temImagens ? "das imagens acima (fotos de um material de estudo)" : "acima") + ".",
     "Regras:",
-    `- 20 perguntas, ${dobro ? "difíceis: cobre detalhes, números, nomes e relações do conteúdo" : "de dificuldade fácil a média, sobre as ideias principais"}.`,
+    `- 20 perguntas, ${DIFICULDADE[mult]}.`,
     "- Enunciado curto, até 90 caracteres. Respostas curtas, até 40 caracteres.",
     "- Exatamente 3 opções por pergunta: a primeira é a correta e as outras duas são erradas mas plausíveis. As três devem ser diferentes.",
     "- A resposta correta precisa estar clara no conteúdo. Não invente fatos que não estejam nele.",
@@ -41,18 +48,18 @@ export default async function handler(req, res) {
   const imagens = Array.isArray(b.imagens) ? b.imagens.filter(s => typeof s === "string" && s.length).slice(0, MAX_IMAGENS) : [];
   if (!texto.trim() && !imagens.length) return res.status(400).json({ erro: "Envie um texto ou fotos." });
   const evitar = Array.isArray(b.evitar) ? b.evitar.filter(s => typeof s === "string").slice(-80).map(s => s.slice(0, 200)) : [];
-  const dobro = b.dobro === true;
+  const mult = [1, 2, 3].includes(b.mult) ? b.mult : b.dobro === true ? 2 : 1;
 
   const conteudo = imagens.map(dados => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: dados } }));
   if (texto) conteudo.push({ type: "text", text: 'CONTEÚDO:\n"""\n' + texto + '\n"""' });
   // O conteúdo do arquivo fica em cache: pedir "mais perguntas" do mesmo arquivo sai mais barato.
   conteudo[conteudo.length - 1].cache_control = { type: "ephemeral" };
-  conteudo.push({ type: "text", text: instrucoes(dobro, imagens.length > 0, evitar) });
+  conteudo.push({ type: "text", text: instrucoes(mult, imagens.length > 0, evitar) });
 
   const params = {
     model: MODELO,
     max_tokens: 16000,
-    output_config: { effort: dobro ? "medium" : "low" },
+    output_config: { effort: mult === 3 ? "high" : mult === 2 ? "medium" : "low" },
     messages: [{ role: "user", content: conteudo }]
   };
   if (COM_FALLBACK.has(MODELO)) { params.betas = ["server-side-fallback-2026-07-01"]; params.fallbacks = "default"; }
