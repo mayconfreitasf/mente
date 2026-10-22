@@ -186,6 +186,8 @@ h2 { font-size: 21px; line-height: 1.2; }
 @media (prefers-reduced-motion: reduce) { .gravando .ponto { animation: none; } }
 .opcao-radio { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .opcao-radio input { accent-color: var(--accent); }
+.sugestoes-email { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -10px; }
+.sugestoes-email button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 10px; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-google { min-height: 44px; display: flex; justify-content: center; }
 .btn-apple { background: #000; color: #fff; }
 .ou { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
@@ -1696,6 +1698,26 @@ async function montarSocial() {
     } catch (e) { if (!(e && e.error === "popup_closed_by_user")) { const erro = $("#contaErro"); if (erro) erro.textContent = "Não foi possível entrar com a Apple."; } }
   });
 }
+// Enquanto a pessoa digita o e-mail, sugere os domínios mais comuns para completar com um toque.
+const DOMINIOS = ["gmail.com", "hotmail.com", "outlook.com", "yahoo.com.br", "icloud.com", "live.com", "uol.com.br", "bol.com.br", "yahoo.com"];
+function ligarSugestoesEmail(input, caixa) {
+  if (!caixa) return;
+  const atualizar = () => {
+    const v = input.value.trim(), i = v.indexOf("@");
+    const nome = i < 0 ? v : v.slice(0, i), dom = i < 0 ? "" : v.slice(i + 1).toLowerCase();
+    const lista = nome && !/\s/.test(nome) ? DOMINIOS.filter(d => d.startsWith(dom) && d !== dom).slice(0, 5) : [];
+    caixa.hidden = !lista.length;
+    caixa.innerHTML = lista.map(d => `<button type="button" data-dom="${d}">${esc(nome)}@${d}</button>`).join("");
+  };
+  input.addEventListener("input", atualizar);
+  caixa.addEventListener("click", e => {
+    const b = e.target.closest("[data-dom]"); if (!b) return;
+    input.value = input.value.trim().split("@")[0] + "@" + b.dataset.dom;
+    caixa.hidden = true;
+    const prox = input.closest("form").querySelector('input[type="password"]');
+    (prox || input).focus();
+  });
+}
 function renderConta() {
   $("#abas").hidden = true; $("#chipNivel").hidden = true;
   const t = telaConta;
@@ -1708,6 +1730,7 @@ function renderConta() {
     ${campo("cUsuario", "Usuário", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"')}
     <span class="muted" style="font-size:12px;margin-top:-10px">De 4 a 15 letras minúsculas, sem números nem símbolos. Ele é único no Mente.</span>
     ${campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"')}
+    <div class="sugestoes-email" id="sugEmail" hidden></div>
     ${campo("cSenha", "Senha", 'type="password" autocomplete="new-password" maxlength="128"')}
     <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_SENHA}</span>
     ${campo("cSenha2", "Repita a senha", 'type="password" autocomplete="new-password" maxlength="128"')}
@@ -1716,7 +1739,7 @@ function renderConta() {
     <button class="link" type="button" data-ir="entrar">Já tenho conta</button>`;
   else if (t === "recuperar") corpo = `
     <p class="muted" style="margin:0">${cfgConta.recuperar ? "Digite o e-mail da sua conta. Enviamos um link para você criar uma nova senha." : "A recuperação de senha ainda não está disponível."}</p>
-    ${cfgConta.recuperar ? campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"') + `<div class="erro" id="contaErro"></div><button class="btn bloco" type="submit">Enviar link</button>` : ""}
+    ${cfgConta.recuperar ? campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"') + `<div class="sugestoes-email" id="sugEmail" hidden></div><div class="erro" id="contaErro"></div><button class="btn bloco" type="submit">Enviar link</button>` : ""}
     <button class="link" type="button" data-ir="entrar">Voltar</button>`;
   else if (t === "redefinir") corpo = `
     ${campo("cSenha", "Nova senha", 'type="password" autocomplete="new-password" maxlength="128"')}
@@ -1740,6 +1763,7 @@ function renderConta() {
   const bt = $("#testar"); if (bt) bt.addEventListener("click", () => { modoTeste = true; try { sessionStorage.setItem("mente.teste", "1"); } catch {} render(); });
   tela.querySelectorAll("[data-ir]").forEach(b => b.addEventListener("click", () => { telaConta = b.dataset.ir; render(); }));
   const u = $("#cUsuario"); if (u) u.addEventListener("input", () => { u.value = limpaUsuario(u.value); });
+  const em = $("#cEmail"); if (em) ligarSugestoesEmail(em, $("#sugEmail"));
   const f = $("#fConta"), erro = $("#contaErro"), botao = f.querySelector('button[type="submit"]');
   f.addEventListener("submit", async e => {
     e.preventDefault(); if (!botao || botao.disabled) return;
