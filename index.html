@@ -17,8 +17,8 @@
   --accent-soft: #c2304f26;
   --accent-fg: #fff6f7;
   --gold: #d8b06a;
-  --triplo: #e0773e;
-  --triplo-fg: #1d0d04;
+  --triplo: #f5c518;
+  --triplo-fg: #2a1d00;
   --ok: #4cb782;
   --bad: #e2596f;
   --shadow: 0 18px 40px #00000066;
@@ -31,14 +31,14 @@
   :root:not([data-theme="dark"]) {
     --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
     --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-    --gold: #8f6520; --triplo: #b24f1c; --triplo-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+    --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
   --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-  --gold: #8f6520; --triplo: #b24f1c; --triplo-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
   color-scheme: light;
 }
 
@@ -210,6 +210,12 @@ h2 { font-size: 21px; line-height: 1.2; }
 .modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, transparent); }
 .modos button[data-modo="triplo"][aria-pressed="true"] { border-color: var(--triplo); background: color-mix(in srgb, var(--triplo) 16%, transparent); }
 .tag-dobro.t3 { background: var(--triplo); color: var(--triplo-fg); }
+.status-cat { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.status-cat.ok { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.minha { display: flex; flex-direction: column; gap: 8px; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+.minha .txt strong { display: block; }
+.minha .txt span { color: var(--muted); font-size: 13px; }
+.link[disabled] { opacity: .45; cursor: not-allowed; }
 .caixa.extras { gap: 10px; padding: 14px; }
 .divisor { border-top: 1px solid var(--line); }
 .tag-cat { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); font-weight: 700; }
@@ -655,12 +661,9 @@ function renderQuizInicio() {
     <div class="caixa extras">
       <div class="chave"><div><strong>Quiz do seu arquivo</strong><div class="muted" style="font-size:12px">PDF, texto ou fotos viram perguntas.</div></div><label class="btn sec mini" for="fArq">Anexar</label></div>
       <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
-      <div class="divisor"></div>
-      <div><strong>Criar categoria</strong><div class="muted" style="font-size:12px">Digite um tema e o Mente cria um quiz. Cada acerto vale de 0,1 a 3 níveis, conforme a dificuldade do tema.</div></div>
-      <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Harry Potter" aria-label="Tema da categoria"></div><button class="btn sec mini" type="button" id="criarCat" ${criacoesRecentes().length >= LIMITE_CATEGORIAS ? "disabled" : ""}>Criar</button></div>
-      <span class="muted" style="font-size:12px">${esc(textoLimite())}</span>
     </div>
-    ${(S.minhas || []).length ? `<div class="pilha" style="gap:6px"><h2>Minhas categorias</h2><div class="lista">${S.minhas.map(c => `<div class="item" style="cursor:default"><div class="txt"><strong>${esc(c.nome)}</strong><span>${c.q.length} perguntas · peso ${fmtNivel(c.peso)}</span></div><button class="btn sec" type="button" data-jogar="${c.id}" style="padding:8px 14px">Jogar</button><button class="link" type="button" data-apagar="${c.id}" aria-label="Apagar ${esc(c.nome)}">Apagar</button></div>`).join("")}</div></div>` : ""}
+    <div class="caixa extras" id="blocoCat">${htmlBlocoCat()}</div>
+    <div id="minhasCat">${htmlMinhas()}</div>
     <div class="pilha" style="gap:10px">
       <div class="linha" style="justify-content:space-between"><h2>Escolha os assuntos</h2><span class="rotulo">um ou vários</span></div>
       <div class="cats">
@@ -684,17 +687,7 @@ function renderQuizInicio() {
   }));
   $("#comecar").addEventListener("click", () => { S.selecao = [...selecao]; salvar(); iniciarRodada(S.selecao, mult); });
   const vt = $("#verTodos"); if (vt) vt.addEventListener("click", () => { verTodos = !verTodos; redesenhar(); });
-  const tema = $("#fTema"), bc = $("#criarCat");
-  bc.addEventListener("click", () => criarCategoria(tema.value));
-  tema.addEventListener("keydown", e => { if (e.key === "Enter" && !bc.disabled) criarCategoria(tema.value); });
-  tela.querySelectorAll("[data-jogar]").forEach(b => b.addEventListener("click", () => iniciarMinha(S.minhas.find(c => c.id === b.dataset.jogar))));
-  tela.querySelectorAll("[data-apagar]").forEach(b => b.addEventListener("click", () => {
-    const c = S.minhas.find(x => x.id === b.dataset.apagar);
-    const v = folha(`<h2>Apagar ${esc(c.nome)}?</h2><p class="muted" style="margin:0">As ${c.q.length} perguntas desta categoria serão apagadas. Isso não libera uma nova criação no limite de 6 horas.</p>
-      <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar categoria</button><button class="link" type="button" id="nao">Cancelar</button>`);
-    v.querySelector("#nao").addEventListener("click", () => v.remove());
-    v.querySelector("#sim").addEventListener("click", () => { S.minhas = S.minhas.filter(x => x.id !== c.id); salvar(); v.remove(); redesenhar(); });
-  }));
+  ligarBlocoCat(); ligarMinhas();
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
     const l = [...fa.files]; fa.value = ""; if (!l.length) return;
     if (!sampleFn && !modoServidor) await prepararClaude();
@@ -1118,10 +1111,17 @@ async function quizDoArquivo(lista) {
 // ---------- Categoria criada por tema ----------
 // O Claude avalia o tema, define o peso (0,1 a 3) e cria as perguntas. Sem 50 perguntas válidas, a categoria não é criada.
 const MIN_PERGUNTAS_TEMA = 50, LIMITE_CATEGORIAS = 3, JANELA_CATEGORIAS = 6 * 3600 * 1000;
-function promptAvaliar(tema) {
+const DIFICULDADES = [
+  { id: "facil", nome: "Fácil", dif: "fáceis, sobre o que a maioria de quem gosta do assunto sabe" },
+  { id: "dificil", nome: "Difícil", dif: "difíceis: detalhes, números, nomes e relações que só quem conhece bem o assunto sabe" },
+  { id: "expert", nome: "Expert", dif: "de nível expert: exceções, dados exatos e conexões que só especialistas acertam" }
+];
+const difDe = id => DIFICULDADES.find(d => d.id === id) || DIFICULDADES[0];
+function promptAvaliar(tema, dificuldade) {
   return [
     "Você cria categorias de quiz para o app Mente, em português do Brasil.",
     'Tema pedido pelo usuário: """' + tema + '"""',
+    "Dificuldade escolhida pelo usuário: " + difDe(dificuldade).nome + ".",
     "Avalie o tema. Recuse se ele:",
     "- for ofensivo, sexual, discriminatório, incentivar crime ou automutilação, ou tratar de pessoas comuns ou privadas;",
     "- for banal ou estreito demais (por exemplo um objeto do dia a dia, como cortina, chão ou garrafa) e não render pelo menos 50 perguntas de conhecimento verificável e variado;",
@@ -1129,21 +1129,22 @@ function promptAvaliar(tema) {
     'Se recusar, responda apenas: {"aprovado": false, "motivo": "uma frase curta para o usuário", "sugestoes": ["até 3 temas próximos que renderiam um bom quiz"]}',
     "Se aprovar, responda com:",
     "- titulo: nome da categoria em até 4 palavras;",
-    "- peso: número de 0.1 a 3, com uma casa decimal, conforme a complexidade do assunto: 0.1 para assuntos muito fáceis e conhecidos de todos, 1 para conhecimento geral médio, 2 para assuntos técnicos, 3 para assuntos altamente especializados;",
+    "- peso: número de 0.1 a 3, com uma casa decimal, conforme a complexidade do assunto e a dificuldade escolhida: 0.1 para assuntos muito fáceis e conhecidos de todos, 1 para conhecimento geral médio, 2 para assuntos técnicos, 3 para assuntos altamente especializados em nível expert;",
     "- subtemas: 3 subtemas bem diferentes entre si, que juntos cubram o tema e rendam pelo menos 20 perguntas cada.",
     'Responda apenas com JSON: {"aprovado": true, "titulo": "...", "peso": 1.2, "subtemas": ["...", "...", "..."]}'
   ].join("\n");
 }
-function promptSubtema(tema, subtema) {
+function promptSubtema(tema, subtema, dificuldade, evitar) {
   return [
     "Crie perguntas de quiz em português do Brasil para o app Mente.",
     'Tema: """' + tema + '""". Subtema desta parte: """' + subtema + '""".',
     "Regras:",
-    "- 22 perguntas só sobre o subtema, variadas, sobre fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;",
+    `- 22 perguntas ${difDe(dificuldade).dif}, só sobre o subtema, variadas, sobre fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;`,
     "- enunciado curto, até 90 caracteres; respostas curtas, até 40 caracteres;",
     "- exatamente 3 opções por pergunta: a primeira é a correta e as outras duas são erradas mas plausíveis, todas diferentes.",
+    evitar && evitar.length ? "- Não repita nem reformule estas perguntas já feitas:\n" + evitar.map(q => "  • " + q).join("\n") : "",
     'Responda apenas com JSON: {"perguntas": [["enunciado", "correta", "errada 1", "errada 2"]]}'
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 const pesoValido = x => Math.min(3, Math.max(0.1, arred(Number(x) || 1)));
 function criacoesRecentes() { const desde = Date.now() - JANELA_CATEGORIAS; return (S.criacoes || []).filter(t => t > desde); }
@@ -1155,7 +1156,7 @@ function textoLimite() {
 }
 // Sem "subtema" o pedido avalia o tema; com "subtema" ele cria as perguntas daquela parte.
 async function pedirCategoria(corpo) {
-  if (sampleFn) return sampleFn.json(corpo.subtema ? promptSubtema(corpo.tema, corpo.subtema) : promptAvaliar(corpo.tema), { modelTier: "default" });
+  if (sampleFn) return sampleFn.json(corpo.subtema ? promptSubtema(corpo.tema, corpo.subtema, corpo.dificuldade, corpo.evitar) : promptAvaliar(corpo.tema, corpo.dificuldade), { modelTier: "default" });
   let r;
   try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corpo, codigo: lerCodigo() }) }); }
   catch { throw { code: "rede" }; }
@@ -1165,70 +1166,146 @@ async function pedirCategoria(corpo) {
   if (!r.ok) throw { code: "servidor", message: j.erro || (r.status === 504 ? "O servidor demorou demais para responder (código 504). Tente de novo." : `O servidor falhou (código ${r.status}). Tente de novo.`) };
   return j;
 }
-async function criarCategoria(tema) {
-  tema = tema.trim().slice(0, 60);
-  if (tema.length < 2) { toast("Digite um tema"); return; }
-  if (criacoesRecentes().length >= LIMITE_CATEGORIAS) { toast("Limite de categorias atingido"); return; }
-  if (!sampleFn && !modoServidor) await prepararClaude();
-  if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
-  const v = folha(`<span class="rotulo">Criar categoria</span><h2 id="catTitulo">Avaliando “${esc(tema)}”…</h2>
-    <p class="muted" style="margin:0" id="catMsg">O Mente confere se o tema rende um bom quiz.</p>
-    <div class="trilho"><i class="carregando"></i></div>`);
-  const fl = v.querySelector(".folha");
-  const fim = (html, depois) => { fl.innerHTML = html; if (depois) depois(); };
-  const fechar = () => { v.remove(); render(); };
-  const falhou = e => fim(`<span class="rotulo">Criar categoria</span><h2>Não deu certo</h2><p style="margin:0">${esc(mensagemErroClaude(e))}</p>
-    <button class="btn bloco" type="button" id="okT">Entendi</button>`, () => fl.querySelector("#okT").addEventListener("click", fechar));
-  // Toda tentativa que chega ao Claude conta no limite, aprovada ou não: cada uma gasta crédito da API.
-  S.criacoes = [...criacoesRecentes(), Date.now()]; salvar();
-  let res;
-  try { res = await pedirCategoria({ tema }); } catch (e) {
-    if (e && e.code === "codigo") {
-      S.criacoes.pop(); salvar();
-      return fim(`<span class="rotulo">Criar categoria</span><h2>Código de acesso</h2>
-        <p class="muted" style="margin:0">${lerCodigo() ? "Esse código não confere." : "Este recurso usa a conta do dono do app. Peça o código para ele."}</p>
-        <div class="campo"><label for="cAcesso">Código</label><input id="cAcesso" autocomplete="off"></div>
-        <button class="btn bloco" type="button" id="cOk">Continuar</button><button class="link" type="button" id="cNao">Cancelar</button>`, () => {
-        fl.querySelector("#cNao").addEventListener("click", () => v.remove());
-        fl.querySelector("#cOk").addEventListener("click", () => { const c = fl.querySelector("#cAcesso").value.trim(); if (!c) return; salvarCodigo(c); v.remove(); criarCategoria(tema); });
-      });
-    }
-    return falhou(e);
-  }
-  const recusar = (motivo, sugestoes) => fim(`<span class="rotulo">Criar categoria</span><h2>Tema recusado</h2><p style="margin:0">${esc(motivo)}</p>
-    ${sugestoes.length ? `<p class="muted" style="margin:0">Que tal um destes?</p><div class="pilha" style="gap:8px">${sugestoes.map((x, k) => `<button class="btn sec bloco" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}
-    <p class="aviso" style="margin:0">${esc(textoLimite())}</p>
-    <button class="link" type="button" id="okT">Fechar</button>`, () => {
-    fl.querySelector("#okT").addEventListener("click", fechar);
-    fl.querySelectorAll("[data-sug]").forEach(b => b.addEventListener("click", () => { v.remove(); criarCategoria(sugestoes[Number(b.dataset.sug)]); }));
-  });
-  if (!res || !res.aprovado) {
-    const sugestoes = (res && Array.isArray(res.sugestoes) ? res.sugestoes : []).filter(x => typeof x === "string" && x.trim()).slice(0, 3).map(x => x.trim().slice(0, 60));
-    return recusar(res && typeof res.motivo === "string" && res.motivo.trim() ? res.motivo.trim().slice(0, 200) : "Esse tema não rende um bom quiz.", sugestoes);
-  }
-  const titulo = textoCurto(res.titulo, 40) || tema;
-  const subtemas = (Array.isArray(res.subtemas) ? res.subtemas : []).filter(x => typeof x === "string" && x.trim()).slice(0, 3).map(x => x.trim().slice(0, 120));
-  fl.querySelector("#catTitulo").textContent = `Criando as perguntas de ${titulo}…`;
-  fl.querySelector("#catMsg").textContent = "Pode levar até um minuto.";
-  const partes = await Promise.allSettled((subtemas.length ? subtemas : [titulo]).map(st => pedirCategoria({ tema: titulo, subtema: st })));
-  const vistos = new Set();
+// A criação e a atualização rodam em segundo plano: o bloco mostra o andamento e o app continua livre.
+let difCat = "facil", tarefaCat = null;
+const atualizando = {};
+const naTelaQuiz = () => aba === "quiz" && !rodada && !!document.getElementById("blocoCat");
+function pedirCodigo(depois) {
+  const v = folha(`<span class="rotulo">Código de acesso</span><h2>Código de acesso</h2>
+    <p class="muted" style="margin:0">${lerCodigo() ? "Esse código não confere." : "Este recurso usa a conta do dono do app. Peça o código para ele."}</p>
+    <div class="campo"><label for="cAcesso">Código</label><input id="cAcesso" autocomplete="off"></div>
+    <button class="btn bloco" type="button" id="cOk">Continuar</button><button class="link" type="button" id="cNao">Cancelar</button>`);
+  v.querySelector("#cNao").addEventListener("click", () => v.remove());
+  v.querySelector("#cOk").addEventListener("click", () => { const c = v.querySelector("#cAcesso").value.trim(); if (!c) return; salvarCodigo(c); v.remove(); depois(); });
+}
+async function gerarPerguntasTema(titulo, subtemas, dificuldade, evitar, progresso) {
+  let feitas = 0;
+  const partes = await Promise.allSettled(subtemas.map(st => pedirCategoria({ tema: titulo, subtema: st, dificuldade, evitar })
+    .finally(() => progresso(++feitas, subtemas.length))));
+  const vistos = new Set(evitar.map(q => q.trim().toLowerCase()));
   const perguntas = partes.flatMap(x => x.status === "fulfilled" && x.value && Array.isArray(x.value.perguntas) ? x.value.perguntas : []).filter(q =>
     Array.isArray(q) && q.length === 4 && q.every(x => typeof x === "string" && x.trim()) &&
     new Set(q.slice(1).map(x => x.trim().toLowerCase())).size === 3 && !vistos.has(q[0].trim().toLowerCase()) && vistos.add(q[0].trim().toLowerCase())
   ).map(q => q.map(x => x.trim().slice(0, 200)));
-  if (perguntas.length < MIN_PERGUNTAS_TEMA) {
-    const erro = partes.find(x => x.status === "rejected");
-    if (erro && !perguntas.length) return falhou(erro.reason);
-    return recusar(`Esse tema não rendeu ${MIN_PERGUNTAS_TEMA} boas perguntas. Tente um tema mais amplo.`, []);
+  const erro = partes.find(x => x.status === "rejected");
+  return { perguntas, erro: erro ? erro.reason : null };
+}
+const limpaLista = (l, n, max) => (Array.isArray(l) ? l : []).filter(x => typeof x === "string" && x.trim()).slice(0, n).map(x => x.trim().slice(0, max));
+function htmlBlocoCat() {
+  const t = tarefaCat, ocupado = t && (t.etapa === "avaliando" || t.etapa === "criando"), lotado = criacoesRecentes().length >= LIMITE_CATEGORIAS;
+  let status = "";
+  if (t && t.etapa === "avaliando") status = `<div class="status-cat"><div class="trilho"><i class="carregando"></i></div><span class="muted">Avaliando “${esc(t.tema)}”…</span></div>`;
+  else if (t && t.etapa === "criando") status = `<div class="status-cat"><div class="trilho"><i style="width:${Math.round(100 * (t.feitas + 0.5) / (t.total + 0.5))}%"></i></div><span class="muted">Criando as perguntas de ${esc(t.titulo)}… ${t.feitas} de ${t.total} partes</span></div>`;
+  else if (t && t.etapa === "pronta") status = `<div class="status-cat ok"><span><b>${esc(t.titulo)}</b> criada: ${t.n} perguntas, peso ${fmtNivel(t.peso)}.</span><div class="linha" style="gap:6px"><button class="btn mini" type="button" data-jogar="${t.catId}">Jogar</button><button class="link" type="button" data-fechar>Ok</button></div></div>`;
+  else if (t && t.etapa === "recusada") status = `<div class="status-cat"><span><b>Tema recusado.</b> ${esc(t.texto)}</span>${t.sugestoes.length ? `<div class="linha" style="gap:6px">${t.sugestoes.map((x, k) => `<button class="btn sec mini" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}<button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
+  else if (t && t.etapa === "erro") status = `<div class="status-cat"><span class="erro" style="min-height:0">${esc(t.texto)}</span><button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
+  else if (lotado) status = `<span class="muted" style="font-size:12px">${esc(textoLimite())}</span>`;
+  return `<div><strong>Criar categoria</strong><div class="muted" style="font-size:13px">Digite um tema e o Mente cria um quiz.</div></div>
+    <div class="seg" id="difCat">${DIFICULDADES.map(d => `<button type="button" data-dif="${d.id}" aria-pressed="${d.id === difCat}">${d.nome}</button>`).join("")}</div>
+    <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Harry Potter" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
+    ${status}`;
+}
+function ligarBlocoCat() {
+  const el = document.getElementById("blocoCat"); if (!el) return;
+  const tema = el.querySelector("#fTema"), bc = el.querySelector("#criarCat");
+  bc.addEventListener("click", () => criarCategoria(tema.value));
+  tema.addEventListener("keydown", e => { if (e.key === "Enter" && !bc.disabled) criarCategoria(tema.value); });
+  el.querySelectorAll("[data-dif]").forEach(b => b.addEventListener("click", () => { difCat = b.dataset.dif; el.querySelectorAll("[data-dif]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
+  el.querySelectorAll("[data-fechar]").forEach(b => b.addEventListener("click", () => { tarefaCat = null; pintarBlocoCat(); }));
+  el.querySelectorAll("[data-sug]").forEach(b => b.addEventListener("click", () => { const x = tarefaCat.sugestoes[Number(b.dataset.sug)]; tarefaCat = null; criarCategoria(x); }));
+  el.querySelectorAll("[data-jogar]").forEach(b => b.addEventListener("click", () => { const c = (S.minhas || []).find(x => x.id === b.dataset.jogar); tarefaCat = null; if (c) iniciarMinha(c); }));
+}
+function pintarBlocoCat() {
+  const el = document.getElementById("blocoCat"); if (!el) return;
+  const valor = el.querySelector("#fTema") ? el.querySelector("#fTema").value : "";
+  el.innerHTML = htmlBlocoCat(); ligarBlocoCat();
+  const inp = el.querySelector("#fTema"); if (inp && !(tarefaCat && tarefaCat.etapa === "pronta")) inp.value = valor;
+}
+function htmlMinhas() {
+  if (!(S.minhas || []).length) return "";
+  return `<div class="pilha" style="gap:6px"><h2>Minhas categorias</h2><div class="lista">${S.minhas.map(c => {
+    const at = atualizando[c.id];
+    const info = at ? `Atualizando as perguntas… ${at.feitas} de ${at.total} partes` : `${c.q.length} perguntas · peso ${fmtNivel(c.peso)}${c.dificuldade ? " · " + difDe(c.dificuldade).nome : ""}`;
+    return `<div class="minha"><div class="txt"><strong>${esc(c.nome)}</strong><span>${info}</span></div>
+      <div class="linha" style="gap:6px;flex-wrap:nowrap"><button class="btn sec mini" type="button" data-jogar="${c.id}">Jogar</button><button class="link" type="button" data-atualizar="${c.id}" ${at ? "disabled" : ""}>Atualizar perguntas</button><button class="link" type="button" data-apagar="${c.id}" ${at ? "disabled" : ""} aria-label="Apagar ${esc(c.nome)}">Apagar</button></div></div>`;
+  }).join("")}</div></div>`;
+}
+function ligarMinhas() {
+  const el = document.getElementById("minhasCat"); if (!el) return;
+  el.querySelectorAll("[data-jogar]").forEach(b => b.addEventListener("click", () => iniciarMinha(S.minhas.find(c => c.id === b.dataset.jogar))));
+  el.querySelectorAll("[data-atualizar]").forEach(b => b.addEventListener("click", () => atualizarCategoria(b.dataset.atualizar)));
+  el.querySelectorAll("[data-apagar]").forEach(b => b.addEventListener("click", () => {
+    const c = S.minhas.find(x => x.id === b.dataset.apagar);
+    const v = folha(`<h2>Apagar ${esc(c.nome)}?</h2><p class="muted" style="margin:0">As ${c.q.length} perguntas desta categoria serão apagadas. Isso não libera uma nova criação no limite de 6 horas.</p>
+      <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar categoria</button><button class="link" type="button" id="nao">Cancelar</button>`);
+    v.querySelector("#nao").addEventListener("click", () => v.remove());
+    v.querySelector("#sim").addEventListener("click", () => { S.minhas = S.minhas.filter(x => x.id !== c.id); salvar(); v.remove(); pintarMinhas(); });
+  }));
+}
+function pintarMinhas() { const el = document.getElementById("minhasCat"); if (el) { el.innerHTML = htmlMinhas(); ligarMinhas(); } }
+async function criarCategoria(tema) {
+  tema = String(tema || "").trim().slice(0, 60);
+  if (tarefaCat && (tarefaCat.etapa === "avaliando" || tarefaCat.etapa === "criando")) { toast("Já tem uma categoria sendo criada"); return; }
+  if (tema.length < 2) { toast("Digite um tema"); return; }
+  if (criacoesRecentes().length >= LIMITE_CATEGORIAS) { toast("Limite de categorias atingido"); return; }
+  if (!sampleFn && !modoServidor) await prepararClaude();
+  if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
+  const dificuldade = difCat;
+  // Toda tentativa que chega ao Claude conta no limite, aprovada ou não: cada uma gasta crédito da API.
+  S.criacoes = [...criacoesRecentes(), Date.now()]; salvar();
+  const mostrar = estado => { tarefaCat = estado; pintarBlocoCat(); };
+  const avisar = txt => { if (!naTelaQuiz()) toast(txt); };
+  mostrar({ tema, etapa: "avaliando" });
+  let res;
+  try { res = await pedirCategoria({ tema, dificuldade }); } catch (e) {
+    if (e && e.code === "codigo") { S.criacoes.pop(); salvar(); mostrar(null); return pedirCodigo(() => criarCategoria(tema)); }
+    mostrar({ tema, etapa: "erro", texto: mensagemErroClaude(e) }); return avisar("A categoria não foi criada");
   }
-  const cat = { id: "m" + Date.now(), nome: titulo, peso: pesoValido(res.peso), q: perguntas, criada: Date.now() };
+  if (!res || !res.aprovado) {
+    mostrar({ tema, etapa: "recusada", texto: res && typeof res.motivo === "string" && res.motivo.trim() ? res.motivo.trim().slice(0, 200) : "Esse tema não rende um bom quiz.", sugestoes: limpaLista(res && res.sugestoes, 3, 60) });
+    return avisar("Tema recusado");
+  }
+  const titulo = textoCurto(res.titulo, 40) || tema;
+  const subtemas = limpaLista(res.subtemas, 3, 120);
+  const lista = subtemas.length ? subtemas : [titulo];
+  mostrar({ tema, etapa: "criando", titulo, feitas: 0, total: lista.length });
+  const { perguntas, erro } = await gerarPerguntasTema(titulo, lista, dificuldade, [], f => { if (tarefaCat && tarefaCat.etapa === "criando") { tarefaCat.feitas = f; pintarBlocoCat(); } });
+  if (perguntas.length < MIN_PERGUNTAS_TEMA) {
+    if (erro && !perguntas.length) mostrar({ tema, etapa: "erro", texto: mensagemErroClaude(erro) });
+    else mostrar({ tema, etapa: "recusada", texto: `Esse tema não rendeu ${MIN_PERGUNTAS_TEMA} boas perguntas. Tente um tema mais amplo.`, sugestoes: [] });
+    return avisar("A categoria não foi criada");
+  }
+  const cat = { id: "m" + Date.now(), nome: titulo, peso: pesoValido(res.peso), dificuldade, subtemas: lista, q: perguntas, criada: Date.now() };
   S.minhas = [cat, ...(S.minhas || [])]; salvar();
-  fim(`<span class="rotulo">Categoria criada</span><h2>${esc(cat.nome)}</h2>
-    <p style="margin:0">${cat.q.length} perguntas. Cada acerto vale +${fmtNivel(cat.peso)} ${cat.peso === 1 ? "nível" : "níveis"}.</p>
-    <button class="btn bloco" type="button" id="jogarT">Jogar agora</button><button class="link" type="button" id="okT">Depois</button>`, () => {
-    fl.querySelector("#okT").addEventListener("click", fechar);
-    fl.querySelector("#jogarT").addEventListener("click", () => { v.remove(); iniciarMinha(cat); });
-  });
+  mostrar({ tema, etapa: "pronta", titulo, n: perguntas.length, peso: cat.peso, catId: cat.id });
+  pintarMinhas();
+  avisar(`Categoria ${titulo} pronta`);
+}
+async function atualizarCategoria(id) {
+  const cat = (S.minhas || []).find(c => c.id === id);
+  if (!cat || atualizando[id]) return;
+  if (criacoesRecentes().length >= LIMITE_CATEGORIAS) { toast(textoLimite()); return; }
+  if (!sampleFn && !modoServidor) await prepararClaude();
+  if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
+  const dificuldade = cat.dificuldade || "facil";
+  S.criacoes = [...criacoesRecentes(), Date.now()]; salvar();
+  atualizando[id] = { feitas: 0, total: 3 }; pintarMinhas();
+  const terminar = txt => { delete atualizando[id]; pintarMinhas(); toast(txt); };
+  let lista = cat.subtemas;
+  if (!lista || !lista.length) {
+    try { const r = await pedirCategoria({ tema: cat.nome, dificuldade }); lista = r && r.aprovado ? limpaLista(r.subtemas, 3, 120) : []; }
+    catch (e) { if (e && e.code === "codigo") { S.criacoes.pop(); salvar(); delete atualizando[id]; pintarMinhas(); return pedirCodigo(() => atualizarCategoria(id)); } return terminar(mensagemErroClaude(e)); }
+    if (!lista.length) lista = [cat.nome];
+  }
+  atualizando[id].total = lista.length; pintarMinhas();
+  const { perguntas, erro } = await gerarPerguntasTema(cat.nome, lista, dificuldade, cat.q.map(q => q[0]), f => { if (atualizando[id]) { atualizando[id].feitas = f; pintarMinhas(); } });
+  if (erro && erro.code === "codigo" && !perguntas.length) { S.criacoes.pop(); salvar(); delete atualizando[id]; pintarMinhas(); return pedirCodigo(() => atualizarCategoria(id)); }
+  const atual = (S.minhas || []).find(c => c.id === id);
+  if (atual && perguntas.length >= MIN_PERGUNTAS_TEMA) {
+    atual.q = perguntas; atual.subtemas = lista; atual.atualizada = Date.now(); salvar();
+    return terminar(`${atual.nome}: ${perguntas.length} perguntas novas`);
+  }
+  terminar(erro && !perguntas.length ? mensagemErroClaude(erro) : "Não saíram perguntas novas suficientes. As antigas foram mantidas.");
 }
 function iniciarMinha(cat) {
   rodada = { nome: cat.nome + " · peso " + fmtNivel(cat.peso), ids: [], mult: 1, peso: cat.peso, minha: cat.id, cats: [cat], arquivo: true, usadas: new Set(),
