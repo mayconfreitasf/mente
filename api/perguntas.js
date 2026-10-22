@@ -30,23 +30,34 @@ function instrucoes(mult, temImagens, evitar) {
   ].filter(Boolean).join("\n");
 }
 
-// Categoria criada pelo usuário a partir de um tema: o Claude avalia o tema, define o peso e cria as perguntas.
-function instrucoesTema(tema) {
+// Categoria criada pelo usuário a partir de um tema, em duas fases curtas para caber no tempo da função:
+// 1) avaliar: o Claude aprova ou recusa o tema, define o peso e divide o tema em 3 subtemas;
+// 2) perguntas: o app pede as perguntas de cada subtema em paralelo.
+function instrucoesAvaliar(tema) {
   return [
     "Você cria categorias de quiz para o app Mente, em português do Brasil.",
     'Tema pedido pelo usuário: """' + tema + '"""',
-    "Primeiro avalie o tema. Recuse se ele:",
+    "Avalie o tema. Recuse se ele:",
     "- for ofensivo, sexual, discriminatório, incentivar crime ou automutilação, ou tratar de pessoas comuns ou privadas;",
     "- for banal ou estreito demais (por exemplo um objeto do dia a dia, como cortina, chão ou garrafa) e não render pelo menos 50 perguntas de conhecimento verificável e variado;",
     "- for vago, sem sentido ou só uma brincadeira.",
     'Se recusar, responda apenas: {"aprovado": false, "motivo": "uma frase curta para o usuário", "sugestoes": ["até 3 temas próximos que renderiam um bom quiz"]}',
-    "Se aprovar:",
+    "Se aprovar, responda com:",
     "- titulo: nome da categoria em até 4 palavras;",
     "- peso: número de 0.1 a 3, com uma casa decimal, conforme a complexidade do assunto: 0.1 para assuntos muito fáceis e conhecidos de todos, 1 para conhecimento geral médio, 2 para assuntos técnicos, 3 para assuntos altamente especializados;",
-    "- perguntas: 60 perguntas variadas, só fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;",
+    "- subtemas: 3 subtemas bem diferentes entre si, que juntos cubram o tema e rendam pelo menos 20 perguntas cada.",
+    'Responda apenas com JSON: {"aprovado": true, "titulo": "...", "peso": 1.2, "subtemas": ["...", "...", "..."]}'
+  ].join("\n");
+}
+function instrucoesSubtema(tema, subtema) {
+  return [
+    "Crie perguntas de quiz em português do Brasil para o app Mente.",
+    'Tema: """' + tema + '""". Subtema desta parte: """' + subtema + '""".',
+    "Regras:",
+    "- 22 perguntas só sobre o subtema, variadas, sobre fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;",
     "- enunciado curto, até 90 caracteres; respostas curtas, até 40 caracteres;",
     "- exatamente 3 opções por pergunta: a primeira é a correta e as outras duas são erradas mas plausíveis, todas diferentes.",
-    'Responda apenas com JSON: {"aprovado": true, "titulo": "...", "peso": 1.2, "perguntas": [["enunciado", "correta", "errada 1", "errada 2"]]}'
+    'Responda apenas com JSON: {"perguntas": [["enunciado", "correta", "errada 1", "errada 2"]]}'
   ].join("\n");
 }
 
@@ -63,7 +74,7 @@ export default async function handler(req, res) {
 
   const codigo = process.env.CODIGO_ACESSO;
   if (codigo && b.codigo !== codigo) return res.status(401).json({ erro: "Código de acesso inválido." });
-  if (typeof b.tema === "string") return criarCategoria(b.tema.trim().slice(0, 60), res);
+  if (typeof b.tema === "string") return criarCategoria(b.tema.trim().slice(0, 60), typeof b.subtema === "string" ? b.subtema.trim().slice(0, 120) : "", res);
 
   const texto = typeof b.texto === "string" ? b.texto.slice(0, LIMITE_TEXTO) : "";
   const imagens = Array.isArray(b.imagens) ? b.imagens.filter(s => typeof s === "string" && s.length).slice(0, MAX_IMAGENS) : [];
@@ -98,20 +109,20 @@ export default async function handler(req, res) {
 }
 
 // O app valida as perguntas e exige pelo menos 50; aqui só repassamos o que o Claude decidiu.
-async function criarCategoria(tema, res) {
+async function criarCategoria(tema, subtema, res) {
   if (tema.length < 2) return res.status(400).json({ erro: "Digite um tema." });
   const params = {
     model: MODELO,
-    max_tokens: 16000,
-    output_config: { effort: "medium" },
-    messages: [{ role: "user", content: instrucoesTema(tema) }]
+    max_tokens: subtema ? 6000 : 1500,
+    output_config: { effort: "low" },
+    messages: [{ role: "user", content: subtema ? instrucoesSubtema(tema, subtema) : instrucoesAvaliar(tema) }]
   };
   if (COM_FALLBACK.has(MODELO)) { params.betas = ["server-side-fallback-2026-07-01"]; params.fallbacks = "default"; }
   try {
     const resp = await client.beta.messages.create(params);
-    if (resp.stop_reason === "refusal") return res.status(200).json({ aprovado: false, motivo: "Esse tema não pode virar categoria.", sugestoes: [] });
+    if (resp.stop_reason === "refusal") return res.status(200).json(subtema ? { perguntas: [] } : { aprovado: false, motivo: "Esse tema não pode virar categoria.", sugestoes: [] });
     const json = extrairJson(resp.content.filter(c => c.type === "text").map(c => c.text).join(""));
-    if (!json || typeof json.aprovado !== "boolean") return res.status(502).json({ erro: "Não consegui avaliar esse tema. Tente de novo." });
+    if (!json) return res.status(502).json({ erro: "Não consegui ler a resposta do Claude. Tente de novo." });
     return res.status(200).json(json);
   } catch (e) {
     return erroDaApi(e, res);

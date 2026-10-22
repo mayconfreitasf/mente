@@ -17,6 +17,8 @@
   --accent-soft: #c2304f26;
   --accent-fg: #fff6f7;
   --gold: #d8b06a;
+  --triplo: #e0773e;
+  --triplo-fg: #1d0d04;
   --ok: #4cb782;
   --bad: #e2596f;
   --shadow: 0 18px 40px #00000066;
@@ -29,14 +31,14 @@
   :root:not([data-theme="dark"]) {
     --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
     --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-    --gold: #8f6520; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+    --gold: #8f6520; --triplo: #b24f1c; --triplo-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
   --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-  --gold: #8f6520; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  --gold: #8f6520; --triplo: #b24f1c; --triplo-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
   color-scheme: light;
 }
 
@@ -90,6 +92,8 @@ h2 { font-size: 21px; line-height: 1.2; }
 .btn:active { transform: scale(0.98); }
 .btn.sec { background: var(--surface-2); color: var(--fg); }
 .btn.ouro { background: var(--gold); color: #1d1206; }
+.btn.triplo { background: var(--triplo); color: var(--triplo-fg); }
+.btn.mini { padding: 9px 14px; flex: none; }
 .btn.bloco { width: 100%; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 .link { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 8px; }
@@ -204,7 +208,10 @@ h2 { font-size: 21px; line-height: 1.2; }
 .modos button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; text-align: left; }
 .modos small { font-weight: 500; font-size: 12px; color: var(--muted); }
 .modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, transparent); }
-.modos button[data-modo="triplo"][aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 30%, transparent); }
+.modos button[data-modo="triplo"][aria-pressed="true"] { border-color: var(--triplo); background: color-mix(in srgb, var(--triplo) 16%, transparent); }
+.tag-dobro.t3 { background: var(--triplo); color: var(--triplo-fg); }
+.caixa.extras { gap: 10px; padding: 14px; }
+.divisor { border-top: 1px solid var(--line); }
 .tag-cat { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); font-weight: 700; }
 
 /* Nível subindo */
@@ -268,6 +275,7 @@ const MODOS = [
 ];
 const modoDe = m => MODOS.find(x => x.mult === m) || MODOS[0];
 const multAtual = () => (MODOS.find(x => x.id === S.modo) || MODOS[0]).mult;
+const classeModo = m => m === 3 ? "triplo" : m === 2 ? "ouro" : "";
 const sufixo = m => m > 1 ? " · " + modoDe(m).nome : "";
 
 // Perfis fictícios: [id, nome, sexo, idade, profissão, cidade, nível, passe (null = não aceita), bio]
@@ -610,7 +618,7 @@ function textoFalta(g) {
   return `Faltam <b style="color:var(--gold)">+${fmtNivel(g.falta)} ${g.falta === 1 ? "ponto" : "pontos"}</b> para desbloquear <b style="color:var(--fg)">${n} ${n === 1 ? "pessoa" : "pessoas"}</b>`;
 }
 const ALEATORIO = "aleatorio";
-let selecao = null; // Set com ids de assuntos, ou com ALEATORIO
+let selecao = null, verTodos = false; // Set com ids de assuntos, ou com ALEATORIO
 function nomeSelecao(ids) {
   if (ids.includes(ALEATORIO)) return "Aleatório";
   if (ids.length === 1) return CATS.find(c => c.id === ids[0]).nome;
@@ -625,6 +633,9 @@ function renderQuizInicio() {
   const pct = g ? Math.round(((S.nivel - anterior) / Math.max(1, g.nivel - anterior)) * 100) : 100;
   const alea = selecao.has(ALEATORIO);
   const qtd = alea ? CATS.length : selecao.size;
+  // Sem "ver todos", aparecem os 6 assuntos mais jogados e os que estiverem marcados.
+  const maisJogados = CATS.slice().sort((a, b) => ((S.porCat[b.id] || {}).r || 0) - ((S.porCat[a.id] || {}).r || 0)).slice(0, 6);
+  const visiveis = verTodos ? CATS : CATS.filter(c => maisJogados.includes(c) || (!alea && selecao.has(c.id)));
   const alvo = alea ? "assuntos aleatórios" : qtd === 1 ? "1 assunto" : qtd + " assuntos";
   tela.innerHTML = `
   <div class="pilha entra">
@@ -641,14 +652,12 @@ function renderQuizInicio() {
         ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><b>${m.nome}</b><small>${m.desc}</small></button>`).join("")}
       </div>
     </div>
-    ${true ? `<div class="caixa">
-      <div><strong>Quiz do seu arquivo</strong><div class="muted" style="font-size:13px">Anexe um PDF e o Mente irá criar um quiz com o conteúdo do seu arquivo.</div></div>
-      <label class="btn sec bloco" for="fArq">Anexar arquivo</label>
+    <div class="caixa extras">
+      <div class="chave"><div><strong>Quiz do seu arquivo</strong><div class="muted" style="font-size:12px">PDF, texto ou fotos viram perguntas.</div></div><label class="btn sec mini" for="fArq">Anexar</label></div>
       <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
-    </div>` : ""}
-    <div class="caixa">
-      <div><strong>Criar categoria</strong><div class="muted" style="font-size:13px">Digite um tema e o Mente cria pelo menos ${MIN_PERGUNTAS_TEMA} perguntas. Cada acerto vale de 0,1 a 3 níveis, conforme a dificuldade do tema.</div></div>
-      <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Harry Potter" aria-label="Tema da categoria"></div><button class="btn sec" type="button" id="criarCat" ${criacoesRecentes().length >= LIMITE_CATEGORIAS ? "disabled" : ""}>Criar</button></div>
+      <div class="divisor"></div>
+      <div><strong>Criar categoria</strong><div class="muted" style="font-size:12px">Digite um tema e o Mente cria um quiz. Cada acerto vale de 0,1 a 3 níveis, conforme a dificuldade do tema.</div></div>
+      <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Harry Potter" aria-label="Tema da categoria"></div><button class="btn sec mini" type="button" id="criarCat" ${criacoesRecentes().length >= LIMITE_CATEGORIAS ? "disabled" : ""}>Criar</button></div>
       <span class="muted" style="font-size:12px">${esc(textoLimite())}</span>
     </div>
     ${(S.minhas || []).length ? `<div class="pilha" style="gap:6px"><h2>Minhas categorias</h2><div class="lista">${S.minhas.map(c => `<div class="item" style="cursor:default"><div class="txt"><strong>${esc(c.nome)}</strong><span>${c.q.length} perguntas · peso ${fmtNivel(c.peso)}</span></div><button class="btn sec" type="button" data-jogar="${c.id}" style="padding:8px 14px">Jogar</button><button class="link" type="button" data-apagar="${c.id}" aria-label="Apagar ${esc(c.nome)}">Apagar</button></div>`).join("")}</div></div>` : ""}
@@ -656,10 +665,11 @@ function renderQuizInicio() {
       <div class="linha" style="justify-content:space-between"><h2>Escolha os assuntos</h2><span class="rotulo">um ou vários</span></div>
       <div class="cats">
         <button class="cat aleatorio" type="button" data-cat="${ALEATORIO}" aria-pressed="${alea}"><strong>Aleatório</strong><span>todos os ${CATS.length} assuntos misturados</span></button>
-        ${CATS.map(c => { const pc = S.porCat[c.id] || { r: 0, a: 0 }; return `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="${!alea && selecao.has(c.id)}"><strong>${esc(c.nome)}</strong><span>${pc.r ? `${pc.a}/${pc.r} acertos` : "nova"}</span></button>`; }).join("")}
+        ${visiveis.map(c => { const pc = S.porCat[c.id] || { r: 0, a: 0 }; return `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="${!alea && selecao.has(c.id)}"><strong>${esc(c.nome)}</strong><span>${pc.r ? `${pc.a}/${pc.r} acertos` : "nova"}</span></button>`; }).join("")}
       </div>
+      ${CATS.length > 6 ? `<button class="link" type="button" id="verTodos" style="align-self:center">${verTodos ? "Mostrar menos" : `Ver todos os ${CATS.length}`}</button>` : ""}
       <div class="iniciar">
-        <button class="btn bloco ${mult > 1 ? "ouro" : ""}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
+        <button class="btn bloco ${classeModo(mult)}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
         <p class="aviso" style="margin:8px 0 0">As perguntas seguem sem limite até você encerrar.</p>
       </div>
     </div>
@@ -673,6 +683,7 @@ function renderQuizInicio() {
     redesenhar();
   }));
   $("#comecar").addEventListener("click", () => { S.selecao = [...selecao]; salvar(); iniciarRodada(S.selecao, mult); });
+  const vt = $("#verTodos"); if (vt) vt.addEventListener("click", () => { verTodos = !verTodos; redesenhar(); });
   const tema = $("#fTema"), bc = $("#criarCat");
   bc.addEventListener("click", () => criarCategoria(tema.value));
   tema.addEventListener("keydown", e => { if (e.key === "Enter" && !bc.disabled) criarCategoria(tema.value); });
@@ -748,7 +759,7 @@ function renderPergunta() {
   durTempo = segundosPara(it.q) * 1000;
   tela.innerHTML = `
   <div class="rodada entra">
-    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.peso != null ? ` <span class="tag-dobro">×${fmtNivel(r.peso)}</span>` : r.mult > 1 ? ` <span class="tag-dobro">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1}${r.desafio ? " de " + r.fila.length : ""} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
+    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.peso != null ? ` <span class="tag-dobro">×${fmtNivel(r.peso)}</span>` : r.mult > 1 ? ` <span class="tag-dobro${r.mult === 3 ? " t3" : ""}">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1}${r.desafio ? " de " + r.fila.length : ""} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
     <div class="tempo" id="tempo"><i id="barra"></i></div>
     <div class="enunciado">${esc(it.q)}</div>
     <div class="opcoes">${it.ops.map((o, k) => `<button class="opcao" type="button" data-k="${k}"><kbd>${"ABC"[k]}</kbd><span>${esc(o)}</span></button>`).join("")}</div>
@@ -807,7 +818,7 @@ function renderResultado() {
       ${liberou.length ? `<p style="margin:0;color:var(--gold)">Novas pessoas desbloqueadas: ${liberou.map(p => esc(p.nome)).join(", ")}</p>` : ""}
       ${g ? `<p class="muted" style="margin:0;font-size:14px">${textoFalta(g)}.</p>` : ""}
     </div>
-    <button class="btn bloco ${r.mult > 1 ? "ouro" : ""}" type="button" id="denovo">Jogar de novo</button>
+    <button class="btn bloco ${r.peso != null ? "" : classeModo(r.mult)}" type="button" id="denovo">Jogar de novo</button>
     ${r.n ? `<button class="btn sec bloco" type="button" id="desafiar">Desafiar um amigo</button>` : ""}
     <div class="acoes" style="margin-top:0">
       <button class="btn sec" type="button" id="outra">Trocar assuntos</button>
@@ -898,7 +909,7 @@ function renderDesafioIntro() {
       <div class="grande">${d.a}/${d.t}</div>
       <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${fmtNivel(d.peso ?? d.m)} ${(d.peso ?? d.m) === 1 ? "nível" : "níveis"}.</p>
     </div>
-    <button class="btn bloco ${d.m > 1 ? "ouro" : ""}" type="button" id="aceitarD">Aceitar desafio</button>
+    <button class="btn bloco ${d.peso != null ? "" : classeModo(d.m)}" type="button" id="aceitarD">Aceitar desafio</button>
     <button class="link" type="button" id="recusarD">Agora não</button>
   </div>`;
   $("#aceitarD").addEventListener("click", () => iniciarDesafio(d));
@@ -1107,41 +1118,51 @@ async function quizDoArquivo(lista) {
 // ---------- Categoria criada por tema ----------
 // O Claude avalia o tema, define o peso (0,1 a 3) e cria as perguntas. Sem 50 perguntas válidas, a categoria não é criada.
 const MIN_PERGUNTAS_TEMA = 50, LIMITE_CATEGORIAS = 3, JANELA_CATEGORIAS = 6 * 3600 * 1000;
-function promptCategoria(tema) {
+function promptAvaliar(tema) {
   return [
     "Você cria categorias de quiz para o app Mente, em português do Brasil.",
     'Tema pedido pelo usuário: """' + tema + '"""',
-    "Primeiro avalie o tema. Recuse se ele:",
+    "Avalie o tema. Recuse se ele:",
     "- for ofensivo, sexual, discriminatório, incentivar crime ou automutilação, ou tratar de pessoas comuns ou privadas;",
     "- for banal ou estreito demais (por exemplo um objeto do dia a dia, como cortina, chão ou garrafa) e não render pelo menos 50 perguntas de conhecimento verificável e variado;",
     "- for vago, sem sentido ou só uma brincadeira.",
     'Se recusar, responda apenas: {"aprovado": false, "motivo": "uma frase curta para o usuário", "sugestoes": ["até 3 temas próximos que renderiam um bom quiz"]}',
-    "Se aprovar:",
+    "Se aprovar, responda com:",
     "- titulo: nome da categoria em até 4 palavras;",
     "- peso: número de 0.1 a 3, com uma casa decimal, conforme a complexidade do assunto: 0.1 para assuntos muito fáceis e conhecidos de todos, 1 para conhecimento geral médio, 2 para assuntos técnicos, 3 para assuntos altamente especializados;",
-    "- perguntas: 60 perguntas variadas, só fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;",
+    "- subtemas: 3 subtemas bem diferentes entre si, que juntos cubram o tema e rendam pelo menos 20 perguntas cada.",
+    'Responda apenas com JSON: {"aprovado": true, "titulo": "...", "peso": 1.2, "subtemas": ["...", "...", "..."]}'
+  ].join("\n");
+}
+function promptSubtema(tema, subtema) {
+  return [
+    "Crie perguntas de quiz em português do Brasil para o app Mente.",
+    'Tema: """' + tema + '""". Subtema desta parte: """' + subtema + '""".',
+    "Regras:",
+    "- 22 perguntas só sobre o subtema, variadas, sobre fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;",
     "- enunciado curto, até 90 caracteres; respostas curtas, até 40 caracteres;",
     "- exatamente 3 opções por pergunta: a primeira é a correta e as outras duas são erradas mas plausíveis, todas diferentes.",
-    'Responda apenas com JSON: {"aprovado": true, "titulo": "...", "peso": 1.2, "perguntas": [["enunciado", "correta", "errada 1", "errada 2"]]}'
+    'Responda apenas com JSON: {"perguntas": [["enunciado", "correta", "errada 1", "errada 2"]]}'
   ].join("\n");
 }
 const pesoValido = x => Math.min(3, Math.max(0.1, arred(Number(x) || 1)));
 function criacoesRecentes() { const desde = Date.now() - JANELA_CATEGORIAS; return (S.criacoes || []).filter(t => t > desde); }
 function textoLimite() {
   const r = criacoesRecentes(), resta = LIMITE_CATEGORIAS - r.length;
-  if (resta > 0) return `Você pode criar mais ${resta} ${resta === 1 ? "categoria" : "categorias"} nas próximas 6 horas.`;
+  if (resta > 0) return `Restam ${resta} de ${LIMITE_CATEGORIAS} criações nas próximas 6 horas.`;
   const libera = new Date(Math.min(...r) + JANELA_CATEGORIAS).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  return `Limite de ${LIMITE_CATEGORIAS} categorias a cada 6 horas atingido. Você poderá criar outra às ${libera}.`;
+  return `Limite atingido. Próxima criação às ${libera}.`;
 }
-async function pedirCategoria(tema) {
-  if (sampleFn) return sampleFn.json(promptCategoria(tema), { modelTier: "default" });
+// Sem "subtema" o pedido avalia o tema; com "subtema" ele cria as perguntas daquela parte.
+async function pedirCategoria(corpo) {
+  if (sampleFn) return sampleFn.json(corpo.subtema ? promptSubtema(corpo.tema, corpo.subtema) : promptAvaliar(corpo.tema), { modelTier: "default" });
   let r;
-  try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, codigo: lerCodigo() }) }); }
+  try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corpo, codigo: lerCodigo() }) }); }
   catch { throw { code: "rede" }; }
   const j = await r.json().catch(() => ({}));
   if (r.status === 401) throw { code: "codigo", message: j.erro };
   if (r.status === 429) throw { code: "rate_limited" };
-  if (!r.ok) throw { code: "servidor", message: j.erro };
+  if (!r.ok) throw { code: "servidor", message: j.erro || (r.status === 504 ? "O servidor demorou demais para responder (código 504). Tente de novo." : `O servidor falhou (código ${r.status}). Tente de novo.`) };
   return j;
 }
 async function criarCategoria(tema) {
@@ -1150,15 +1171,18 @@ async function criarCategoria(tema) {
   if (criacoesRecentes().length >= LIMITE_CATEGORIAS) { toast("Limite de categorias atingido"); return; }
   if (!sampleFn && !modoServidor) await prepararClaude();
   if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
-  const v = folha(`<span class="rotulo">Criar categoria</span><h2>Avaliando “${esc(tema)}”…</h2>
-    <p class="muted" style="margin:0">O Mente confere se o tema rende um bom quiz e cria as perguntas. Pode levar até um minuto.</p>
+  const v = folha(`<span class="rotulo">Criar categoria</span><h2 id="catTitulo">Avaliando “${esc(tema)}”…</h2>
+    <p class="muted" style="margin:0" id="catMsg">O Mente confere se o tema rende um bom quiz.</p>
     <div class="trilho"><i class="carregando"></i></div>`);
   const fl = v.querySelector(".folha");
   const fim = (html, depois) => { fl.innerHTML = html; if (depois) depois(); };
+  const fechar = () => { v.remove(); render(); };
+  const falhou = e => fim(`<span class="rotulo">Criar categoria</span><h2>Não deu certo</h2><p style="margin:0">${esc(mensagemErroClaude(e))}</p>
+    <button class="btn bloco" type="button" id="okT">Entendi</button>`, () => fl.querySelector("#okT").addEventListener("click", fechar));
   // Toda tentativa que chega ao Claude conta no limite, aprovada ou não: cada uma gasta crédito da API.
   S.criacoes = [...criacoesRecentes(), Date.now()]; salvar();
   let res;
-  try { res = await pedirCategoria(tema); } catch (e) {
+  try { res = await pedirCategoria({ tema }); } catch (e) {
     if (e && e.code === "codigo") {
       S.criacoes.pop(); salvar();
       return fim(`<span class="rotulo">Criar categoria</span><h2>Código de acesso</h2>
@@ -1169,32 +1193,40 @@ async function criarCategoria(tema) {
         fl.querySelector("#cOk").addEventListener("click", () => { const c = fl.querySelector("#cAcesso").value.trim(); if (!c) return; salvarCodigo(c); v.remove(); criarCategoria(tema); });
       });
     }
-    return fim(`<span class="rotulo">Criar categoria</span><h2>Não deu certo</h2><p style="margin:0">${esc(mensagemErroClaude(e))}</p>
-      <button class="btn bloco" type="button" id="okT">Entendi</button>`, () => fl.querySelector("#okT").addEventListener("click", () => { v.remove(); render(); }));
+    return falhou(e);
   }
-  const sugestoes = (res && Array.isArray(res.sugestoes) ? res.sugestoes : []).filter(x => typeof x === "string" && x.trim()).slice(0, 3).map(x => x.trim().slice(0, 60));
+  const recusar = (motivo, sugestoes) => fim(`<span class="rotulo">Criar categoria</span><h2>Tema recusado</h2><p style="margin:0">${esc(motivo)}</p>
+    ${sugestoes.length ? `<p class="muted" style="margin:0">Que tal um destes?</p><div class="pilha" style="gap:8px">${sugestoes.map((x, k) => `<button class="btn sec bloco" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}
+    <p class="aviso" style="margin:0">${esc(textoLimite())}</p>
+    <button class="link" type="button" id="okT">Fechar</button>`, () => {
+    fl.querySelector("#okT").addEventListener("click", fechar);
+    fl.querySelectorAll("[data-sug]").forEach(b => b.addEventListener("click", () => { v.remove(); criarCategoria(sugestoes[Number(b.dataset.sug)]); }));
+  });
+  if (!res || !res.aprovado) {
+    const sugestoes = (res && Array.isArray(res.sugestoes) ? res.sugestoes : []).filter(x => typeof x === "string" && x.trim()).slice(0, 3).map(x => x.trim().slice(0, 60));
+    return recusar(res && typeof res.motivo === "string" && res.motivo.trim() ? res.motivo.trim().slice(0, 200) : "Esse tema não rende um bom quiz.", sugestoes);
+  }
+  const titulo = textoCurto(res.titulo, 40) || tema;
+  const subtemas = (Array.isArray(res.subtemas) ? res.subtemas : []).filter(x => typeof x === "string" && x.trim()).slice(0, 3).map(x => x.trim().slice(0, 120));
+  fl.querySelector("#catTitulo").textContent = `Criando as perguntas de ${titulo}…`;
+  fl.querySelector("#catMsg").textContent = "Pode levar até um minuto.";
+  const partes = await Promise.allSettled((subtemas.length ? subtemas : [titulo]).map(st => pedirCategoria({ tema: titulo, subtema: st })));
   const vistos = new Set();
-  const perguntas = (res && res.aprovado && Array.isArray(res.perguntas) ? res.perguntas : []).filter(q =>
+  const perguntas = partes.flatMap(x => x.status === "fulfilled" && x.value && Array.isArray(x.value.perguntas) ? x.value.perguntas : []).filter(q =>
     Array.isArray(q) && q.length === 4 && q.every(x => typeof x === "string" && x.trim()) &&
     new Set(q.slice(1).map(x => x.trim().toLowerCase())).size === 3 && !vistos.has(q[0].trim().toLowerCase()) && vistos.add(q[0].trim().toLowerCase())
   ).map(q => q.map(x => x.trim().slice(0, 200)));
-  if (!res || !res.aprovado || perguntas.length < MIN_PERGUNTAS_TEMA) {
-    const motivo = res && !res.aprovado && typeof res.motivo === "string" && res.motivo.trim() ? res.motivo.trim().slice(0, 200)
-      : `Esse tema não rendeu ${MIN_PERGUNTAS_TEMA} boas perguntas. Tente um tema mais amplo.`;
-    return fim(`<span class="rotulo">Criar categoria</span><h2>Tema recusado</h2><p style="margin:0">${esc(motivo)}</p>
-      ${sugestoes.length ? `<p class="muted" style="margin:0">Que tal um destes?</p><div class="pilha" style="gap:8px">${sugestoes.map((x, k) => `<button class="btn sec bloco" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}
-      <p class="aviso" style="margin:0">${esc(textoLimite())}</p>
-      <button class="link" type="button" id="okT">Fechar</button>`, () => {
-      fl.querySelector("#okT").addEventListener("click", () => { v.remove(); render(); });
-      fl.querySelectorAll("[data-sug]").forEach(b => b.addEventListener("click", () => { v.remove(); criarCategoria(sugestoes[Number(b.dataset.sug)]); }));
-    });
+  if (perguntas.length < MIN_PERGUNTAS_TEMA) {
+    const erro = partes.find(x => x.status === "rejected");
+    if (erro && !perguntas.length) return falhou(erro.reason);
+    return recusar(`Esse tema não rendeu ${MIN_PERGUNTAS_TEMA} boas perguntas. Tente um tema mais amplo.`, []);
   }
-  const cat = { id: "m" + Date.now(), nome: textoCurto(res.titulo, 40) || tema, peso: pesoValido(res.peso), q: perguntas, criada: Date.now() };
+  const cat = { id: "m" + Date.now(), nome: titulo, peso: pesoValido(res.peso), q: perguntas, criada: Date.now() };
   S.minhas = [cat, ...(S.minhas || [])]; salvar();
   fim(`<span class="rotulo">Categoria criada</span><h2>${esc(cat.nome)}</h2>
     <p style="margin:0">${cat.q.length} perguntas. Cada acerto vale +${fmtNivel(cat.peso)} ${cat.peso === 1 ? "nível" : "níveis"}.</p>
     <button class="btn bloco" type="button" id="jogarT">Jogar agora</button><button class="link" type="button" id="okT">Depois</button>`, () => {
-    fl.querySelector("#okT").addEventListener("click", () => { v.remove(); render(); });
+    fl.querySelector("#okT").addEventListener("click", fechar);
     fl.querySelector("#jogarT").addEventListener("click", () => { v.remove(); iniciarMinha(cat); });
   });
 }
