@@ -329,7 +329,7 @@ const PADRAO = () => ({
   v: 1, perfil: null, nivel: 0, respondidas: 0, porCat: {}, vistas: {},
   curtidos: [], passados: [], matches: [], novos: [], chats: {}, passes: [],
   meuPasse: { ativo: true, valor: 150 }, selecao: [], modo: "normal", atualizado: 0,
-  filtros: { verMin: 0, visMin: 0, raio: null }, local: null
+  filtros: { verMin: 0, visMin: 0, raio: null }, local: null, minhas: [], criacoes: []
 });
 let S = carregarLocal() || PADRAO();
 let db = null, uid = null, salvarTimer = null;
@@ -376,6 +376,8 @@ async function conectarNuvem() {
 const $ = s => document.querySelector(s);
 const tela = $("#tela");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const arred = n => Math.round(n * 10) / 10;
+const fmtNivel = n => Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const brl = v => "R$ " + Number(v).toLocaleString("pt-BR");
 const embaralhar = a => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 const iniciais = n => n.split(" ").map(x => x[0]).slice(0, 2).join("").toUpperCase();
@@ -394,9 +396,9 @@ function toast(txt) {
 }
 function animarNivel(qtd = 1) {
   const chip = $("#chipNivel");
-  $("#chipNum").textContent = S.nivel;
+  $("#chipNum").textContent = fmtNivel(S.nivel);
   chip.classList.remove("sobe"); void chip.offsetWidth; chip.classList.add("sobe");
-  const m = document.createElement("span"); m.className = "mais1"; m.textContent = "+" + qtd;
+  const m = document.createElement("span"); m.className = "mais1"; m.textContent = "+" + fmtNivel(qtd);
   chip.appendChild(m); setTimeout(() => m.remove(), 950);
 }
 function folha(html) {
@@ -451,13 +453,13 @@ const semMatch = () => !!S.perfil && S.perfil.interesse === "N";
 function meVe(p) { return p.nivel >= Math.min(S.filtros.visMin, S.nivel); }
 function resumoFiltros() {
   const f = S.filtros;
-  return `Níveis ${Math.min(f.verMin, S.nivel)} a ${S.nivel} · ${f.raio ? "até " + f.raio + " km" : "qualquer distância"}`;
+  return `Níveis ${Math.min(f.verMin, Math.floor(S.nivel))} a ${fmtNivel(S.nivel)} · ${f.raio ? "até " + f.raio + " km" : "qualquer distância"}`;
 }
 function abrirFiltros() {
   const f = S.filtros, loc = meuLocal();
   const iR = RAIOS.includes(f.raio) ? RAIOS.indexOf(f.raio) : RAIOS.length - 1;
   const txtR = r => r ? "até " + r + " km" : "qualquer distância";
-  const campoNivel = (id, valor) => `<div class="linha" style="flex-wrap:nowrap"><input id="${id}" type="number" inputmode="numeric" min="0" max="${S.nivel}" value="${Math.min(valor, S.nivel)}" style="max-width:110px"><span class="muted">até o seu nível, ${S.nivel}</span></div>`;
+  const campoNivel = (id, valor) => `<div class="linha" style="flex-wrap:nowrap"><input id="${id}" type="number" inputmode="numeric" min="0" max="${Math.floor(S.nivel)}" value="${Math.min(valor, Math.floor(S.nivel))}" style="max-width:110px"><span class="muted">até o seu nível, ${fmtNivel(S.nivel)}</span></div>`;
   const v = folha(`<span class="rotulo">Filtros</span><h2>Quem você vê e quem vê você</h2>
     <div class="campo"><label for="fVer">Mostrar perfis liberados a partir do nível</label>${campoNivel("fVer", f.verMin)}
       <span class="muted" style="font-size:13px">Perfis acima do seu nível continuam aparecendo borrados.</span></div>
@@ -484,7 +486,7 @@ function abrirFiltros() {
   v.querySelector("#salvarF").addEventListener("click", () => {
     const num = id => { const x = v.querySelector(id).value.trim(); return x === "" ? 0 : Math.round(Number(x)); };
     const verMin = num("#fVer"), visMin = num("#fVis");
-    if (![verMin, visMin].every(n => n >= 0 && n <= S.nivel)) { v.querySelector("#filtroErro").textContent = `Os níveis precisam ficar entre 0 e o seu nível, ${S.nivel}.`; return; }
+    if (![verMin, visMin].every(n => n >= 0 && n <= S.nivel)) { v.querySelector("#filtroErro").textContent = `Os níveis precisam ficar entre 0 e o seu nível, ${fmtNivel(S.nivel)}.`; return; }
     S.filtros = { verMin, visMin, raio: raio.disabled ? null : RAIOS[raio.value] };
     salvar(); v.remove(); toast("Filtros salvos"); render();
   });
@@ -508,13 +510,13 @@ $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); 
 function render() {
   pararTimer();
   if (!S.perfil) {
-    $("#abas").hidden = true; $("#chipNivel").hidden = !(rodada && rodada.desafio); $("#chipNum").textContent = S.nivel;
+    $("#abas").hidden = true; $("#chipNivel").hidden = !(rodada && rodada.desafio); $("#chipNum").textContent = fmtNivel(S.nivel);
     if (desafioAberto) return renderDesafioIntro();
     if (rodada && rodada.desafio) return renderPergunta();
     return renderCadastro();
   }
   $("#abas").hidden = false; $("#chipNivel").hidden = false;
-  $("#chipNum").textContent = S.nivel;
+  $("#chipNum").textContent = fmtNivel(S.nivel);
   document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-current", b.dataset.aba === aba ? "page" : "false"));
   document.querySelectorAll('.aba[data-aba="descobrir"], .aba[data-aba="matches"]').forEach(b => b.classList.toggle("desligada", semMatch()));
   const nb = $("#badgeMatches"); nb.hidden = !S.novos.length || semMatch(); nb.textContent = S.novos.length;
@@ -537,7 +539,7 @@ function renderCadastro(editando) {
     ${editando ? `<h2>Editar perfil</h2>` : `<div class="pilha" style="gap:8px;padding-top:8px">
       <span class="rotulo">Primeiro a mente. Depois o match.</span>
       <h1>Responda, suba de nível e conheça quem pensa no seu ritmo.</h1>
-      <p class="muted" style="margin:0">${S.nivel ? `Você já está no nível ${S.nivel}.` : "Você começa no nível 0."} Cada resposta certa vale +1 nível e desbloqueia pessoas do mesmo nível.</p>
+      <p class="muted" style="margin:0">${S.nivel ? `Você já está no nível ${fmtNivel(S.nivel)}.` : "Você começa no nível 0."} Cada resposta certa vale +1 nível e desbloqueia pessoas do mesmo nível.</p>
     </div>`}
     <div class="linha" style="gap:14px">
       <div id="fotoPrev">${r.foto ? `<div class="avatar" style="width:72px;height:72px;background-image:url(${r.foto})"></div>` : `<div class="avatar" style="width:72px;height:72px;font-size:30px;background:var(--surface-2);color:var(--muted)">+</div>`}</div>
@@ -558,7 +560,7 @@ function renderCadastro(editando) {
     <div class="campo"><label for="fProf">Profissão</label><input id="fProf" value="${esc(r.prof)}" maxlength="40"></div>
     <div class="campo"><label for="fBio">Sobre você</label><textarea id="fBio" maxlength="140" placeholder="Uma frase que puxe conversa">${esc(r.bio)}</textarea></div>
     <div class="erro" id="fErro"></div>
-    <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : `Começar no nível ${S.nivel}`}</button>
+    <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : `Começar no nível ${fmtNivel(S.nivel)}`}</button>
     ${editando ? `<button class="link" type="button" id="fCancelar">Cancelar</button>` : `<p class="aviso">Protótipo: os outros perfis são fictícios e seus dados ficam só com você.</p>`}
   </form>`;
   const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, cidade: $("#fCidade").value.trim(), prof: $("#fProf").value.trim(), bio: $("#fBio").value.trim() });
@@ -601,11 +603,11 @@ function proximoGrupo() {
   if (!presos.length) return null;
   const nivel = Math.min(...presos.map(p => p.nivel));
   const pessoas = presos.filter(p => p.nivel === nivel);
-  return { nivel, falta: nivel - S.nivel, pessoas };
+  return { nivel, falta: arred(nivel - S.nivel), pessoas };
 }
 function textoFalta(g) {
   const n = g.pessoas.length;
-  return `Faltam <b style="color:var(--gold)">+${g.falta} ${g.falta === 1 ? "ponto" : "pontos"}</b> para desbloquear <b style="color:var(--fg)">${n} ${n === 1 ? "pessoa" : "pessoas"}</b>`;
+  return `Faltam <b style="color:var(--gold)">+${fmtNivel(g.falta)} ${g.falta === 1 ? "ponto" : "pontos"}</b> para desbloquear <b style="color:var(--fg)">${n} ${n === 1 ? "pessoa" : "pessoas"}</b>`;
 }
 const ALEATORIO = "aleatorio";
 let selecao = null; // Set com ids de assuntos, ou com ALEATORIO
@@ -627,7 +629,7 @@ function renderQuizInicio() {
   tela.innerHTML = `
   <div class="pilha entra">
     <section class="placar">
-      <div class="num">${S.nivel}</div>
+      <div class="num">${fmtNivel(S.nivel)}</div>
       <span class="rotulo">Seu nível</span>
       <p>${liberados} ${liberados === 1 ? "pessoa liberada" : "pessoas liberadas"} para você</p>
       ${g ? `<div class="prox"><div class="trilho"><i style="width:${pct}%"></i></div>
@@ -644,6 +646,12 @@ function renderQuizInicio() {
       <label class="btn sec bloco" for="fArq">Anexar arquivo</label>
       <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
     </div>` : ""}
+    <div class="caixa">
+      <div><strong>Criar categoria</strong><div class="muted" style="font-size:13px">Digite um tema e o Mente cria pelo menos ${MIN_PERGUNTAS_TEMA} perguntas. Cada acerto vale de 0,1 a 3 níveis, conforme a dificuldade do tema.</div></div>
+      <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Harry Potter" aria-label="Tema da categoria"></div><button class="btn sec" type="button" id="criarCat" ${criacoesRecentes().length >= LIMITE_CATEGORIAS ? "disabled" : ""}>Criar</button></div>
+      <span class="muted" style="font-size:12px">${esc(textoLimite())}</span>
+    </div>
+    ${(S.minhas || []).length ? `<div class="pilha" style="gap:6px"><h2>Minhas categorias</h2><div class="lista">${S.minhas.map(c => `<div class="item" style="cursor:default"><div class="txt"><strong>${esc(c.nome)}</strong><span>${c.q.length} perguntas · peso ${fmtNivel(c.peso)}</span></div><button class="btn sec" type="button" data-jogar="${c.id}" style="padding:8px 14px">Jogar</button><button class="link" type="button" data-apagar="${c.id}" aria-label="Apagar ${esc(c.nome)}">Apagar</button></div>`).join("")}</div></div>` : ""}
     <div class="pilha" style="gap:10px">
       <div class="linha" style="justify-content:space-between"><h2>Escolha os assuntos</h2><span class="rotulo">um ou vários</span></div>
       <div class="cats">
@@ -665,6 +673,17 @@ function renderQuizInicio() {
     redesenhar();
   }));
   $("#comecar").addEventListener("click", () => { S.selecao = [...selecao]; salvar(); iniciarRodada(S.selecao, mult); });
+  const tema = $("#fTema"), bc = $("#criarCat");
+  bc.addEventListener("click", () => criarCategoria(tema.value));
+  tema.addEventListener("keydown", e => { if (e.key === "Enter" && !bc.disabled) criarCategoria(tema.value); });
+  tela.querySelectorAll("[data-jogar]").forEach(b => b.addEventListener("click", () => iniciarMinha(S.minhas.find(c => c.id === b.dataset.jogar))));
+  tela.querySelectorAll("[data-apagar]").forEach(b => b.addEventListener("click", () => {
+    const c = S.minhas.find(x => x.id === b.dataset.apagar);
+    const v = folha(`<h2>Apagar ${esc(c.nome)}?</h2><p class="muted" style="margin:0">As ${c.q.length} perguntas desta categoria serão apagadas. Isso não libera uma nova criação no limite de 6 horas.</p>
+      <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar categoria</button><button class="link" type="button" id="nao">Cancelar</button>`);
+    v.querySelector("#nao").addEventListener("click", () => v.remove());
+    v.querySelector("#sim").addEventListener("click", () => { S.minhas = S.minhas.filter(x => x.id !== c.id); salvar(); v.remove(); redesenhar(); });
+  }));
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
     const l = [...fa.files]; fa.value = ""; if (!l.length) return;
     if (!sampleFn && !modoServidor) await prepararClaude();
@@ -729,7 +748,7 @@ function renderPergunta() {
   durTempo = segundosPara(it.q) * 1000;
   tela.innerHTML = `
   <div class="rodada entra">
-    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.mult > 1 ? ` <span class="tag-dobro">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1}${r.desafio ? " de " + r.fila.length : ""} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
+    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.peso != null ? ` <span class="tag-dobro">×${fmtNivel(r.peso)}</span>` : r.mult > 1 ? ` <span class="tag-dobro">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1}${r.desafio ? " de " + r.fila.length : ""} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
     <div class="tempo" id="tempo"><i id="barra"></i></div>
     <div class="enunciado">${esc(it.q)}</div>
     <div class="opcoes">${it.ops.map((o, k) => `<button class="opcao" type="button" data-k="${k}"><kbd>${"ABC"[k]}</kbd><span>${esc(o)}</span></button>`).join("")}</div>
@@ -761,9 +780,9 @@ function responder(k) {
   });
   const fb = $("#fb");
   if (certo) {
-    const pts = r.mult;
-    r.acertos++; r.pontos += pts; S.nivel += pts;
-    fb.className = "feedback ok"; fb.textContent = "Certo! Nível " + S.nivel; animarNivel(pts);
+    const pts = r.peso != null ? r.peso : r.mult;
+    r.acertos++; r.pontos = arred(r.pontos + pts); S.nivel = arred(S.nivel + pts);
+    fb.className = "feedback ok"; fb.textContent = "Certo! Nível " + fmtNivel(S.nivel); animarNivel(pts);
   } else { fb.className = "feedback no"; fb.textContent = k < 0 ? "Tempo esgotado" : "Errou"; }
   r.n++; S.respondidas++;
   (r.hist || (r.hist = [])).push(it.ref);
@@ -783,8 +802,8 @@ function renderResultado() {
   <div class="pilha entra" style="padding-top:8px">
     <div class="resultado">
       <span class="rotulo">${esc(r.nome)}</span>
-      <div class="grande">+${r.pontos}</div>
-      <p style="margin:0">${r.acertos} de ${r.n} certas. Agora você está no <b>nível ${S.nivel}</b>.</p>
+      <div class="grande">+${fmtNivel(r.pontos)}</div>
+      <p style="margin:0">${r.acertos} de ${r.n} certas. Agora você está no <b>nível ${fmtNivel(S.nivel)}</b>.</p>
       ${liberou.length ? `<p style="margin:0;color:var(--gold)">Novas pessoas desbloqueadas: ${liberou.map(p => esc(p.nome)).join(", ")}</p>` : ""}
       ${g ? `<p class="muted" style="margin:0;font-size:14px">${textoFalta(g)}.</p>` : ""}
     </div>
@@ -796,7 +815,7 @@ function renderResultado() {
     </div>
   </div>`;
   const ids = r.ids, mult = r.mult;
-  $("#denovo").addEventListener("click", () => r.arquivo ? iniciarArquivo(r.fonte, mult, r.cats[0]) : iniciarRodada(ids, mult));
+  $("#denovo").addEventListener("click", () => r.minha ? iniciarMinha(r.cats[0]) : r.arquivo ? iniciarArquivo(r.fonte, mult, r.cats[0]) : iniciarRodada(ids, mult));
   $("#outra").addEventListener("click", () => { rodada = null; render(); });
   $("#ver").addEventListener("click", () => irPara("descobrir"));
   const bd = $("#desafiar"); if (bd) bd.addEventListener("click", () => compartilharDesafio(r));
@@ -839,7 +858,8 @@ function lerDesafio() {
     const fila = resolverDesafio({ m: mult, f: textoCurto(d.f, 40), q: d.q.slice(0, 40) });
     if (!fila.length) return null;
     const t = Math.min(Math.max(0, d.t | 0), 999);
-    return { nome: textoCurto(d.n, 30) || "Alguém", m: mult, f: textoCurto(d.f, 40), t, a: Math.min(Math.max(0, d.a | 0), t), fila };
+    const peso = typeof d.p === "number" && d.f ? pesoValido(d.p) : null;
+    return { nome: textoCurto(d.n, 30) || "Alguém", m: mult, peso, f: textoCurto(d.f, 40), t, a: Math.min(Math.max(0, d.a | 0), t), fila };
   } catch { return null; }
 }
 function limparLinkDesafio() { try { history.replaceState(null, "", location.pathname + location.search); } catch {} }
@@ -847,8 +867,9 @@ async function compartilharDesafio(r) {
   const titulo = r.arquivo ? r.cats[0].nome : r.desafio && r.desafio.f;
   const d = { v: 1, n: S.perfil ? S.perfil.nome : "Um amigo", m: r.mult, a: r.acertos, t: r.n, q: r.hist };
   if (titulo) d.f = titulo;
+  if (r.peso != null) d.p = r.peso;
   const url = location.href.split("#")[0] + "#desafio=" + codificar(d);
-  const texto = `${d.n} fez ${r.acertos} de ${r.n} no Mente${sufixo(r.mult)}. Duvido você bater!`;
+  const texto = `${d.n} fez ${r.acertos} de ${r.n} no Mente${r.peso != null ? " · " + titulo : sufixo(r.mult)}. Duvido você bater!`;
   if (navigator.share) {
     try { await navigator.share({ title: "Desafio no Mente", text: texto, url }); return; }
     catch (e) { if (e && e.name === "AbortError") return; }
@@ -872,10 +893,10 @@ function renderDesafioIntro() {
   tela.innerHTML = `
   <div class="pilha entra" style="padding-top:8px">
     <div class="resultado">
-      <span class="rotulo">Desafio${d.m > 1 ? " · " + modoDe(d.m).nome : ""}</span>
+      <span class="rotulo">Desafio${d.peso != null ? " · peso " + fmtNivel(d.peso) : d.m > 1 ? " · " + modoDe(d.m).nome : ""}</span>
       <h1>${esc(d.nome)} te desafiou</h1>
       <div class="grande">${d.a}/${d.t}</div>
-      <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${d.m} ${d.m === 1 ? "nível" : "níveis"}.</p>
+      <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${fmtNivel(d.peso ?? d.m)} ${(d.peso ?? d.m) === 1 ? "nível" : "níveis"}.</p>
     </div>
     <button class="btn bloco ${d.m > 1 ? "ouro" : ""}" type="button" id="aceitarD">Aceitar desafio</button>
     <button class="link" type="button" id="recusarD">Agora não</button>
@@ -886,7 +907,7 @@ function renderDesafioIntro() {
 function iniciarDesafio(d) {
   desafioAberto = null; limparLinkDesafio();
   aba = "quiz";
-  rodada = { nome: "Desafio de " + d.nome + sufixo(d.m), ids: [], mult: d.m, desafio: d, fila: d.fila, pos: 0, cats: [], hist: [],
+  rodada = { nome: "Desafio de " + d.nome + (d.peso != null ? " · peso " + fmtNivel(d.peso) : sufixo(d.m)), ids: [], mult: d.m, peso: d.peso ?? undefined, desafio: d, fila: d.fila, pos: 0, cats: [], hist: [],
     n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
   tela.scrollTop = 0; render();
 }
@@ -899,12 +920,12 @@ function renderResultadoDesafio() {
       <span class="rotulo">${esc(r.nome)}</span>
       <h1>${esc(veredito)}</h1>
       <div class="placar-desafio"><div><b>${r.acertos}/${r.n}</b><span>você</span></div><div><b>${d.a}/${d.t}</b><span>${esc(d.nome)}</span></div></div>
-      <p style="margin:0">Você ganhou <b>+${r.pontos}</b> ${r.pontos === 1 ? "nível" : "níveis"} e está no nível ${S.nivel}.</p>
+      <p style="margin:0">Você ganhou <b>+${fmtNivel(r.pontos)}</b> ${r.pontos === 1 ? "nível" : "níveis"} e está no nível ${fmtNivel(S.nivel)}.</p>
       ${r.n < d.fila.length ? `<p class="muted" style="margin:0;font-size:14px">Você encerrou antes do fim: respondeu ${r.n} de ${d.fila.length}.</p>` : ""}
     </div>
     ${S.perfil ? `${r.n ? `<button class="btn bloco" type="button" id="devolver">Desafiar de volta</button>` : ""}
       <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="outra">Jogar um quiz</button><button class="btn sec" type="button" id="ver">Ver pessoas</button></div>`
-    : `<button class="btn bloco" type="button" id="criar">Criar perfil e guardar ${S.nivel} ${S.nivel === 1 ? "nível" : "níveis"}</button>`}
+    : `<button class="btn bloco" type="button" id="criar">Criar perfil e guardar ${fmtNivel(S.nivel)} ${S.nivel === 1 ? "nível" : "níveis"}</button>`}
   </div>`;
   const dv = $("#devolver"); if (dv) dv.addEventListener("click", () => compartilharDesafio(r));
   if (S.perfil) {
@@ -1083,6 +1104,105 @@ async function quizDoArquivo(lista) {
   v.remove();
   iniciarArquivo(fonte, mult, { id: "arquivo", nome: lote.titulo, arquivo: true, q: lote.perguntas });
 }
+// ---------- Categoria criada por tema ----------
+// O Claude avalia o tema, define o peso (0,1 a 3) e cria as perguntas. Sem 50 perguntas válidas, a categoria não é criada.
+const MIN_PERGUNTAS_TEMA = 50, LIMITE_CATEGORIAS = 3, JANELA_CATEGORIAS = 6 * 3600 * 1000;
+function promptCategoria(tema) {
+  return [
+    "Você cria categorias de quiz para o app Mente, em português do Brasil.",
+    'Tema pedido pelo usuário: """' + tema + '"""',
+    "Primeiro avalie o tema. Recuse se ele:",
+    "- for ofensivo, sexual, discriminatório, incentivar crime ou automutilação, ou tratar de pessoas comuns ou privadas;",
+    "- for banal ou estreito demais (por exemplo um objeto do dia a dia, como cortina, chão ou garrafa) e não render pelo menos 50 perguntas de conhecimento verificável e variado;",
+    "- for vago, sem sentido ou só uma brincadeira.",
+    'Se recusar, responda apenas: {"aprovado": false, "motivo": "uma frase curta para o usuário", "sugestoes": ["até 3 temas próximos que renderiam um bom quiz"]}',
+    "Se aprovar:",
+    "- titulo: nome da categoria em até 4 palavras;",
+    "- peso: número de 0.1 a 3, com uma casa decimal, conforme a complexidade do assunto: 0.1 para assuntos muito fáceis e conhecidos de todos, 1 para conhecimento geral médio, 2 para assuntos técnicos, 3 para assuntos altamente especializados;",
+    "- perguntas: 60 perguntas variadas, só fatos verificáveis e estáveis, sem opinião nem fatos que mudam com o tempo;",
+    "- enunciado curto, até 90 caracteres; respostas curtas, até 40 caracteres;",
+    "- exatamente 3 opções por pergunta: a primeira é a correta e as outras duas são erradas mas plausíveis, todas diferentes.",
+    'Responda apenas com JSON: {"aprovado": true, "titulo": "...", "peso": 1.2, "perguntas": [["enunciado", "correta", "errada 1", "errada 2"]]}'
+  ].join("\n");
+}
+const pesoValido = x => Math.min(3, Math.max(0.1, arred(Number(x) || 1)));
+function criacoesRecentes() { const desde = Date.now() - JANELA_CATEGORIAS; return (S.criacoes || []).filter(t => t > desde); }
+function textoLimite() {
+  const r = criacoesRecentes(), resta = LIMITE_CATEGORIAS - r.length;
+  if (resta > 0) return `Você pode criar mais ${resta} ${resta === 1 ? "categoria" : "categorias"} nas próximas 6 horas.`;
+  const libera = new Date(Math.min(...r) + JANELA_CATEGORIAS).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `Limite de ${LIMITE_CATEGORIAS} categorias a cada 6 horas atingido. Você poderá criar outra às ${libera}.`;
+}
+async function pedirCategoria(tema) {
+  if (sampleFn) return sampleFn.json(promptCategoria(tema), { modelTier: "default" });
+  let r;
+  try { r = await fetch("/api/perguntas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, codigo: lerCodigo() }) }); }
+  catch { throw { code: "rede" }; }
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) throw { code: "codigo", message: j.erro };
+  if (r.status === 429) throw { code: "rate_limited" };
+  if (!r.ok) throw { code: "servidor", message: j.erro };
+  return j;
+}
+async function criarCategoria(tema) {
+  tema = tema.trim().slice(0, 60);
+  if (tema.length < 2) { toast("Digite um tema"); return; }
+  if (criacoesRecentes().length >= LIMITE_CATEGORIAS) { toast("Limite de categorias atingido"); return; }
+  if (!sampleFn && !modoServidor) await prepararClaude();
+  if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
+  const v = folha(`<span class="rotulo">Criar categoria</span><h2>Avaliando “${esc(tema)}”…</h2>
+    <p class="muted" style="margin:0">O Mente confere se o tema rende um bom quiz e cria as perguntas. Pode levar até um minuto.</p>
+    <div class="trilho"><i class="carregando"></i></div>`);
+  const fl = v.querySelector(".folha");
+  const fim = (html, depois) => { fl.innerHTML = html; if (depois) depois(); };
+  // Toda tentativa que chega ao Claude conta no limite, aprovada ou não: cada uma gasta crédito da API.
+  S.criacoes = [...criacoesRecentes(), Date.now()]; salvar();
+  let res;
+  try { res = await pedirCategoria(tema); } catch (e) {
+    if (e && e.code === "codigo") {
+      S.criacoes.pop(); salvar();
+      return fim(`<span class="rotulo">Criar categoria</span><h2>Código de acesso</h2>
+        <p class="muted" style="margin:0">${lerCodigo() ? "Esse código não confere." : "Este recurso usa a conta do dono do app. Peça o código para ele."}</p>
+        <div class="campo"><label for="cAcesso">Código</label><input id="cAcesso" autocomplete="off"></div>
+        <button class="btn bloco" type="button" id="cOk">Continuar</button><button class="link" type="button" id="cNao">Cancelar</button>`, () => {
+        fl.querySelector("#cNao").addEventListener("click", () => v.remove());
+        fl.querySelector("#cOk").addEventListener("click", () => { const c = fl.querySelector("#cAcesso").value.trim(); if (!c) return; salvarCodigo(c); v.remove(); criarCategoria(tema); });
+      });
+    }
+    return fim(`<span class="rotulo">Criar categoria</span><h2>Não deu certo</h2><p style="margin:0">${esc(mensagemErroClaude(e))}</p>
+      <button class="btn bloco" type="button" id="okT">Entendi</button>`, () => fl.querySelector("#okT").addEventListener("click", () => { v.remove(); render(); }));
+  }
+  const sugestoes = (res && Array.isArray(res.sugestoes) ? res.sugestoes : []).filter(x => typeof x === "string" && x.trim()).slice(0, 3).map(x => x.trim().slice(0, 60));
+  const vistos = new Set();
+  const perguntas = (res && res.aprovado && Array.isArray(res.perguntas) ? res.perguntas : []).filter(q =>
+    Array.isArray(q) && q.length === 4 && q.every(x => typeof x === "string" && x.trim()) &&
+    new Set(q.slice(1).map(x => x.trim().toLowerCase())).size === 3 && !vistos.has(q[0].trim().toLowerCase()) && vistos.add(q[0].trim().toLowerCase())
+  ).map(q => q.map(x => x.trim().slice(0, 200)));
+  if (!res || !res.aprovado || perguntas.length < MIN_PERGUNTAS_TEMA) {
+    const motivo = res && !res.aprovado && typeof res.motivo === "string" && res.motivo.trim() ? res.motivo.trim().slice(0, 200)
+      : `Esse tema não rendeu ${MIN_PERGUNTAS_TEMA} boas perguntas. Tente um tema mais amplo.`;
+    return fim(`<span class="rotulo">Criar categoria</span><h2>Tema recusado</h2><p style="margin:0">${esc(motivo)}</p>
+      ${sugestoes.length ? `<p class="muted" style="margin:0">Que tal um destes?</p><div class="pilha" style="gap:8px">${sugestoes.map((x, k) => `<button class="btn sec bloco" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}
+      <p class="aviso" style="margin:0">${esc(textoLimite())}</p>
+      <button class="link" type="button" id="okT">Fechar</button>`, () => {
+      fl.querySelector("#okT").addEventListener("click", () => { v.remove(); render(); });
+      fl.querySelectorAll("[data-sug]").forEach(b => b.addEventListener("click", () => { v.remove(); criarCategoria(sugestoes[Number(b.dataset.sug)]); }));
+    });
+  }
+  const cat = { id: "m" + Date.now(), nome: textoCurto(res.titulo, 40) || tema, peso: pesoValido(res.peso), q: perguntas, criada: Date.now() };
+  S.minhas = [cat, ...(S.minhas || [])]; salvar();
+  fim(`<span class="rotulo">Categoria criada</span><h2>${esc(cat.nome)}</h2>
+    <p style="margin:0">${cat.q.length} perguntas. Cada acerto vale +${fmtNivel(cat.peso)} ${cat.peso === 1 ? "nível" : "níveis"}.</p>
+    <button class="btn bloco" type="button" id="jogarT">Jogar agora</button><button class="link" type="button" id="okT">Depois</button>`, () => {
+    fl.querySelector("#okT").addEventListener("click", () => { v.remove(); render(); });
+    fl.querySelector("#jogarT").addEventListener("click", () => { v.remove(); iniciarMinha(cat); });
+  });
+}
+function iniciarMinha(cat) {
+  rodada = { nome: cat.nome + " · peso " + fmtNivel(cat.peso), ids: [], mult: 1, peso: cat.peso, minha: cat.id, cats: [cat], arquivo: true, usadas: new Set(),
+    gerando: false, esgotou: true, n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
+  tela.scrollTop = 0; render();
+}
 function iniciarArquivo(fonte, mult, cat) {
   rodada = { nome: cat.nome + sufixo(mult), ids: [], mult, cats: [cat], arquivo: true, fonte, usadas: new Set(), gerando: false, esgotou: false,
     n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
@@ -1145,7 +1265,7 @@ function renderDescobrir() {
       ${livre ? "" : `<div class="cadeado">
         <span class="rotulo">Perfil bloqueado</span>
         <div class="grande">nível ${p.nivel}</div>
-        <p style="margin:0">Faltam ${p.nivel - S.nivel} acertos para desbloquear.</p>
+        <p style="margin:0">Faltam ${fmtNivel(arred(p.nivel - S.nivel))} níveis para desbloquear.</p>
         ${p.passe ? `<button class="btn ouro" type="button" id="passe">Passe Direto · ${brl(p.passe)}</button>` : `<span class="muted" style="font-size:13px">Este perfil não aceita Passe Direto.</span>`}
       </div>`}
     </article>
@@ -1245,7 +1365,7 @@ function renderPerfil() {
     <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${esc([pf.prof, pf.cidade].filter(Boolean).join(" · ") || "Complete seu perfil")}</div></div></div>
     ${pf.bio ? `<p style="margin:0">${esc(pf.bio)}</p>` : ""}
     <div class="stats">
-      <div class="stat"><b style="color:var(--gold)">${S.nivel}</b><span>nível</span></div>
+      <div class="stat"><b style="color:var(--gold)">${fmtNivel(S.nivel)}</b><span>nível</span></div>
       <div class="stat"><b>${S.respondidas}</b><span>respondidas</span></div>
       <div class="stat"><b>${pct}%</b><span>de acerto</span></div>
     </div>
