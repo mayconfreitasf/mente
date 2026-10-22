@@ -1719,7 +1719,7 @@ function renderConta() {
     ${campo("cSenha", "Senha", 'type="password" autocomplete="current-password" maxlength="128"')}
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Entrar</button>
-    <div class="linha" style="justify-content:space-between"><button class="link" type="button" data-ir="recuperar">Esqueci a senha</button><button class="link" type="button" data-ir="criar">Criar conta</button></div>`;
+    <div class="linha" style="justify-content:${cfgConta.recuperar ? "space-between" : "center"}">${cfgConta.recuperar ? `<button class="link" type="button" data-ir="recuperar">Esqueci a senha</button>` : ""}<button class="link" type="button" data-ir="criar">Criar conta</button></div>`;
   tela.innerHTML = `
   <form class="pilha entra" id="fConta" novalidate>
     <div class="pilha" style="gap:8px;padding-top:8px"><span class="rotulo">Primeiro a mente. Depois o match.</span><h1>${titulos[t]}</h1></div>
