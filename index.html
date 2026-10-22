@@ -18,8 +18,9 @@
   --accent-fg: #fff6f7;
   --gold: #d8b06a;
   --triplo: #f5c518;
-  --prata: #c9ced6;
-  --prata-fg: #15181d;
+  --prata: linear-gradient(160deg, #f4f2f1 0%, #c4bfbc 55%, #e6e2df 100%);
+  --prata-cor: #b7b1ae;
+  --prata-fg: #2a2322;
   --triplo-fg: #2a1d00;
   --ok: #4cb782;
   --bad: #e2596f;
@@ -33,14 +34,14 @@
   :root:not([data-theme="dark"]) {
     --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
     --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-    --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: #b9bfc8; --prata-fg: #15181d; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+    --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(160deg, #efedec 0%, #b9b3b0 55%, #dcd8d5 100%); --prata-cor: #a9a3a0; --prata-fg: #2a2322; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
   --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-  --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: #b9bfc8; --prata-fg: #15181d; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(160deg, #efedec 0%, #b9b3b0 55%, #dcd8d5 100%); --prata-cor: #a9a3a0; --prata-fg: #2a2322; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
   color-scheme: light;
 }
 
@@ -95,7 +96,7 @@ h2 { font-size: 21px; line-height: 1.2; }
 .btn.sec { background: var(--surface-2); color: var(--fg); }
 .btn.ouro { background: var(--gold); color: #1d1206; }
 .btn.triplo { background: var(--triplo); color: var(--triplo-fg); }
-.btn.prata { background: var(--prata); color: var(--prata-fg); }
+.btn.prata { background: var(--prata); color: var(--prata-fg); box-shadow: inset 0 0 0 1px var(--prata-cor), inset 0 1px 0 #ffffffb3; }
 .btn.mini { padding: 9px 14px; flex: none; }
 .btn.bloco { width: 100%; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
@@ -172,6 +173,19 @@ h2 { font-size: 21px; line-height: 1.2; }
 .msg.ela { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 6px; }
 .digitando { color: var(--muted); font-size: 13px; font-style: italic; }
 .envio { display: flex; gap: 8px; padding-top: 8px; }
+.envio .mic { padding: 0 12px; flex: none; }
+.msg.eu[data-i] { cursor: pointer; }
+.msg.apagada { font-style: italic; opacity: .7; }
+.msg.audio { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.msg audio { height: 36px; max-width: 200px; }
+.msg .dur { font-size: 12px; opacity: .8; }
+.gravando { display: flex; align-items: center; gap: 10px; flex: 1; min-height: 46px; }
+.gravando #gravT { flex: 1; font-variant-numeric: tabular-nums; }
+.gravando .ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); animation: pisca 1s ease-in-out infinite; }
+@keyframes pisca { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .gravando .ponto { animation: none; } }
+.opcao-radio { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.opcao-radio input { accent-color: var(--accent); }
 .envio input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 12px 16px; }
 
 /* Folha (modal) */
@@ -210,7 +224,7 @@ h2 { font-size: 21px; line-height: 1.2; }
 .modos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .modos button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; text-align: left; }
 .modos small { font-weight: 500; font-size: 12px; color: var(--muted); }
-.modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--prata); background: color-mix(in srgb, var(--prata) 22%, transparent); }
+.modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--prata-cor); background: color-mix(in srgb, var(--prata-cor) 24%, transparent); }
 .tag-dobro.t2 { background: var(--prata); color: var(--prata-fg); }
 .modos button[data-modo="triplo"][aria-pressed="true"] { border-color: var(--triplo); background: color-mix(in srgb, var(--triplo) 16%, transparent); }
 .tag-dobro.t3 { background: var(--triplo); color: var(--triplo-fg); }
@@ -221,7 +235,8 @@ h2 { font-size: 21px; line-height: 1.2; }
 .minha { display: flex; align-items: center; gap: 8px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
 .minha .txt { flex: 1; min-width: 0; }
 .minha .txt strong, .minha .txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.minha .link { padding: 6px 4px; font-size: 13px; }
+.minha .btn.mini { padding: 7px 10px; font-size: 13px; border-radius: 10px; }
+.btn.perigo { color: var(--bad); }
 .minha .txt strong { display: block; }
 .minha .txt span { display: block; color: var(--muted); font-size: 12px; }
 .link[disabled] { opacity: .45; cursor: not-allowed; }
@@ -352,7 +367,7 @@ const PADRAO = () => ({
   v: 1, perfil: null, nivel: 0, respondidas: 0, porCat: {}, vistas: {},
   curtidos: [], passados: [], matches: [], novos: [], chats: {}, passes: [],
   meuPasse: { ativo: true, valor: 150 }, selecao: [], modo: "normal", atualizado: 0,
-  filtros: { verMin: 0, visMin: 0, raio: null }, local: null, minhas: [], criacoes: []
+  filtros: { verMin: 0, visMin: 0, raio: null }, local: null, minhas: [], criacoes: [], denuncias: [], bloqueados: []
 });
 let S = carregarLocal() || PADRAO();
 let db = null, uid = null, salvarTimer = null;
@@ -482,12 +497,12 @@ function abrirFiltros() {
   const f = S.filtros, loc = meuLocal();
   const iR = RAIOS.includes(f.raio) ? RAIOS.indexOf(f.raio) : RAIOS.length - 1;
   const txtR = r => r ? "até " + r + " km" : "qualquer distância";
-  const campoNivel = (id, valor) => `<div class="linha" style="flex-wrap:nowrap"><input id="${id}" type="number" inputmode="numeric" min="0" max="${Math.floor(S.nivel)}" value="${Math.min(valor, Math.floor(S.nivel))}" style="max-width:110px"><span class="muted">até o seu nível, ${fmtNivel(S.nivel)}</span></div>`;
+  const campoNivel = (id, valor, antes, depois) => `<div class="linha" style="flex-wrap:nowrap"><span class="muted">${antes}</span><input id="${id}" type="number" inputmode="numeric" min="0" max="${Math.floor(S.nivel)}" value="${Math.min(valor, Math.floor(S.nivel))}" style="max-width:90px"><span class="muted">${depois}</span></div>`;
   const v = folha(`<span class="rotulo">Filtros</span><h2>Quem você vê e quem vê você</h2>
-    <div class="campo"><label for="fVer">Mostrar perfis liberados a partir do nível</label>${campoNivel("fVer", f.verMin)}
+    <div class="campo"><label for="fVer">Perfis que você vê</label>${campoNivel("fVer", f.verMin, "Do nível", `até o seu, ${fmtNivel(S.nivel)}`)}
       <span class="muted" style="font-size:13px">Perfis acima do seu nível continuam aparecendo borrados.</span></div>
-    <div class="campo"><label for="fVis">Aparecer para quem está abaixo de você a partir do nível</label>${campoNivel("fVis", f.visMin)}
-      <span class="muted" style="font-size:13px">Quem está no seu nível ou acima sempre pode ver você.</span></div>
+    <div class="campo"><label for="fVis">Quem pode ver seu perfil</label>${campoNivel("fVis", f.visMin, "Pessoas a partir do nível", "")}
+      <span class="muted" style="font-size:13px">Use para esconder seu perfil de quem está muitos níveis abaixo de você.</span></div>
     <div class="campo"><label for="fRaio">Distância: <b id="raioTxt">${txtR(RAIOS[iR])}</b></label>
       <input id="fRaio" type="range" min="0" max="${RAIOS.length - 1}" step="1" value="${iR}" ${loc ? "" : "disabled"}>
       <span class="muted" style="font-size:13px" id="locTxt">${loc ? "A partir de " + esc(loc.nome) : "Para filtrar por distância, informe sua cidade no perfil ou use sua localização."}</span>
@@ -527,7 +542,7 @@ function renderSemMatch() {
 
 // ---------- Navegação ----------
 let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
-function irPara(a) { aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
+function irPara(a) { pararGravacao(true); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
 $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
 
 function render() {
@@ -552,7 +567,7 @@ function render() {
 }
 
 // ---------- Cadastro ----------
-let rascunho = { nome: "", idade: "", sexo: "", interesse: "", prof: "", cidade: "", bio: "", foto: null };
+let rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null };
 function renderCadastro(editando) {
   const r = editando ? Object.assign({}, S.perfil) : rascunho;
   if (editando) rascunho = r;
@@ -580,13 +595,12 @@ function renderCadastro(editando) {
     <div class="campo"><label>Eu sou</label>${seg("sexo", [["F", "Mulher"], ["M", "Homem"], ["O", "Outro"]])}</div>
     <div class="campo"><label>Quero conhecer</label>${seg("interesse", [["F", "Mulheres"], ["M", "Homens"], ["T", "Ambos"], ["N", "Ninguém"]])}
       <p class="aviso" id="avisoN" style="margin:0;text-align:left" ${r.interesse === "N" ? "" : "hidden"}>Com "Ninguém" seu perfil fica invisível e o match fica desligado. Dá pra mudar depois no Perfil.</p></div>
-    <div class="campo"><label for="fProf">Profissão</label><input id="fProf" value="${esc(r.prof)}" maxlength="40"></div>
     <div class="campo"><label for="fBio">Sobre você</label><textarea id="fBio" maxlength="140" placeholder="Uma frase que puxe conversa">${esc(r.bio)}</textarea></div>
     <div class="erro" id="fErro"></div>
     <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : `Começar no nível ${fmtNivel(S.nivel)}`}</button>
     ${editando ? `<button class="link" type="button" id="fCancelar">Cancelar</button>` : `<p class="aviso">Protótipo: os outros perfis são fictícios e seus dados ficam só com você.</p>`}
   </form>`;
-  const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, cidade: $("#fCidade").value.trim(), prof: $("#fProf").value.trim(), bio: $("#fBio").value.trim() });
+  const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, cidade: $("#fCidade").value.trim(), bio: $("#fBio").value.trim() });
   tela.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     rascunho[g.dataset.campo] = b.dataset.v;
@@ -614,7 +628,7 @@ function renderCadastro(editando) {
     else if (!rascunho.interesse) erro = "Escolha quem você quer conhecer.";
     if (erro) { $("#fErro").textContent = erro; return; }
     if (S.perfil && S.perfil.cidade !== rascunho.cidade) S.local = null;
-    S.perfil = { nome: rascunho.nome, idade, sexo: rascunho.sexo, interesse: rascunho.interesse, prof: rascunho.prof, cidade: rascunho.cidade, bio: rascunho.bio, foto: rascunho.foto };
+    S.perfil = { nome: rascunho.nome, idade, sexo: rascunho.sexo, interesse: rascunho.interesse, cidade: rascunho.cidade, bio: rascunho.bio, foto: rascunho.foto };
     salvar(); irPara(editando ? "perfil" : "quiz");
   });
 }
@@ -1248,7 +1262,7 @@ function htmlMinhas() {
     const at = atualizando[c.id];
     const info = at ? `Renovando… ${at.feitas} de ${at.total} partes` : `${c.q.length} perguntas · peso ${fmtNivel(c.peso)}${c.dificuldade ? " · " + difDe(c.dificuldade).nome : ""}`;
     return `<div class="minha"><div class="txt"><strong>${esc(c.nome)}</strong><span>${info}</span></div>
-      <div class="linha" style="gap:2px;flex-wrap:nowrap;flex:none"><button class="btn sec mini" type="button" data-jogar="${c.id}">Jogar</button><button class="link" type="button" data-atualizar="${c.id}" ${at ? "disabled" : ""} aria-label="Renovar as perguntas de ${esc(c.nome)}">Renovar</button><button class="link" type="button" data-apagar="${c.id}" ${at ? "disabled" : ""} aria-label="Apagar ${esc(c.nome)}">Apagar</button></div></div>`;
+      <div class="linha" style="gap:4px;flex-wrap:nowrap;flex:none"><button class="btn sec mini" type="button" data-jogar="${c.id}">Jogar</button><button class="btn sec mini" type="button" data-atualizar="${c.id}" ${at ? "disabled" : ""} aria-label="Renovar as perguntas de ${esc(c.nome)}">Renovar</button><button class="btn sec mini perigo" type="button" data-apagar="${c.id}" ${at ? "disabled" : ""} aria-label="Apagar ${esc(c.nome)}">Apagar</button></div></div>`;
   }).join("")}</div></div>`;
 }
 function ligarMinhas() {
@@ -1353,7 +1367,7 @@ async function gerarMais(r) {
 // ---------- Descobrir ----------
 const pulados = new Set();
 function fila() {
-  const fora = new Set([...S.curtidos, ...S.passados, ...pulados]);
+  const fora = new Set([...S.curtidos, ...S.passados, ...(S.bloqueados || []), ...pulados]);
   const pool = PERFIS.filter(p => elegivel(p) && !fora.has(p.id));
   const livres = pool.filter(desbloqueado).sort((a, b) => b.nivel - a.nivel);
   const presos = pool.filter(p => !desbloqueado(p)).sort((a, b) => a.nivel - b.nivel);
@@ -1403,8 +1417,10 @@ function renderDescobrir() {
       ${livre ? `<button class="btn sec" type="button" id="passar">Passar</button><button class="btn" type="button" id="curtir">Curtir</button>`
               : `<button class="btn sec" type="button" id="pular" style="grid-column:1/-1">Ver próximo</button>`}
     </div>
+    <button class="link" type="button" id="denunciar" style="display:block;margin:10px auto 0;font-size:13px">Denunciar perfil</button>
   </div>`;
   $("#filtros").addEventListener("click", abrirFiltros);
+  $("#denunciar").addEventListener("click", () => denunciar(p, livre));
   if (livre) {
     $("#passar").addEventListener("click", () => { S.passados.push(p.id); salvar(); render(); });
     $("#curtir").addEventListener("click", () => curtir(p));
@@ -1451,36 +1467,142 @@ function renderMatches() {
   }
   tela.innerHTML = `<div class="pilha entra" style="gap:6px"><h2>Matches</h2><div class="lista">${S.matches.map(id => {
     const p = PERFIL[id], ch = S.chats[id] || [], ult = ch[ch.length - 1], novo = S.novos.includes(id);
-    return `<button class="item" type="button" data-id="${id}">${avatarHTML(p, 52)}<div class="txt"><strong>${esc(p.nome)}${novo ? ` <span style="display:inline;color:var(--accent);font-size:12px">· novo</span>` : ""}</strong><span>${ult ? esc((ult.de === "eu" ? "Você: " : "") + ult.t) : esc(p.prof) + " · nível " + p.nivel}</span></div></button>`;
+    return `<button class="item" type="button" data-id="${id}">${avatarHTML(p, 52)}<div class="txt"><strong>${esc(p.nome)}${novo ? ` <span style="display:inline;color:var(--accent);font-size:12px">· novo</span>` : ""}</strong><span>${ult ? esc((ult.de === "eu" ? "Você: " : "") + previa(ult)) : esc(p.prof) + " · nível " + p.nivel}</span></div></button>`;
   }).join("")}</div></div>`;
   tela.querySelectorAll(".item").forEach(b => b.addEventListener("click", () => abrirChat(b.dataset.id)));
 }
 function abrirChat(id) { chatAberto = id; S.novos = S.novos.filter(x => x !== id); salvar(); render(); }
-let digitando = null;
+let digitando = null, gravacao = null;
+const MAX_AUDIO = 10;
+const ICONE_MIC = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
+const previa = m => m.apagada ? "Mensagem apagada" : m.audio ? "Áudio" : m.t;
+function htmlMsg(m, i) {
+  const lado = m.de === "eu" ? "eu" : "ela";
+  if (m.apagada) return `<div class="msg ${lado} apagada">${lado === "eu" ? "Você apagou esta mensagem" : "Mensagem apagada"}</div>`;
+  const audio = typeof m.audio === "string" && m.audio.startsWith("data:audio/");
+  const corpo = audio ? `<audio controls preload="metadata" src="${m.audio}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t);
+  return lado === "eu" ? `<div class="msg eu${audio ? " audio" : ""}" data-i="${i}" tabindex="0" title="Toque para apagar">${corpo}</div>` : `<div class="msg ela${audio ? " audio" : ""}">${corpo}</div>`;
+}
+// Envia a mensagem e simula a resposta da outra pessoa (os perfis do protótipo são fictícios).
+function enviarMsg(alvo, msg) {
+  const ch = S.chats[alvo]; if (!ch) return;
+  ch.push(Object.assign({ de: "eu" }, msg)); salvar();
+  digitando = alvo; render();
+  setTimeout(() => {
+    const c = S.chats[alvo];
+    if (!c || !S.matches.includes(alvo)) { if (digitando === alvo) digitando = null; return; }
+    const n = c.filter(m => m.de !== "eu").length;
+    c.push({ de: "ela", t: RESPOSTAS[(hash(alvo) + n) % RESPOSTAS.length] });
+    digitando = null; salvar();
+    if (chatAberto === alvo && aba === "matches") render();
+    else if (!S.novos.includes(alvo)) { S.novos.push(alvo); salvar(); render(); }
+  }, 1400 + Math.random() * 1600);
+}
+async function gravarAudio() {
+  if (gravacao) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") { toast("Este navegador não grava áudio"); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { toast("Permita o uso do microfone para gravar"); return; }
+  const tipo = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"].find(t => MediaRecorder.isTypeSupported(t));
+  const rec = new MediaRecorder(stream, Object.assign({ audioBitsPerSecond: 24000 }, tipo ? { mimeType: tipo } : {}));
+  const g = gravacao = { alvo: chatAberto, rec, stream, partes: [], inicio: Date.now(), cancelado: false, timer: 0 };
+  rec.ondataavailable = e => { if (e.data.size) g.partes.push(e.data); };
+  rec.onstop = () => {
+    clearInterval(g.timer); g.stream.getTracks().forEach(t => t.stop());
+    gravacao = null;
+    const dur = Math.max(1, Math.min(MAX_AUDIO, Math.round((Date.now() - g.inicio) / 1000)));
+    if (g.cancelado || !g.partes.length) { render(); return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      if (String(rd.result).length > 300000) { toast("Áudio grande demais"); render(); return; }
+      enviarMsg(g.alvo, { audio: rd.result, dur });
+    };
+    rd.readAsDataURL(new Blob(g.partes, { type: rec.mimeType || "audio/webm" }));
+  };
+  rec.start();
+  g.timer = setInterval(() => {
+    const seg = Math.floor((Date.now() - g.inicio) / 1000), el = $("#gravT");
+    if (el) el.textContent = `${Math.min(seg, MAX_AUDIO)}s de ${MAX_AUDIO}s`;
+    if (seg >= MAX_AUDIO) pararGravacao(false);
+  }, 250);
+  mostrarGravando();
+}
+function pararGravacao(cancelar) { const g = gravacao; if (!g || g.rec.state === "inactive") return; g.cancelado = cancelar; g.rec.stop(); }
+function mostrarGravando() {
+  const f = $("#fMsg"); if (!f) return;
+  f.innerHTML = `<div class="gravando"><span class="ponto" aria-hidden="true"></span><span id="gravT" aria-live="polite">0s de ${MAX_AUDIO}s</span><button class="link" type="button" id="gravCancelar">Cancelar</button><button class="btn" type="button" id="gravEnviar" style="padding:12px 16px">Enviar áudio</button></div>`;
+  $("#gravCancelar").addEventListener("click", () => pararGravacao(true));
+  $("#gravEnviar").addEventListener("click", () => pararGravacao(false));
+}
+function apagarMsg(i) {
+  const ch = S.chats[chatAberto]; if (!ch || !ch[i] || ch[i].de !== "eu" || ch[i].apagada) return;
+  const v = folha(`<h2>Apagar mensagem?</h2><p class="muted" style="margin:0">A mensagem some da conversa para vocês dois.</p>
+    <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar mensagem</button><button class="link" type="button" id="nao">Cancelar</button>`);
+  v.querySelector("#nao").addEventListener("click", () => v.remove());
+  v.querySelector("#sim").addEventListener("click", () => { ch[i] = { de: "eu", apagada: true }; salvar(); v.remove(); render(); });
+}
+function encerrarContato(id) {
+  S.matches = S.matches.filter(x => x !== id); S.novos = S.novos.filter(x => x !== id); delete S.chats[id];
+  if (!S.passados.includes(id)) S.passados.push(id);
+  if (chatAberto === id) chatAberto = null;
+}
+function desfazerMatch(p) {
+  const v = folha(`<h2>Desfazer match com ${esc(p.nome)}?</h2><p class="muted" style="margin:0">A conversa será apagada e vocês não aparecem mais um para o outro.</p>
+    <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Desfazer match</button><button class="link" type="button" id="nao">Cancelar</button>`);
+  v.querySelector("#nao").addEventListener("click", () => v.remove());
+  v.querySelector("#sim").addEventListener("click", () => { encerrarContato(p.id); salvar(); v.remove(); toast("Match desfeito"); render(); });
+}
+const MOTIVOS = ["Perfil falso", "Fotos ou conteúdo impróprio", "Assédio ou ofensa", "Golpe ou spam", "Parece menor de idade", "Outro motivo"];
+function denunciar(p, mostraNome) {
+  const v = folha(`<span class="rotulo">Denunciar</span><h2>Denunciar ${mostraNome ? esc(p.nome) : "este perfil"}</h2>
+    <div class="pilha" style="gap:6px">${MOTIVOS.map((m, k) => `<label class="opcao-radio"><input type="radio" name="motivo" value="${k}">${m}</label>`).join("")}</div>
+    <div class="campo"><label for="denTxt">Detalhes (opcional)</label><textarea id="denTxt" maxlength="300"></textarea></div>
+    <div class="erro" id="denErro"></div>
+    <button class="btn bloco" type="button" id="denEnviar" style="background:var(--bad)">Enviar denúncia</button>
+    <button class="link" type="button" id="denCancelar">Cancelar</button>
+    <p class="aviso" style="margin:0">Você não verá mais esse perfil. Protótipo: a denúncia fica salva só neste aparelho.</p>`);
+  v.querySelector("#denCancelar").addEventListener("click", () => v.remove());
+  v.querySelector("#denEnviar").addEventListener("click", () => {
+    const k = v.querySelector('input[name="motivo"]:checked');
+    if (!k) { v.querySelector("#denErro").textContent = "Escolha um motivo."; return; }
+    S.denuncias = [...(S.denuncias || []), { id: p.id, motivo: MOTIVOS[Number(k.value)], texto: v.querySelector("#denTxt").value.trim().slice(0, 300), quando: Date.now() }];
+    S.bloqueados = [...new Set([...(S.bloqueados || []), p.id])];
+    encerrarContato(p.id); salvar(); v.remove(); toast("Denúncia enviada"); render();
+  });
+}
+function menuChat(p) {
+  const v = folha(`<h2>${esc(p.nome)}</h2>
+    <button class="btn sec bloco" type="button" id="mDesfazer">Desfazer match</button>
+    <button class="btn sec bloco" type="button" id="mDenunciar" style="color:var(--bad)">Denunciar</button>
+    <button class="link" type="button" id="mFechar">Cancelar</button>`);
+  v.querySelector("#mFechar").addEventListener("click", () => v.remove());
+  v.querySelector("#mDesfazer").addEventListener("click", () => { v.remove(); desfazerMatch(p); });
+  v.querySelector("#mDenunciar").addEventListener("click", () => { v.remove(); denunciar(p, true); });
+}
 function renderChat() {
   const p = PERFIL[chatAberto], ch = S.chats[chatAberto] || (S.chats[chatAberto] = []);
   tela.innerHTML = `
   <div class="chat">
-    <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button>${avatarHTML(p, 40)}<div><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc(p.prof)} · nível ${p.nivel}</div></div></div>
-    <div class="msgs" id="msgs">${ch.length ? ch.map(m => `<div class="msg ${m.de === "eu" ? "eu" : "ela"}">${esc(m.t)}</div>`).join("") : `<p class="muted" style="text-align:center;margin:auto 0">Diga oi para ${esc(p.nome)}. Uma pergunta do quiz é um bom começo.</p>`}
+    <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button>${avatarHTML(p, 40)}<div style="flex:1;min-width:0"><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc(p.prof)} · nível ${p.nivel}</div></div><button class="btn sec mini" type="button" id="opcoesChat" aria-label="Opções da conversa">⋯</button></div>
+    <div class="msgs" id="msgs">${ch.length ? ch.map(htmlMsg).join("") : `<p class="muted" style="text-align:center;margin:auto 0">Diga oi para ${esc(p.nome)}. Uma pergunta do quiz é um bom começo.</p>`}
       ${digitando === chatAberto ? `<div class="digitando">${esc(p.nome)} está digitando…</div>` : ""}</div>
-    <form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>
+    <form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn sec mic" type="button" id="mic" aria-label="Gravar áudio de até ${MAX_AUDIO} segundos">${ICONE_MIC}</button><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>
   </div>`;
   const ms = $("#msgs"); ms.scrollTop = ms.scrollHeight;
-  $("#voltar").addEventListener("click", () => { chatAberto = null; render(); });
+  $("#voltar").addEventListener("click", () => { pararGravacao(true); chatAberto = null; render(); });
+  $("#opcoesChat").addEventListener("click", () => menuChat(p));
+  $("#mic").addEventListener("click", gravarAudio);
+  ms.querySelectorAll(".msg.eu[data-i]").forEach(el => {
+    el.addEventListener("click", e => { if (!e.target.closest("audio")) apagarMsg(Number(el.dataset.i)); });
+    el.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === el) apagarMsg(Number(el.dataset.i)); });
+  });
   $("#fMsg").addEventListener("submit", e => {
     e.preventDefault();
     const t = $("#txtMsg").value.trim(); if (!t) return;
-    ch.push({ de: "eu", t }); salvar();
-    const alvo = chatAberto; digitando = alvo; render(); $("#txtMsg").focus();
-    setTimeout(() => {
-      const c = S.chats[alvo]; const n = c.filter(m => m.de !== "eu").length;
-      c.push({ de: "ela", t: RESPOSTAS[(hash(alvo) + n) % RESPOSTAS.length] });
-      digitando = null; salvar();
-      if (chatAberto === alvo && aba === "matches") render();
-      else if (!S.novos.includes(alvo)) { S.novos.push(alvo); salvar(); render(); }
-    }, 1400 + Math.random() * 1600);
+    enviarMsg(chatAberto, { t }); $("#txtMsg").focus();
   });
+  if (gravacao && gravacao.alvo === chatAberto) mostrarGravando();
 }
 
 // ---------- Perfil ----------
@@ -1492,7 +1614,7 @@ function renderPerfil() {
   const melhorNome = melhor ? CATS.find(c => c.id === melhor[0]).nome : "—";
   tela.innerHTML = `
   <div class="pilha entra">
-    <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${esc([pf.prof, pf.cidade].filter(Boolean).join(" · ") || "Complete seu perfil")}</div></div></div>
+    <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${esc(pf.cidade || "Complete seu perfil")}</div></div></div>
     ${pf.bio ? `<p style="margin:0">${esc(pf.bio)}</p>` : ""}
     <div class="stats">
       <div class="stat"><b style="color:var(--gold)">${fmtNivel(S.nivel)}</b><span>nível</span></div>
@@ -1526,7 +1648,7 @@ function renderPerfil() {
     const v = folha(`<h2>Recomeçar do zero?</h2><p class="muted" style="margin:0">Seu nível, matches e conversas serão apagados. Isso não pode ser desfeito.</p>
       <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar e recomeçar</button><button class="link" type="button" id="nao">Cancelar</button>`);
     v.querySelector("#nao").addEventListener("click", () => v.remove());
-    v.querySelector("#sim").addEventListener("click", () => { v.remove(); S = PADRAO(); rascunho = { nome: "", idade: "", sexo: "", interesse: "", prof: "", cidade: "", bio: "", foto: null }; pulados.clear(); selecao = null; salvar(); aba = "quiz"; render(); });
+    v.querySelector("#sim").addEventListener("click", () => { v.remove(); S = PADRAO(); rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null }; pulados.clear(); selecao = null; salvar(); aba = "quiz"; render(); });
   });
 }
 
