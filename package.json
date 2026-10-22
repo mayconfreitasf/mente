@@ -6,6 +6,7 @@
     "build": "node build.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.0.0"
+    "@anthropic-ai/sdk": "^1.0.0",
+    "@neondatabase/serverless": "^1.2.0"
   }
 }

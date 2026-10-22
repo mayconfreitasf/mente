@@ -186,6 +186,10 @@ h2 { font-size: 21px; line-height: 1.2; }
 @media (prefers-reduced-motion: reduce) { .gravando .ponto { animation: none; } }
 .opcao-radio { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .opcao-radio input { accent-color: var(--accent); }
+.btn-google { min-height: 44px; display: flex; justify-content: center; }
+.btn-apple { background: #000; color: #fff; }
+.ou { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.ou::before, .ou::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 .envio input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 12px 16px; }
 
 /* Folha (modal) */
@@ -380,6 +384,7 @@ function salvar() {
   try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {}
   clearTimeout(salvarTimer);
   salvarTimer = setTimeout(salvarNuvem, 800);
+  if (conta) { clearTimeout(timerConta); timerConta = setTimeout(salvarConta, 1500); }
 }
 let gravando = false, pendente = false;
 async function salvarNuvem() {
@@ -547,6 +552,12 @@ $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); 
 
 function render() {
   pararTimer();
+  if (!contaPronta) { $("#abas").hidden = true; $("#chipNivel").hidden = true; tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Carregando…</p></div>`; return; }
+  if (!semServidor) {
+    const jogandoDesafio = desafioAberto || (rodada && rodada.desafio);
+    if (tokenRedefinir || (!conta && !jogandoDesafio)) return renderConta();
+    if (conta && !conta.usuario) return renderEscolherUsuario();
+  }
   if (!S.perfil) {
     $("#abas").hidden = true; $("#chipNivel").hidden = !(rodada && rodada.desafio); $("#chipNum").textContent = fmtNivel(S.nivel);
     if (desafioAberto) return renderDesafioIntro();
@@ -1605,6 +1616,155 @@ function renderChat() {
   if (gravacao && gravacao.alvo === chatAberto) mostrarGravando();
 }
 
+// ---------- Conta: usuário, e-mail e senha, ou Google e Apple ----------
+// Sem servidor de contas (protótipo local ou banco ainda não configurado), o app funciona sem login.
+let conta = null, contaPronta = false, semServidor = false, cfgConta = {}, telaConta = "entrar", tokenRedefinir = null;
+let timerConta = 0, avisouTamanho = false, googlePronto = false, applePronto = false;
+async function chamarConta(corpo) {
+  let r;
+  try { r = await fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(corpo) }); }
+  catch { throw { rede: true, erro: "Sem conexão. Verifique a internet e tente de novo." }; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw { status: r.status, erro: j.erro || `Erro no servidor (código ${r.status}).` };
+  return j;
+}
+async function iniciarConta() {
+  const m = location.hash.match(/^#redefinir=([A-Za-z0-9_-]+)$/);
+  if (m) { tokenRedefinir = m[1]; telaConta = "redefinir"; limparLinkDesafio(); }
+  try {
+    cfgConta = await chamarConta({ acao: "config" });
+    if (!cfgConta.banco) semServidor = true;
+    else {
+      try { aplicarConta(await chamarConta({ acao: "eu" })); }
+      catch (e) { if (e.status !== 401) throw e; }
+    }
+  } catch { semServidor = true; }
+  contaPronta = true; render();
+}
+// Ao entrar, o progresso salvo na conta substitui o do aparelho; conta sem progresso recebe o do aparelho.
+function aplicarConta(j) {
+  conta = j.conta;
+  if (j.estado && typeof j.estado === "object") {
+    S = Object.assign(PADRAO(), j.estado);
+    try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {}
+  } else if (S.perfil) salvarConta();
+}
+function salvarConta() {
+  if (!conta) return;
+  chamarConta({ acao: "salvarEstado", estado: S }).catch(e => {
+    if (e.status === 401) { conta = null; render(); }
+    else if (e.status === 413 && !avisouTamanho) { avisouTamanho = true; toast("Progresso grande demais para salvar na conta"); }
+  });
+}
+function sairDaConta() {
+  chamarConta({ acao: "sair" }).catch(() => {});
+  conta = null; S = PADRAO(); telaConta = "entrar";
+  rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null };
+  try { localStorage.removeItem(CHAVE); } catch {}
+  aba = "quiz"; rodada = null; chatAberto = null; selecao = null; pulados.clear();
+  render();
+}
+async function entrarSocial(provedor, token) {
+  const erro = $("#contaErro");
+  try { aplicarConta(await chamarConta({ acao: "social", provedor, token, estado: S })); render(); }
+  catch (e) { if (erro) erro.textContent = e.erro; }
+}
+async function montarSocial() {
+  const g = $("#btnGoogle");
+  if (g && cfgConta.google) {
+    try {
+      await carregarScript("https://accounts.google.com/gsi/client");
+      if (!googlePronto) { google.accounts.id.initialize({ client_id: cfgConta.google, callback: r => entrarSocial("google", r.credential), ux_mode: "popup" }); googlePronto = true; }
+      if (document.body.contains(g)) google.accounts.id.renderButton(g, { theme: "outline", size: "large", text: "continue_with", locale: "pt-BR", width: Math.min(400, g.clientWidth || 320) });
+    } catch { g.textContent = "Não foi possível carregar o login do Google."; }
+  }
+  const a = $("#btnApple");
+  if (a && cfgConta.apple) a.addEventListener("click", async () => {
+    try {
+      await carregarScript("https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/pt_BR/appleid.auth.js");
+      if (!applePronto) { AppleID.auth.init({ clientId: cfgConta.apple, scope: "name email", redirectURI: location.origin + "/", usePopup: true }); applePronto = true; }
+      const r = await AppleID.auth.signIn();
+      entrarSocial("apple", r.authorization.id_token);
+    } catch (e) { if (!(e && e.error === "popup_closed_by_user")) { const erro = $("#contaErro"); if (erro) erro.textContent = "Não foi possível entrar com a Apple."; } }
+  });
+}
+function renderConta() {
+  $("#abas").hidden = true; $("#chipNivel").hidden = true;
+  const t = telaConta;
+  const titulos = { entrar: "Entre na sua conta", criar: "Crie sua conta", recuperar: "Recuperar senha", redefinir: "Crie uma nova senha" };
+  const social = (t === "entrar" || t === "criar") && (cfgConta.google || cfgConta.apple)
+    ? `<div class="pilha" style="gap:10px">${cfgConta.google ? `<div id="btnGoogle" class="btn-google"></div>` : ""}${cfgConta.apple ? `<button class="btn bloco btn-apple" type="button" id="btnApple"> Continuar com a Apple</button>` : ""}</div><div class="ou"><span>ou</span></div>` : "";
+  const campo = (id, rotulo, extra) => `<div class="campo"><label for="${id}">${rotulo}</label><input id="${id}" ${extra}></div>`;
+  let corpo = "";
+  if (t === "criar") corpo = `
+    ${campo("cUsuario", "Usuário", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20"')}
+    <span class="muted" style="font-size:12px;margin-top:-10px">De 3 a 20 caracteres: letras minúsculas, números, ponto ou _. Ele é único no Mente.</span>
+    ${campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"')}
+    ${campo("cSenha", "Senha", 'type="password" autocomplete="new-password" maxlength="128"')}
+    ${campo("cSenha2", "Repita a senha", 'type="password" autocomplete="new-password" maxlength="128"')}
+    <div class="erro" id="contaErro"></div>
+    <button class="btn bloco" type="submit">Criar conta</button>
+    <button class="link" type="button" data-ir="entrar">Já tenho conta</button>`;
+  else if (t === "recuperar") corpo = `
+    <p class="muted" style="margin:0">${cfgConta.recuperar ? "Digite o e-mail da sua conta. Enviamos um link para você criar uma nova senha." : "A recuperação de senha ainda não está disponível."}</p>
+    ${cfgConta.recuperar ? campo("cEmail", "E-mail", 'type="email" autocomplete="email" maxlength="120"') + `<div class="erro" id="contaErro"></div><button class="btn bloco" type="submit">Enviar link</button>` : ""}
+    <button class="link" type="button" data-ir="entrar">Voltar</button>`;
+  else if (t === "redefinir") corpo = `
+    ${campo("cSenha", "Nova senha", 'type="password" autocomplete="new-password" maxlength="128"')}
+    ${campo("cSenha2", "Repita a nova senha", 'type="password" autocomplete="new-password" maxlength="128"')}
+    <div class="erro" id="contaErro"></div>
+    <button class="btn bloco" type="submit">Salvar nova senha</button>`;
+  else corpo = `
+    ${campo("cLogin", "Usuário ou e-mail", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120"')}
+    ${campo("cSenha", "Senha", 'type="password" autocomplete="current-password" maxlength="128"')}
+    <div class="erro" id="contaErro"></div>
+    <button class="btn bloco" type="submit">Entrar</button>
+    <div class="linha" style="justify-content:space-between"><button class="link" type="button" data-ir="recuperar">Esqueci a senha</button><button class="link" type="button" data-ir="criar">Criar conta</button></div>`;
+  tela.innerHTML = `
+  <form class="pilha entra" id="fConta" novalidate>
+    <div class="pilha" style="gap:8px;padding-top:8px"><span class="rotulo">Primeiro a mente. Depois o match.</span><h1>${titulos[t]}</h1></div>
+    ${social}${corpo}
+    <p class="aviso">Ao continuar, você confirma que tem 18 anos ou mais.</p>
+  </form>`;
+  tela.querySelectorAll("[data-ir]").forEach(b => b.addEventListener("click", () => { telaConta = b.dataset.ir; render(); }));
+  const u = $("#cUsuario"); if (u) u.addEventListener("input", () => { u.value = u.value.toLowerCase().replace(/\s/g, ""); });
+  const f = $("#fConta"), erro = $("#contaErro"), botao = f.querySelector('button[type="submit"]');
+  f.addEventListener("submit", async e => {
+    e.preventDefault(); if (!botao || botao.disabled) return;
+    const val = id => { const x = $("#" + id); return x ? x.value : ""; };
+    if ((t === "criar" || t === "redefinir") && val("cSenha") !== val("cSenha2")) { erro.textContent = "As senhas não são iguais."; return; }
+    const texto = botao.textContent; botao.disabled = true; botao.textContent = "Aguarde…"; erro.textContent = "";
+    try {
+      if (t === "criar") aplicarConta(await chamarConta({ acao: "cadastrar", usuario: val("cUsuario").trim(), email: val("cEmail").trim(), senha: val("cSenha"), estado: S }));
+      else if (t === "entrar") aplicarConta(await chamarConta({ acao: "entrar", login: val("cLogin").trim(), senha: val("cSenha") }));
+      else if (t === "redefinir") { aplicarConta(await chamarConta({ acao: "redefinir", token: tokenRedefinir, senha: val("cSenha") })); tokenRedefinir = null; toast("Senha alterada"); }
+      else if (t === "recuperar") { await chamarConta({ acao: "recuperar", email: val("cEmail").trim() }); toast("Se o e-mail tiver conta, o link foi enviado"); telaConta = "entrar"; return render(); }
+      telaConta = "entrar"; render();
+    } catch (x) { erro.textContent = x.erro; botao.disabled = false; botao.textContent = texto; }
+  });
+  montarSocial();
+}
+function renderEscolherUsuario() {
+  $("#abas").hidden = true; $("#chipNivel").hidden = true;
+  tela.innerHTML = `
+  <form class="pilha entra" id="fUsuario" novalidate style="padding-top:8px">
+    <h1>Escolha seu nome de usuário</h1>
+    <p class="muted" style="margin:0">É como você entra e aparece no Mente. Ele é único.</p>
+    <div class="campo"><label for="cUsuario">Usuário</label><input id="cUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20"></div>
+    <span class="muted" style="font-size:12px;margin-top:-10px">De 3 a 20 caracteres: letras minúsculas, números, ponto ou _.</span>
+    <div class="erro" id="contaErro"></div>
+    <button class="btn bloco" type="submit">Continuar</button>
+    <button class="link" type="button" id="sairU">Sair</button>
+  </form>`;
+  const u = $("#cUsuario"); u.addEventListener("input", () => { u.value = u.value.toLowerCase().replace(/\s/g, ""); });
+  $("#sairU").addEventListener("click", sairDaConta);
+  $("#fUsuario").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { conta = (await chamarConta({ acao: "definirUsuario", usuario: u.value.trim() })).conta; render(); }
+    catch (x) { $("#contaErro").textContent = x.erro; }
+  });
+}
+
 // ---------- Perfil ----------
 function renderPerfil() {
   const pf = S.perfil;
@@ -1633,6 +1793,7 @@ function renderPerfil() {
       <div class="campo" ${S.meuPasse.ativo ? "" : "hidden"} id="cPasse"><label for="vPasse">Valor (R$)</label><input id="vPasse" type="number" inputmode="numeric" min="10" step="10" value="${S.meuPasse.valor}"></div>
     </div>
     <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados</div></div><b style="font-family:var(--f-mono)">${S.matches.length}</b></div></div>
+    ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>@${esc(conta.usuario)}</strong><div class="muted" style="font-size:13px">${esc(conta.email || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div></div>` : ""}
     <button class="btn sec bloco" type="button" id="editar">Editar perfil</button>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>
   </div>`;
@@ -1644,6 +1805,7 @@ function renderPerfil() {
   $("#tPasse").addEventListener("click", () => { S.meuPasse.ativo = !S.meuPasse.ativo; salvar(); render(); });
   const vp = $("#vPasse"); if (vp) vp.addEventListener("change", () => { const n = Math.max(10, Math.round(Number(vp.value) || 0)); S.meuPasse.valor = n; vp.value = n; salvar(); toast("Valor salvo"); });
   $("#editar").addEventListener("click", () => renderCadastro(true));
+  const sc = $("#sairConta"); if (sc) sc.addEventListener("click", sairDaConta);
   $("#zerar").addEventListener("click", () => {
     const v = folha(`<h2>Recomeçar do zero?</h2><p class="muted" style="margin:0">Seu nível, matches e conversas serão apagados. Isso não pode ser desfeito.</p>
       <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar e recomeçar</button><button class="link" type="button" id="nao">Cancelar</button>`);
@@ -1657,6 +1819,7 @@ function renderPerfil() {
 if (location.hash === "#liberar-teste") { S.criacoes = []; S.extraCriacoes = 10; salvar(); limparLinkDesafio(); setTimeout(() => toast("Limite zerado: +10 categorias"), 300); }
 desafioAberto = lerDesafio();
 render();
+iniciarConta();
 conectarNuvem();
 prepararClaude();
 })();
