@@ -9,7 +9,8 @@ Authorization: Bearer <ADMIN_TOKEN>
 {"acao": "contasTeste", "senhaRevisor": "<senha do revisor>"}
 ```
 
-Rodar de novo zera a demonstração (curtidas, matches e conversas do revisor). As contas de teste só enxergam
+Rodar de novo zera a demonstração (curtidas, matches e conversas do revisor). As fotos dos perfis de demonstração vêm do Pexels
+(licença gratuita para uso comercial, sem atribuição) e ficam em `api/_demo-fotos.js`. As contas de teste só enxergam
 umas às outras: usuários reais nunca veem esses perfis.
 
 ## App Store Connect → App Review Information
