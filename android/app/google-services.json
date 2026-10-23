@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "83851078538",
+    "project_id": "jingar-f01f9",
+    "storage_bucket": "jingar-f01f9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:83851078538:android:55a34d796b7e711e0e3673",
+        "android_client_info": {
+          "package_name": "br.com.jingar.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCA8J6DPR9RhsYU_kzn-HLAS7KlFhnk8Tc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
