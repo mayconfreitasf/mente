@@ -18,6 +18,8 @@ export function prepararBanco() {
     await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nascimento date`;
     await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS verificado boolean NOT NULL DEFAULT true`;
     await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS banido boolean NOT NULL DEFAULT false`;
+    // Contas de teste (revisão das lojas): só enxergam e só são vistas por outras contas de teste.
+    await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS teste boolean NOT NULL DEFAULT false`;
     await sql`CREATE TABLE IF NOT EXISTS sessoes (
       token_hash text PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, expira_em timestamptz NOT NULL)`;
     await sql`CREATE TABLE IF NOT EXISTS codigos (
@@ -54,6 +56,14 @@ export function prepararBanco() {
     await sql`CREATE TABLE IF NOT EXISTS bloqueios (
       usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, alvo text NOT NULL,
       criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (usuario_id, alvo))`;
+    // Desafios por link curto (jingar.com.br/Ab3x) e o ranking de quem respondeu cada um.
+    await sql`CREATE TABLE IF NOT EXISTS desafios (
+      codigo text PRIMARY KEY, criador_id uuid REFERENCES usuarios(id) ON DELETE SET NULL,
+      dados jsonb NOT NULL, ip_hash text, criado_em timestamptz NOT NULL DEFAULT now())`;
+    await sql`CREATE TABLE IF NOT EXISTS desafio_respostas (
+      id bigserial PRIMARY KEY, codigo text NOT NULL REFERENCES desafios(codigo) ON DELETE CASCADE,
+      jogador text NOT NULL, usuario_id uuid REFERENCES usuarios(id) ON DELETE CASCADE, nome text NOT NULL,
+      acertos int NOT NULL, total int NOT NULL, criado_em timestamptz NOT NULL DEFAULT now(), UNIQUE (codigo, jogador))`;
   })().catch(e => { pronto = null; throw e; });
   return pronto;
 }

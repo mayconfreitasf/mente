@@ -3,5 +3,8 @@
   "outputDirectory": "dist",
   "functions": {
     "api/perguntas.js": { "maxDuration": 60 }
-  }
+  },
+  "rewrites": [
+    { "source": "/:codigo([A-Za-z0-9]{4,6})", "destination": "/index.html" }
+  ]
 }

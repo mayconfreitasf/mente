@@ -305,6 +305,8 @@ export default async function handler(req, res) {
     if (b.acao === "excluirConta") {
       if (u.senha_hash && !confereSenha(typeof b.senha === "string" ? b.senha.slice(0, 128) : "", u.senha_hash)) throw falha(401, "Senha incorreta.");
       if (!u.senha_hash && b.confirmacao !== "EXCLUIR") throw falha(400, "Digite EXCLUIR para confirmar.");
+      // Os desafios que a pessoa criou continuam valendo para quem tem o link, mas sem o nome dela.
+      await sql`UPDATE desafios SET dados = dados || '{"n":"Alguém"}'::jsonb WHERE criador_id = ${u.id}`;
       await sql`DELETE FROM usuarios WHERE id = ${u.id}`;
       gravarCookie(res, "", 0);
       return res.status(200).json({ ok: true });

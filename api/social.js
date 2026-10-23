@@ -11,7 +11,7 @@ const uuidValido = x => typeof x === "string" && /^[0-9a-f-]{36}$/.test(x);
 function publico(p, meuNivel) {
   const livre = Number(p.nivel) <= meuNivel || !!p.curtiuVoce;
   return {
-    id: p.id, nivel: Number(p.nivel), idade: p.idade, cidade: p.cidade, distancia: p.distancia == null ? null : Number(p.distancia), livre,
+    id: p.id, nivel: Number(p.nivel), idade: p.idade, distancia: p.distancia == null ? null : Number(p.distancia), livre,
     nome: livre ? p.nome : null, bio: livre ? p.bio : null, foto: livre ? urlMidia(p.foto_id) : null
   };
 }
@@ -28,7 +28,7 @@ function distancia(a, b) {
 async function candidatos(eu, { incluirAvaliados = false } = {}) {
   const lista = await sql`SELECT p.usuario_id AS id, p.nome, p.idade, p.sexo, p.interesse, p.cidade, p.bio, p.foto_id, p.lat, p.lng, p.nivel, p.vis_min
     FROM perfis p JOIN usuarios u ON u.id = p.usuario_id
-    WHERE p.usuario_id <> ${eu.usuario_id} AND NOT u.banido AND u.verificado AND p.interesse <> 'N'
+    WHERE p.usuario_id <> ${eu.usuario_id} AND NOT u.banido AND u.verificado AND p.interesse <> 'N' AND u.teste = ${!!eu.teste}
       AND (${eu.interesse} = 'T' OR p.sexo = ${eu.interesse})
       AND (p.interesse = 'T' OR p.interesse = ${eu.sexo})
     LIMIT 500`;
@@ -45,6 +45,8 @@ async function candidatos(eu, { incluirAvaliados = false } = {}) {
     const nivel = Number(p.nivel);
     if (avaliados.has(p.id) || bloqueados.has(String(p.id))) return false;
     if (nivel <= meu && nivel < verMin) return false;
+    // A localização do aparelho é obrigatória para aparecer no Descobrir e dar match.
+    if (p.lat == null || p.lng == null) return false;
     // A outra pessoa escolheu a partir de qual nível abaixo dela pode ser vista.
     p.curtiuVoce = curtiramVoce.has(String(p.id));
     if (meu < nivel && meu < Number(p.vis_min) && !p.curtiuVoce) return false;
@@ -81,10 +83,14 @@ export default async function handler(req, res) {
     if (!u) return res.status(401).json({ erro: "Entre na sua conta." });
     if (u.banido) return res.status(403).json({ erro: "Esta conta foi suspensa por violar os Termos de Uso." });
     const eu = await meuPerfil(u);
+    if (eu) eu.teste = !!u.teste;
     const meuNivel = eu ? Number(eu.nivel) : 0;
 
+    // Sem localização do aparelho não há Descobrir nem match: o app pede a permissão antes.
+    const semLocal = !eu || eu.lat == null || eu.lng == null;
     if (b.acao === "descobrir") {
       if (!eu || eu.interesse === "N") return res.status(200).json({ perfis: [] });
+      if (semLocal) return res.status(200).json({ perfis: [], semLocal: true });
       const lista = await candidatos(eu);
       // Intercala: dois perfis liberados (do maior nível para o menor) e um bloqueado (o mais próximo do seu nível).
       const livre = p => Number(p.nivel) <= meuNivel || p.curtiuVoce;
@@ -100,7 +106,7 @@ export default async function handler(req, res) {
     }
 
     if (b.acao === "resumo") {
-      if (!eu || eu.interesse === "N") return res.status(200).json({ liberados: 0, anterior: 0, prox: null, semPerfil: !eu });
+      if (!eu || eu.interesse === "N" || semLocal) return res.status(200).json({ liberados: 0, anterior: 0, prox: null, semPerfil: !eu, semLocal: !!eu && semLocal });
       const lista = await candidatos(eu, { incluirAvaliados: true });
       const livres = lista.filter(p => Number(p.nivel) <= meuNivel), presos = lista.filter(p => Number(p.nivel) > meuNivel);
       const proxNivel = presos.length ? Math.min(...presos.map(p => Number(p.nivel))) : null;
@@ -115,6 +121,7 @@ export default async function handler(req, res) {
       if (!eu) throw falha(400, "Complete seu perfil primeiro.");
       if (!uuidValido(b.alvo)) throw falha(400, "Perfil inválido.");
       if (b.acao === "curtir") {
+        if (semLocal) throw falha(403, "Ative a localização para dar match.");
         const [alvo] = (await candidatos(eu, { incluirAvaliados: true })).filter(p => p.id === b.alvo);
         if (!alvo) throw falha(404, "Esse perfil não está mais disponível.");
         if (Number(alvo.nivel) > meuNivel && !alvo.curtiuVoce) throw falha(403, "Suba de nível para curtir esse perfil.");

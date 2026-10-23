@@ -39,8 +39,10 @@ export async function sincronizarPerfil(u, estado, local) {
     fotoId = null;
   }
   const f = estado.filtros || {};
-  const lat = local && Number.isFinite(Number(local.lat)) ? numero(local.lat, -90, 90, null) : null;
-  const lng = local && Number.isFinite(Number(local.lng)) ? numero(local.lng, -180, 180, null) : null;
+  // A posição fica arredondada em cerca de 1 km: serve para a distância, não para achar ninguém.
+  const km = n => Math.round(n * 100) / 100;
+  const lat = local && Number.isFinite(Number(local.lat)) ? km(numero(local.lat, -90, 90, null)) : null;
+  const lng = local && Number.isFinite(Number(local.lng)) ? km(numero(local.lng, -180, 180, null)) : null;
   const interesse = ["F", "M", "T", "N"].includes(p.interesse) ? p.interesse : "N";
   const sexo = ["F", "M", "O"].includes(p.sexo) ? p.sexo : "O";
   const nivel = numero(estado.nivel, 0, 1e6, 0);

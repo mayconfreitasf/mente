@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jingar · Excluir conta</title>
+<style>
+:root { --bg: #f6efec; --surface: #fffaf8; --line: #e2d0cb; --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg: #150d11; --surface: #21151a; --line: #3e2931; --fg: #f4ebe7; --muted: #b39ca4; --accent: #e06a86; color-scheme: dark; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
+main { max-width: 720px; margin: 0 auto; }
+h1 { font-size: 28px; line-height: 1.2; margin: 8px 0 4px; }
+h2 { font-size: 19px; margin: 28px 0 6px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); font-size: 14px; }
+li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+<p><a href="/">← Voltar ao Jingar</a></p>
+<h1>Excluir sua conta do Jingar</h1>
+<p class="muted">Última atualização: 23 de outubro de 2026.</p>
+
+<h2>Pelo app ou pelo site</h2>
+<ol>
+  <li>Entre na sua conta no app Jingar ou em <a href="/">jingar.com.br</a>.</li>
+  <li>Toque em <strong>Perfil</strong>, na barra de baixo.</li>
+  <li>Role até o fim e toque em <strong>Excluir conta</strong>.</li>
+  <li>Confirme com a sua senha (ou digitando EXCLUIR, se você entrou com Google ou Apple).</li>
+</ol>
+<p>A exclusão é imediata e não pode ser desfeita.</p>
+
+<h2>Sem acesso ao app</h2>
+<p>Escreva para <a data-contato href="#">o e-mail de contato</a> a partir do e-mail cadastrado, informando seu nome de usuário e pedindo a exclusão. Respondemos em até 7 dias.</p>
+
+<h2>O que é apagado</h2>
+<ul>
+  <li>Conta, perfil, foto, níveis e progresso.</li>
+  <li>Curtidas, matches, conversas e áudios.</li>
+  <li>Categorias criadas, sessões, aparelhos para notificações e sua posição nos rankings de desafios.</li>
+</ul>
+<p>Denúncias feitas por você podem ser mantidas sem identificar o autor, para a segurança da comunidade, e alguns registros podem ser guardados pelo prazo exigido em lei, como explica a <a href="privacidade.html">Política de Privacidade</a>.</p>
+</main>
+<script>
+fetch((window.JINGAR_API || "") + "/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"acao":"config"}' })
+  .then(r => r.json()).then(c => { if (c.contato) document.querySelectorAll("[data-contato]").forEach(a => { a.href = "mailto:" + c.contato; a.textContent = c.contato; }); })
+  .catch(() => {});
+</script>
+</body>
+</html>

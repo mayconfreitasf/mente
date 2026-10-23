@@ -268,6 +268,11 @@ a.btn { text-decoration: none; }
 .placar-desafio div { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .placar-desafio b { font-family: var(--f-mono); font-size: 40px; line-height: 1; color: var(--gold); }
 .placar-desafio span { font-size: 13px; color: var(--muted); }
+.ranking ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ranking li { display: flex; align-items: center; gap: 10px; }
+.ranking .pos { font-family: var(--f-mono); color: var(--muted); min-width: 3ch; }
+.ranking .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking li.voce, .ranking li.voce .pos { color: var(--gold); }
 .seg.quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .seg.quatro button { padding-inline: 2px; font-size: 13px; }
 .aba.desligada { opacity: .4; }
@@ -494,9 +499,10 @@ const CIDADES = {
 const semAcento = t => String(t || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
 const COORD = Object.fromEntries(Object.entries(CIDADES).map(([n, c]) => [semAcento(n), c]));
 const RAIOS = [5, 10, 25, 50, 100, 250, 500, null];
+// A distância parte da localização do aparelho. Só a demonstração sem servidor usa a cidade dos perfis fictícios.
 function meuLocal() {
   if (S.local) return S.local;
-  const c = S.perfil && COORD[semAcento(S.perfil.cidade)];
+  const c = semServidor && S.perfil && COORD[semAcento(S.perfil.cidade)];
   return c ? { lat: c[0], lng: c[1], nome: S.perfil.cidade } : null;
 }
 // Perfis fictícios ficam espalhados entre 2 e 19 km do centro da cidade, sempre no mesmo ponto.
@@ -540,22 +546,12 @@ function abrirFiltros() {
       <span class="muted" style="font-size:13px">Use para esconder seu perfil de quem está muitos níveis abaixo de você.</span></div>
     <div class="campo"><label for="fRaio">Distância: <b id="raioTxt">${txtR(RAIOS[iR])}</b></label>
       <input id="fRaio" type="range" min="0" max="${RAIOS.length - 1}" step="1" value="${iR}" ${loc ? "" : "disabled"}>
-      <span class="muted" style="font-size:13px" id="locTxt">${loc ? "A partir de " + esc(loc.nome) : "Para filtrar por distância, informe sua cidade no perfil ou use sua localização."}</span>
-      <button class="link" type="button" id="usarLoc" style="align-self:flex-start;padding:4px 0">Usar minha localização atual</button></div>
+      <span class="muted" style="font-size:13px">${loc ? "A partir da localização do seu aparelho." : "Ative a localização no Descobrir para filtrar por distância."}</span></div>
     <div class="erro" id="filtroErro"></div>
     <button class="btn bloco" type="button" id="salvarF">Salvar filtros</button>
     <button class="link" type="button" id="cancelarF">Cancelar</button>`);
-  const raio = v.querySelector("#fRaio"), locTxt = v.querySelector("#locTxt");
+  const raio = v.querySelector("#fRaio");
   raio.addEventListener("input", () => { v.querySelector("#raioTxt").textContent = txtR(RAIOS[raio.value]); });
-  v.querySelector("#usarLoc").addEventListener("click", async () => {
-    if (!(await explicarPermissao("avisoLocal", "Usar sua localização", "Usamos sua localização só para calcular a distância até outras pessoas. Ela não aparece para ninguém."))) return;
-    if (!navigator.geolocation) { locTxt.textContent = "Este navegador não informa a localização."; return; }
-    locTxt.textContent = "Buscando sua localização…";
-    navigator.geolocation.getCurrentPosition(pos => {
-      S.local = { lat: pos.coords.latitude, lng: pos.coords.longitude, nome: "sua localização atual" }; salvar();
-      locTxt.textContent = "A partir de sua localização atual"; raio.disabled = false;
-    }, () => { locTxt.textContent = "Não foi possível pegar sua localização. Verifique a permissão do navegador."; }, { timeout: 10000 });
-  });
   v.querySelector("#cancelarF").addEventListener("click", () => v.remove());
   v.querySelector("#salvarF").addEventListener("click", () => {
     const num = id => { const x = v.querySelector(id).value.trim(); return x === "" ? 0 : Math.round(Number(x)); };
@@ -578,6 +574,65 @@ function renderSemMatch() {
   });
 }
 
+// ---------- Localização do aparelho ----------
+// Descobrir e matches exigem a localização do aparelho: não há cidade digitada à mão.
+// A posição é arredondada (cerca de 1 km) e ninguém a vê; os outros só veem a distância.
+let estadoLocal = "", buscandoLocal = false;
+const arredLocal = n => Math.round(n * 100) / 100;
+async function permissaoLocal() {
+  const G = plugin("Geolocation");
+  const traduz = p => p === "granted" ? "ok" : p === "denied" ? "negado" : "perguntar";
+  try {
+    if (G) return traduz((await G.checkPermissions()).location);
+    if (navigator.permissions) return traduz((await navigator.permissions.query({ name: "geolocation" })).state);
+  } catch {}
+  return "perguntar";
+}
+// Pega a posição atual. Com "perguntar", o sistema pode mostrar o pedido de permissão; sem ele, só atualiza quando já há permissão.
+async function pegarLocal(perguntar) {
+  if (buscandoLocal) return !!S.local;
+  const perm = await permissaoLocal();
+  if (perm === "negado") { estadoLocal = "negado"; if (S.local) { S.local = null; salvar(); } return false; }
+  if (perm !== "ok" && !perguntar) return !!S.local;
+  buscandoLocal = true;
+  try {
+    const G = plugin("Geolocation");
+    let pos;
+    if (G) {
+      if (perm !== "ok" && (await G.requestPermissions({ permissions: ["location"] })).location !== "granted") throw { negado: true };
+      pos = await G.getCurrentPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+    } else {
+      if (!navigator.geolocation) throw {};
+      pos = await new Promise((ok, falhou) => navigator.geolocation.getCurrentPosition(ok, falhou, { timeout: 15000, maximumAge: 600000 }));
+    }
+    S.local = { lat: arredLocal(pos.coords.latitude), lng: arredLocal(pos.coords.longitude), em: Date.now() };
+    estadoLocal = "ok"; salvar();
+    if (conta) { clearTimeout(timerConta); await salvarConta(); }
+    return true;
+  } catch (e) {
+    // No navegador, o código 1 é permissão negada.
+    estadoLocal = (e && (e.negado || e.code === 1)) || (await permissaoLocal()) === "negado" ? "negado" : "erro";
+    return false;
+  } finally { buscandoLocal = false; }
+}
+function renderPedirLocal() {
+  const negado = estadoLocal === "negado";
+  const ajuda = !nativo ? "Libere a localização para este site nas configurações do navegador (no ícone ao lado do endereço)."
+    : window.Capacitor.getPlatform() === "ios" ? "Abra Ajustes > Jingar > Localização e escolha \"Durante o Uso do App\"."
+    : "Abra Configurações > Apps > Jingar > Permissões > Localização e permita.";
+  tela.innerHTML = `<div class="vazio entra"><h2>Ative sua localização</h2>
+    <p class="muted" style="margin:0">O Descobrir e os matches mostram pessoas perto de você, por isso usam a localização do aparelho. Ela não aparece para ninguém: os outros só veem a distância aproximada.</p>
+    ${negado ? `<p class="aviso" style="margin:0">O acesso à localização está bloqueado. ${ajuda}</p>` : estadoLocal === "erro" ? `<p class="aviso" style="margin:0">Não foi possível pegar sua localização. Confira se ela está ligada no aparelho e tente de novo.</p>` : ""}
+    <button class="btn" type="button" id="permitirLocal">${negado ? "Já liberei, tentar de novo" : "Permitir localização"}</button>
+    <button class="link" type="button" id="irQuizL">Jogar um quiz</button></div>`;
+  $("#permitirLocal").addEventListener("click", async e => {
+    e.target.disabled = true; e.target.textContent = "Buscando sua localização…";
+    if (await pegarLocal(true)) { filaReal = null; resumoReal = null; toast("Localização ativada"); }
+    render();
+  });
+  $("#irQuizL").addEventListener("click", () => irPara("quiz"));
+}
+
 // ---------- Navegação ----------
 let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
 function irPara(a) { pararGravacao(true); clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
@@ -586,6 +641,7 @@ $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); 
 function render() {
   pararTimer();
   if (semConexao) return renderSemConexao();
+  if (carregandoDesafio) { $("#abas").hidden = true; $("#chipNivel").hidden = true; tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Abrindo o desafio…</p></div>`; return; }
   if (!contaPronta) { $("#abas").hidden = true; $("#chipNivel").hidden = true; tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Carregando…</p></div>`; return; }
   if (!semServidor && !modoTeste) {
     const jogandoDesafio = desafioAberto || (rodada && rodada.desafio);
@@ -606,6 +662,7 @@ function render() {
   if (desafioAberto && !rodada) return renderDesafioIntro();
   if ((aba === "descobrir" || aba === "matches") && semMatch()) return renderSemMatch();
   if ((aba === "descobrir" || aba === "matches") && precisaConta()) return renderPrecisaConta();
+  if ((aba === "descobrir" || aba === "matches") && modoReal() && !S.local) return renderPedirLocal();
   if (aba === "quiz") return rodada ? renderPergunta() : renderQuizInicio();
   if (aba === "descobrir") return renderDescobrir();
   if (aba === "matches") return chatAberto ? renderChat() : renderMatches();
@@ -635,19 +692,16 @@ function renderCadastro(editando, manter) {
       </div>
     </div>
     <div class="campo"><label for="fNome">Nome</label><input id="fNome" value="${esc(r.nome)}" maxlength="30" autocomplete="given-name"></div>
-    <div class="linha" style="flex-wrap:nowrap">
-      <div class="campo" style="flex:1"><label for="fIdade">Idade</label>${conta && conta.idade ? `<input id="fIdade" type="number" value="${conta.idade}" readonly title="Calculada pela sua data de nascimento">` : `<input id="fIdade" type="number" inputmode="numeric" min="18" max="99" value="${esc(r.idade)}">`}</div>
-      <div class="campo" style="flex:2"><label for="fCidade">Cidade</label><input id="fCidade" value="${esc(r.cidade)}" maxlength="40" list="listaCidades"><datalist id="listaCidades">${Object.keys(CIDADES).map(c => `<option value="${c}">`).join("")}</datalist></div>
-    </div>
+    <div class="campo"><label for="fIdade">Idade</label>${conta && conta.idade ? `<input id="fIdade" type="number" value="${conta.idade}" readonly title="Calculada pela sua data de nascimento">` : `<input id="fIdade" type="number" inputmode="numeric" min="18" max="99" value="${esc(r.idade)}">`}</div>
     <div class="campo"><label>Eu sou</label>${seg("sexo", [["F", "Mulher"], ["M", "Homem"], ["O", "Outro"]])}</div>
     <div class="campo"><label>Quero conhecer</label>${seg("interesse", [["F", "Mulheres"], ["M", "Homens"], ["T", "Ambos"], ["N", "Ninguém"]])}
       <p class="aviso" id="avisoN" style="margin:0;text-align:left" ${r.interesse === "N" ? "" : "hidden"}>Com "Ninguém" seu perfil fica invisível e o match fica desligado. Dá pra mudar depois no Perfil.</p></div>
     <div class="campo"><label for="fBio">Sobre você</label><textarea id="fBio" maxlength="140" placeholder="Uma frase que puxe conversa">${esc(r.bio)}</textarea></div>
     <div class="erro" id="fErro"></div>
     <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : `Começar no nível ${fmtNivel(S.nivel)}`}</button>
-    ${editando ? `<button class="link" type="button" id="fCancelar">Cancelar</button>` : `<p class="aviso">Protótipo: os outros perfis são fictícios e seus dados ficam só com você.</p>`}
+    ${editando ? `<button class="link" type="button" id="fCancelar">Cancelar</button>` : semServidor ? `<p class="aviso">Protótipo: os outros perfis são fictícios e seus dados ficam só com você.</p>` : ""}
   </form>`;
-  const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, cidade: $("#fCidade").value.trim(), bio: $("#fBio").value.trim() });
+  const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, bio: $("#fBio").value.trim() });
   tela.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     rascunho[g.dataset.campo] = b.dataset.v;
@@ -674,7 +728,6 @@ function renderCadastro(editando, manter) {
     else if (!rascunho.sexo) erro = "Escolha como você se identifica.";
     else if (!rascunho.interesse) erro = "Escolha quem você quer conhecer.";
     if (erro) { $("#fErro").textContent = erro; return; }
-    if (S.perfil && S.perfil.cidade !== rascunho.cidade) S.local = null;
     S.perfil = { nome: rascunho.nome, idade, sexo: rascunho.sexo, interesse: rascunho.interesse, cidade: rascunho.cidade, bio: rascunho.bio, foto: rascunho.foto };
     salvar(); irPara(editando ? "perfil" : "quiz");
   });
@@ -765,6 +818,7 @@ function renderQuizInicio() {
   ligarBlocoCat(); ligarMinhas();
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
     const l = [...fa.files]; fa.value = ""; if (!l.length) return;
+    if (!(await consentirIA())) return;
     if (!sampleFn && !modoServidor) await prepararClaude();
     if (!sampleFn && !modoServidor) {
       const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Claude indisponível aqui</h2>
@@ -927,29 +981,73 @@ function resolverDesafio(d) {
     return pg ? { cat: c, idx: i, ref: [cid, i], q: pg[0], certa: pg[1], erradas: pg.slice(2) } : null;
   }).filter(Boolean);
 }
+// Monta o desafio a partir dos dados: do link curto (vindos do servidor) ou dos links antigos, com tudo no endereço.
+function montarDesafio(d) {
+  if (!d || !Array.isArray(d.q)) return null;
+  const mult = [1, 2, 3].includes(d.m) ? d.m : 1;
+  const fila = resolverDesafio({ m: mult, f: textoCurto(d.f, 40), q: d.q.slice(0, 40) });
+  if (!fila.length) return null;
+  const t = Math.min(Math.max(0, d.t | 0), 999);
+  const peso = typeof d.p === "number" && d.f ? pesoValido(d.p) : null;
+  return { nome: textoCurto(d.n, 30) || "Alguém", m: mult, peso, f: textoCurto(d.f, 40), t, a: Math.min(Math.max(0, d.a | 0), t), fila };
+}
 function lerDesafio() {
   const m = location.hash.match(/^#desafio=([A-Za-z0-9_-]+)$/);
   if (!m) return null;
-  try {
-    const d = decodificar(m[1]);
-    if (!d || !Array.isArray(d.q)) return null;
-    const mult = [1, 2, 3].includes(d.m) ? d.m : 1;
-    const fila = resolverDesafio({ m: mult, f: textoCurto(d.f, 40), q: d.q.slice(0, 40) });
-    if (!fila.length) return null;
-    const t = Math.min(Math.max(0, d.t | 0), 999);
-    const peso = typeof d.p === "number" && d.f ? pesoValido(d.p) : null;
-    return { nome: textoCurto(d.n, 30) || "Alguém", m: mult, peso, f: textoCurto(d.f, 40), t, a: Math.min(Math.max(0, d.a | 0), t), fila };
-  } catch { return null; }
+  try { return montarDesafio(decodificar(m[1])); } catch { return null; }
 }
-function limparLinkDesafio() { try { history.replaceState(null, "", location.pathname + location.search); } catch {} }
+// Link curto: jingar.com.br/Ab3x. As perguntas e o ranking ficam no servidor.
+const codigoDoLink = (location.pathname.match(/^\/([A-Za-z0-9]{4,6})$/) || [])[1] || null;
+let carregandoDesafio = !!codigoDoLink;
+const linkCurto = codigo => (nativo ? API : location.origin) + "/" + codigo;
+// Quem joga sem conta é identificado no ranking por um código aleatório guardado no aparelho.
+function idJogador() {
+  const novo = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), b => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"[b % 64]).join("");
+  try { let id = localStorage.getItem("jingar.jogador"); if (!id) { id = novo(); localStorage.setItem("jingar.jogador", id); } return id; }
+  catch { return idJogador.mem || (idJogador.mem = novo()); }
+}
+const nomeGuardado = () => { try { return localStorage.getItem("jingar.nome") || ""; } catch { return ""; } };
+async function chamarDesafio(corpo) {
+  let r;
+  try { r = await fetch(API + "/api/desafio", { method: "POST", headers: cabecalhos(), credentials: "same-origin", body: JSON.stringify({ ...corpo, jogador: idJogador() }) }); }
+  catch { throw { rede: true, erro: "Sem conexão. Verifique a internet e tente de novo." }; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign({}, j, { status: r.status, erro: j.erro || `Erro no servidor (código ${r.status}).` });
+  return j;
+}
+async function abrirDesafioDoLink() {
+  try {
+    const j = await chamarDesafio({ acao: "abrir", codigo: codigoDoLink });
+    const d = montarDesafio(j.desafio);
+    if (d) desafioAberto = Object.assign(d, { codigo: codigoDoLink, ranking: j.ranking, jogadores: j.jogadores, posicao: j.posicao, jaRespondeu: j.jaRespondeu });
+    else toast("Esse desafio não pode ser aberto.");
+  } catch (e) { toast(e.erro); limparLinkDesafio(); }
+  carregandoDesafio = false; render();
+}
+function htmlRanking(x) {
+  if (!x || !x.ranking || !x.ranking.length) return "";
+  return `<div class="caixa ranking"><div class="linha" style="justify-content:space-between"><strong>Ranking</strong><span class="muted" style="font-size:13px">${x.jogadores} ${x.jogadores === 1 ? "pessoa jogou" : "pessoas jogaram"}</span></div>
+    <ol>${x.ranking.map(r => `<li${r.voce ? ' class="voce"' : ""}><span class="pos">${r.pos}º</span><span class="nome">${esc(r.nome)}${r.voce ? " (você)" : ""}</span><b>${r.acertos}/${r.total}</b></li>`).join("")}</ol>
+    ${x.posicao && x.posicao > x.ranking.length ? `<p class="muted" style="margin:0;font-size:13px">Você está em ${x.posicao}º lugar.</p>` : ""}</div>`;
+}
+function limparLinkDesafio() { try { history.replaceState(null, "", (codigoDoLink ? "/" : location.pathname) + location.search); } catch {} }
 async function compartilharDesafio(r) {
   const titulo = r.arquivo ? r.cats[0].nome : r.desafio && r.desafio.f;
-  const d = { v: 1, n: S.perfil ? S.perfil.nome : "Um amigo", m: r.mult, a: r.acertos, t: r.n, q: r.hist };
+  const outro = r.desafio;
+  const d = { v: 1, n: S.perfil ? S.perfil.nome : nomeGuardado() || "Um amigo", m: r.mult, a: r.acertos, t: r.n, q: r.hist };
   if (titulo) d.f = titulo;
   if (r.peso != null) d.p = r.peso;
-  // No app, o link do desafio aponta para o site (o endereço do servidor), que abre no navegador de quem recebe.
-  const url = (nativo ? API + "/" : location.href.split("#")[0]) + "#desafio=" + codificar(d);
-  const texto = `${d.n} fez ${r.acertos} de ${r.n} no Jingar${r.peso != null ? " · " + titulo : sufixo(r.mult)}. Duvido você bater!`;
+  let url;
+  // Desafio que veio de um link curto: compartilha o mesmo link, e o ranking cresce. Senão, cria um link curto novo.
+  if (outro && outro.codigo) url = linkCurto(outro.codigo);
+  else if (!semServidor) {
+    try { if (!r.codigo) r.codigo = (await chamarDesafio({ acao: "criar", desafio: d })).codigo; } catch (e) { toast(e.erro); return; }
+    url = linkCurto(r.codigo);
+  }
+  // Sem servidor (demonstração), o link leva o desafio inteiro no endereço.
+  else url = (nativo ? API + "/" : location.href.split("#")[0]) + "#desafio=" + codificar(d);
+  const texto = outro && outro.codigo ? `Fiz ${r.acertos} de ${outro.fila.length} no desafio de ${outro.nome} no Jingar. Duvido você bater!`
+    : `${d.n} fez ${r.acertos} de ${r.n} no Jingar${r.peso != null ? " · " + titulo : sufixo(r.mult)}. Duvido você bater!`;
   if (navigator.share) {
     try { await navigator.share({ title: "Desafio no Jingar", text: texto, url }); return; }
     catch (e) { if (e && e.name === "AbortError") return; }
@@ -968,6 +1066,8 @@ async function compartilharDesafio(r) {
 }
 function renderDesafioIntro() {
   const d = desafioAberto;
+  // Sem perfil, a pessoa diz o nome que vai aparecer no ranking.
+  const pedeNome = d.codigo && !d.jaRespondeu && !(S.perfil && S.perfil.nome);
   const nomes = [...new Set(d.fila.map(x => x.cat.nome))];
   const assunto = d.f || (nomes.length === 1 ? nomes[0] : "assuntos variados");
   tela.innerHTML = `
@@ -978,10 +1078,20 @@ function renderDesafioIntro() {
       <div class="grande">${d.a}/${d.t}</div>
       <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${fmtNivel(d.peso ?? d.m)} ${(d.peso ?? d.m) === 1 ? "nível" : "níveis"}.</p>
     </div>
+    ${htmlRanking(d)}
+    ${d.jaRespondeu ? `<p class="aviso" style="margin:0">Você já respondeu este desafio. Pode jogar de novo, mas no ranking vale a primeira tentativa.</p>` : ""}
+    ${pedeNome ? `<div class="campo"><label for="nomeR">Seu nome no ranking</label><input id="nomeR" maxlength="20" autocomplete="given-name" value="${esc(nomeGuardado())}"></div><div class="erro" id="nomeErro"></div>` : ""}
     <button class="btn bloco ${d.peso != null ? "" : classeModo(d.m)}" type="button" id="aceitarD">Aceitar desafio</button>
     <button class="link" type="button" id="recusarD">Agora não</button>
   </div>`;
-  $("#aceitarD").addEventListener("click", () => iniciarDesafio(d));
+  $("#aceitarD").addEventListener("click", () => {
+    if (pedeNome) {
+      const nome = $("#nomeR").value.replace(/\s+/g, " ").trim().slice(0, 20);
+      if (!nome) { $("#nomeErro").textContent = "Digite seu nome para entrar no ranking."; return; }
+      try { localStorage.setItem("jingar.nome", nome); } catch {}
+    }
+    iniciarDesafio(d);
+  });
   $("#recusarD").addEventListener("click", () => { desafioAberto = null; limparLinkDesafio(); render(); });
 }
 function iniciarDesafio(d) {
@@ -993,6 +1103,13 @@ function iniciarDesafio(d) {
 }
 function renderResultadoDesafio() {
   const r = rodada, d = r.desafio;
+  // O placar vai para o ranking uma vez só (no servidor vale a primeira tentativa).
+  if (d.codigo && !r.enviado) {
+    r.enviado = true;
+    chamarDesafio({ acao: "responder", codigo: d.codigo, nome: S.perfil && S.perfil.nome ? S.perfil.nome : nomeGuardado(), acertos: r.acertos, total: d.fila.length })
+      .then(j => { r.rank = j; }).catch(e => { r.rank = { erro: e.erro }; })
+      .then(() => { if (rodada === r && aba === "quiz") render(); });
+  }
   const veredito = r.acertos > d.a ? "Você venceu!" : r.acertos === d.a ? "Empatou!" : `${d.nome} venceu`;
   tela.innerHTML = `
   <div class="pilha entra" style="padding-top:8px">
@@ -1003,7 +1120,9 @@ function renderResultadoDesafio() {
       <p style="margin:0">Você ganhou <b>+${fmtNivel(r.pontos)}</b> ${r.pontos === 1 ? "nível" : "níveis"} e está no nível ${fmtNivel(S.nivel)}.</p>
       ${r.n < d.fila.length ? `<p class="muted" style="margin:0;font-size:14px">Você encerrou antes do fim: respondeu ${r.n} de ${d.fila.length}.</p>` : ""}
     </div>
-    ${S.perfil ? `${r.n ? `<button class="btn bloco" type="button" id="devolver">Desafiar de volta</button>` : ""}
+    ${d.codigo ? r.rank ? r.rank.erro ? `<p class="aviso" style="margin:0">Não foi possível entrar no ranking: ${esc(r.rank.erro)}</p>` : htmlRanking(r.rank) : `<p class="muted" style="margin:0;text-align:center">Enviando para o ranking…</p>` : ""}
+    ${d.codigo ? `<button class="btn bloco" type="button" id="devolver">Compartilhar este desafio</button>` : ""}
+    ${S.perfil ? `${r.n && !d.codigo ? `<button class="btn bloco" type="button" id="devolver">Desafiar de volta</button>` : ""}
       <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="outra">Jogar um quiz</button><button class="btn sec" type="button" id="ver">Ver pessoas</button></div>`
     : `<button class="btn bloco" type="button" id="criar">Criar perfil e guardar ${fmtNivel(S.nivel)} ${S.nivel === 1 ? "nível" : "níveis"}</button>`}
   </div>`;
@@ -1336,6 +1455,7 @@ async function criarCategoria(tema) {
   if (tarefaCat && (tarefaCat.etapa === "avaliando" || tarefaCat.etapa === "criando")) { toast("Já tem uma categoria sendo criada"); return; }
   if (tema.length < 2) { toast("Digite um tema"); return; }
   if (!podeCriar()) { toast("Limite de categorias atingido"); return; }
+  if (!(await consentirIA())) return;
   if (!sampleFn && !modoServidor) await prepararClaude();
   if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
   const dificuldade = difCat;
@@ -1437,7 +1557,13 @@ const perfilReal = r => Object.assign({ prof: "" }, r, { nome: r.nome || "", hue
 async function carregarFila() {
   if (carregandoFila) return;
   carregandoFila = true;
-  try { filaReal = (await chamarSocial({ acao: "descobrir" })).perfis.map(perfilReal); } catch (e) { if (filaReal == null) filaReal = []; toast(e.erro); }
+  try {
+    let j = await chamarSocial({ acao: "descobrir" });
+    // A localização do aparelho ainda não chegou ao servidor: salva agora e busca de novo.
+    if (j.semLocal && S.local) { clearTimeout(timerConta); await salvarConta(); j = await chamarSocial({ acao: "descobrir" }); }
+    if (j.semLocal) { S.local = null; salvar(); }
+    filaReal = j.perfis.map(perfilReal);
+  } catch (e) { if (filaReal == null) filaReal = []; toast(e.erro); }
   filaEm = Date.now(); carregandoFila = false;
 }
 async function atualizarResumo() {
@@ -1464,6 +1590,8 @@ function iniciarAcompanhamento() {
   clearInterval(timerMatches);
   if (!modoReal()) return;
   if (nativo) registrarPushApp();
+  // Com a permissão já dada, a posição é atualizada em silêncio a cada abertura do app.
+  pegarLocal(false);
   carregarMatches(); atualizarResumo();
   timerMatches = setInterval(carregarMatches, 20000);
 }
@@ -1501,6 +1629,7 @@ function renderDescobrir() {
     carregarFila().then(() => { if (aba === "descobrir") render(); });
     if (primeira) { tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Procurando pessoas…</p></div>`; return; }
   }
+  if (modoReal() && Date.now() - (S.local.em || 0) > 1800000) pegarLocal(false).then(() => { if (!S.local && aba === "descobrir") render(); });
   const p = fila()[0];
   if (!p) {
     const g = proximoGrupo();
@@ -1524,7 +1653,7 @@ function renderDescobrir() {
       <div class="foto" style="${foto}">${livre && p.foto ? "" : esc(iniciais(p.nome || "?"))}${livre ? `<span class="nivel-tag">nível ${fmtNivel(p.nivel)}</span>` : ""}</div>
       <div class="info">
         <div class="nome">${esc(livre ? p.nome : "••••••")} <span>${p.idade || ""}</span></div>
-        <div class="muted">${esc([p.prof, p.cidade].filter(Boolean).join(" · "))}${distanciaKm(p) != null ? ` · a ${distanciaKm(p)} km` : ""}</div>
+        <div class="muted">${esc([p.prof, p.cidade, distanciaKm(p) == null ? "" : distanciaKm(p) < 1 ? "a menos de 1 km" : `a ${distanciaKm(p)} km`].filter(Boolean).join(" · "))}</div>
         ${livre && p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
         ${p.real && p.curtiuVoce ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Essa pessoa curtiu você.</p>` : ""}
         ${livre && !p.real && !meVe(p) ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Seu perfil não aparece para o nível ${p.nivel}. Ajuste em Filtros para ter chance de match.</p>` : ""}
@@ -1540,9 +1669,10 @@ function renderDescobrir() {
       ${livre ? `<button class="btn sec" type="button" id="passar">Passar</button><button class="btn" type="button" id="curtir">Curtir</button>`
               : `<button class="btn sec" type="button" id="pular" style="grid-column:1/-1">Ver próximo</button>`}
     </div>
-    <button class="link" type="button" id="denunciar" style="display:block;margin:10px auto 0;font-size:13px">Denunciar perfil</button>
+    <div class="linha" style="justify-content:center;gap:20px;margin-top:10px"><button class="link" type="button" id="bloquearP" style="font-size:13px">Bloquear</button><button class="link" type="button" id="denunciar" style="font-size:13px">Denunciar perfil</button></div>
   </div>`;
   $("#filtros").addEventListener("click", abrirFiltros);
+  $("#bloquearP").addEventListener("click", () => bloquear(p, livre));
   $("#denunciar").addEventListener("click", () => denunciar(p, livre));
   if (livre) {
     $("#passar").addEventListener("click", () => {
@@ -1758,13 +1888,25 @@ function denunciar(p, mostraNome) {
     encerrarContato(p.id); salvar(); v.remove(); toast("Denúncia enviada"); render();
   });
 }
+function bloquear(p, mostraNome) {
+  const v = folha(`<h2>Bloquear ${mostraNome ? esc(p.nome) : "este perfil"}?</h2><p class="muted" style="margin:0">Vocês deixam de se ver no Jingar. Se houver match, ele é desfeito e a conversa é apagada.</p>
+    <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Bloquear</button><button class="link" type="button" id="nao">Cancelar</button>`);
+  v.querySelector("#nao").addEventListener("click", () => v.remove());
+  v.querySelector("#sim").addEventListener("click", () => {
+    S.bloqueados = [...new Set([...(S.bloqueados || []), p.id])];
+    if (conta) chamarConta({ acao: "bloquear", alvo: p.id }).catch(() => {});
+    encerrarContato(p.id); salvar(); v.remove(); toast("Perfil bloqueado"); render();
+  });
+}
 function menuChat(p) {
   const v = folha(`<h2>${esc(p.nome)}</h2>
     <button class="btn sec bloco" type="button" id="mDesfazer">Desfazer match</button>
+    <button class="btn sec bloco" type="button" id="mBloquear">Bloquear</button>
     <button class="btn sec bloco" type="button" id="mDenunciar" style="color:var(--bad)">Denunciar</button>
     <button class="link" type="button" id="mFechar">Cancelar</button>`);
   v.querySelector("#mFechar").addEventListener("click", () => v.remove());
   v.querySelector("#mDesfazer").addEventListener("click", () => { v.remove(); desfazerMatch(p); });
+  v.querySelector("#mBloquear").addEventListener("click", () => { v.remove(); bloquear(p, true); });
   v.querySelector("#mDenunciar").addEventListener("click", () => { v.remove(); denunciar(p, true); });
 }
 // Redesenha só as mensagens, sem apagar o que a pessoa está digitando.
@@ -2087,6 +2229,8 @@ function renderEscolherUsuario() {
     catch (x) { $("#contaErro").textContent = x.erro; }
   });
 }
+// Antes do primeiro envio, avisa que o tema ou o arquivo vai para a Anthropic (Claude) criar as perguntas.
+const consentirIA = () => explicarPermissao("avisoIA", "Perguntas criadas por IA", "Para criar as perguntas, o tema ou o conteúdo do arquivo é enviado à Anthropic, empresa que faz o Claude, nossa inteligência artificial. Não enviamos seu nome, e-mail nem outros dados da conta. As perguntas podem ter erros.");
 // Explica por que o app pede uma permissão antes de o navegador ou o sistema perguntar.
 function explicarPermissao(chave, titulo, texto) {
   if (S[chave]) return Promise.resolve(true);
@@ -2153,7 +2297,7 @@ function renderPerfil() {
   const melhorNome = melhor ? CATS.find(c => c.id === melhor[0]).nome : "—";
   tela.innerHTML = `
   <div class="pilha entra">
-    <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${esc(pf.cidade || "Complete seu perfil")}</div></div></div>
+    <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${conta && conta.usuario ? "@" + esc(conta.usuario) : "Nível " + fmtNivel(S.nivel)}</div></div></div>
     ${pf.bio ? `<p style="margin:0">${esc(pf.bio)}</p>` : ""}
     <div class="stats">
       <div class="stat"><b style="color:var(--gold)">${fmtNivel(S.nivel)}</b><span>nível</span></div>
@@ -2166,11 +2310,11 @@ function renderPerfil() {
       <div class="seg quatro" id="pInteresse">${[["F", "Mulheres"], ["M", "Homens"], ["T", "Ambos"], ["N", "Ninguém"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${pf.interesse === v}">${t}</button>`).join("")}</div>
     </div>
     <div class="caixa"><div class="chave"><div><strong>Filtros</strong><div class="muted" style="font-size:13px">${resumoFiltros()}</div></div><button class="btn sec" type="button" id="pFiltros" style="padding:8px 14px">Ajustar</button></div></div>
-    <div class="caixa">
+    ${semServidor ? `<div class="caixa">
       <div class="chave"><div><strong>Meu Passe Direto</strong><div class="muted" style="font-size:13px">Quem ainda não chegou no seu nível pode furar a fila e aparecer pra você.</div></div>
         <button class="toggle" type="button" role="switch" id="tPasse" aria-checked="${S.meuPasse.ativo}" aria-label="Aceitar Passe Direto"></button></div>
       <div class="campo" ${S.meuPasse.ativo ? "" : "hidden"} id="cPasse"><label for="vPasse">Valor (R$)</label><input id="vPasse" type="number" inputmode="numeric" min="10" step="10" value="${S.meuPasse.valor}"></div>
-    </div>
+    </div>` : ""}
     <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${modoReal() ? "Pessoas com quem você deu match" : `${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados`}</div></div><b style="font-family:var(--f-mono)">${modoReal() ? (matchesReal || []).length : S.matches.length}</b></div></div>
     ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
     ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>@${esc(conta.usuario)}</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div></div>` : ""}
@@ -2184,7 +2328,7 @@ function renderPerfil() {
     pf.interesse = b.dataset.v; salvar(); toast(b.dataset.v === "N" ? "Match desligado" : "Match ativado"); render();
   });
   $("#pFiltros").addEventListener("click", abrirFiltros);
-  $("#tPasse").addEventListener("click", () => { S.meuPasse.ativo = !S.meuPasse.ativo; salvar(); render(); });
+  const tp = $("#tPasse"); if (tp) tp.addEventListener("click", () => { S.meuPasse.ativo = !S.meuPasse.ativo; salvar(); render(); });
   const vp = $("#vPasse"); if (vp) vp.addEventListener("change", () => { const n = Math.max(10, Math.round(Number(vp.value) || 0)); S.meuPasse.valor = n; vp.value = n; salvar(); toast("Valor salvo"); });
   $("#editar").addEventListener("click", () => renderCadastro(true));
   const sc = $("#sairConta"); if (sc) sc.addEventListener("click", sairDaConta);
@@ -2202,6 +2346,7 @@ function renderPerfil() {
 // Link de teste: zera o limite de criação de categorias e libera 10 criações extras neste navegador.
 if (location.hash === "#liberar-teste") { S.criacoes = []; S.extraCriacoes = 10; salvar(); limparLinkDesafio(); setTimeout(() => toast("Limite zerado: +10 categorias"), 300); }
 desafioAberto = lerDesafio();
+if (codigoDoLink) abrirDesafioDoLink();
 ligarNativo();
 render();
 iniciarConta();
