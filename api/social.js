@@ -12,7 +12,8 @@ function publico(p, meuNivel) {
   const livre = Number(p.nivel) <= meuNivel || !!p.curtiuVoce;
   return {
     id: p.id, nivel: Number(p.nivel), idade: p.idade, distancia: p.distancia == null ? null : Number(p.distancia), livre,
-    nome: livre ? p.nome : null, bio: livre ? p.bio : null, foto: livre ? urlMidia(p.foto_id) : null
+    nome: livre ? p.nome : null, bio: livre ? p.bio : null, foto: livre ? urlMidia(p.foto_id) : null,
+    fotos: livre ? (Array.isArray(p.fotos) && p.fotos.length ? p.fotos : p.foto_id ? [p.foto_id] : []).map(urlMidia) : []
   };
 }
 
@@ -26,9 +27,10 @@ function distancia(a, b) {
 
 // Candidatos compatíveis: interesse dos dois lados, sem avaliação ou bloqueio, dentro dos filtros de nível e visibilidade.
 async function candidatos(eu, { incluirAvaliados = false } = {}) {
-  const lista = await sql`SELECT p.usuario_id AS id, p.nome, p.idade, p.sexo, p.interesse, p.cidade, p.bio, p.foto_id, p.lat, p.lng, p.nivel, p.vis_min
+  const lista = await sql`SELECT p.usuario_id AS id, p.nome, p.idade, p.sexo, p.interesse, p.cidade, p.bio, p.foto_id, p.fotos, p.lat, p.lng, p.nivel, p.vis_min
     FROM perfis p JOIN usuarios u ON u.id = p.usuario_id
     WHERE p.usuario_id <> ${eu.usuario_id} AND NOT u.banido AND u.verificado AND p.interesse <> 'N' AND u.teste = ${!!eu.teste}
+      AND (p.foto_id IS NOT NULL OR u.teste)
       AND (${eu.interesse} = 'T' OR p.sexo = ${eu.interesse})
       AND (p.interesse = 'T' OR p.interesse = ${eu.sexo})
     LIMIT 500`;
@@ -88,9 +90,12 @@ export default async function handler(req, res) {
 
     // Sem localização do aparelho não há Descobrir nem match: o app pede a permissão antes.
     const semLocal = !eu || eu.lat == null || eu.lng == null;
+    // Foto também é obrigatória (as contas de teste da revisão das lojas ficam de fora).
+    const semFoto = !eu || (!eu.foto_id && !u.teste);
     if (b.acao === "descobrir") {
       if (!eu || eu.interesse === "N") return res.status(200).json({ perfis: [] });
       if (semLocal) return res.status(200).json({ perfis: [], semLocal: true });
+      if (semFoto) return res.status(200).json({ perfis: [], semFoto: true });
       const lista = await candidatos(eu);
       // Intercala: dois perfis liberados (do maior nível para o menor) e um bloqueado (o mais próximo do seu nível).
       const livre = p => Number(p.nivel) <= meuNivel || p.curtiuVoce;
@@ -122,6 +127,7 @@ export default async function handler(req, res) {
       if (!uuidValido(b.alvo)) throw falha(400, "Perfil inválido.");
       if (b.acao === "curtir") {
         if (semLocal) throw falha(403, "Ative a localização para dar match.");
+        if (semFoto) throw falha(403, "Adicione uma foto ao seu perfil para dar match.");
         const [alvo] = (await candidatos(eu, { incluirAvaliados: true })).filter(p => p.id === b.alvo);
         if (!alvo) throw falha(404, "Esse perfil não está mais disponível.");
         if (Number(alvo.nivel) > meuNivel && !alvo.curtiuVoce) throw falha(403, "Suba de nível para curtir esse perfil.");

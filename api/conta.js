@@ -6,7 +6,7 @@
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
 import { lerToken, gravarCookie, usuarioDaSessao, falha, cors } from "./_sessao.js";
-import { sincronizarPerfil, urlMidia } from "./_perfil.js";
+import { sincronizarPerfil, guardarFotoConferida, urlMidia, MAX_FOTOS } from "./_perfil.js";
 import { hashSenha, confereSenha, novoToken, hashToken, usuarioValido, emailValido, senhaValida, verificaTokenProvedor, normalizaTelefone, novoCodigo } from "./_auth.js";
 
 const DIAS_SESSAO = 30, MAX_ESTADO = 1500000, MAX_FALHAS = 5;
@@ -28,7 +28,7 @@ const mascaraEmail = e => e.replace(/^(.)[^@]*(@.*)$/, "$1***$2");
 const mascaraTelefone = t => `(${t.slice(3, 5)}) *****-${t.slice(-4)}`;
 const publico = u => ({
   usuario: u.usuario, email: u.email, telefone: u.telefone ? mascaraTelefone(u.telefone) : null, idade: idadeDe(u.nascimento),
-  temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub
+  temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub, teste: !!u.teste
 });
 // "contato" é um e-mail ou um celular; o tipo decide o canal do código.
 function lerContato(x) {
@@ -227,9 +227,11 @@ const MOTIVOS = ["Perfil falso", "Fotos ou conteúdo impróprio", "Assédio ou o
 // O progresso guarda o endereço da foto; ao entrar, o endereço é refeito para valer com a assinatura atual.
 async function estadoAtual(u) {
   const e = u.estado;
-  if (e && e.perfil && typeof e.perfil.foto === "string" && e.perfil.foto.startsWith("/api/midia")) {
-    const [p] = await sql`SELECT foto_id FROM perfis WHERE usuario_id = ${u.id}`;
-    e.perfil.foto = p && p.foto_id ? urlMidia(p.foto_id) : null;
+  // Os endereços das fotos vêm sempre do servidor (assinados), na ordem do perfil.
+  if (e && e.perfil) {
+    const [p] = await sql`SELECT foto_id, fotos FROM perfis WHERE usuario_id = ${u.id}`;
+    const ids = p ? (Array.isArray(p.fotos) && p.fotos.length ? p.fotos : p.foto_id ? [p.foto_id] : []) : null;
+    if (ids) { e.perfil.fotos = ids.map(urlMidia); e.perfil.foto = e.perfil.fotos[0] || null; }
   }
   return e;
 }
@@ -281,9 +283,17 @@ export default async function handler(req, res) {
       if (!estadoAceito(b.estado)) throw falha(413, "Progresso grande demais para salvar na conta.");
       // O perfil público acompanha o progresso; a foto enviada vira mídia e o progresso guarda só o endereço dela.
       const r = await sincronizarPerfil(u, b.estado, b.local);
-      if (r.foto) b.estado.perfil.foto = r.foto;
+      if (r.fotos && b.estado.perfil) { b.estado.perfil.fotos = r.fotos; b.estado.perfil.foto = r.fotos[0] || null; }
       await sql`UPDATE usuarios SET estado = ${JSON.stringify(b.estado)}::jsonb WHERE id = ${u.id}`;
       return res.status(200).json({ ok: true, ...r });
+    }
+    // Foto nova do perfil: o Claude confere se mostra uma pessoa antes de guardar. O app recebe o endereço.
+    if (b.acao === "foto") {
+      const [{ n }] = await sql`SELECT count(*)::int AS n FROM midias WHERE dono_id = ${u.id} AND tipo = 'foto' AND criado_em > now() - interval '1 hour'`;
+      if (n >= 20) throw falha(429, "Muitas fotos enviadas. Tente de novo em uma hora.");
+      const id = await guardarFotoConferida(u.id, b.foto);
+      if (!id) throw falha(400, "Foto inválida ou grande demais. Use JPG ou PNG.");
+      return res.status(200).json({ foto: urlMidia(id), max: MAX_FOTOS });
     }
     if (b.acao === "denunciar") {
       const alvo = typeof b.alvo === "string" ? b.alvo.slice(0, 64) : "";

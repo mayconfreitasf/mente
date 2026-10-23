@@ -37,6 +37,10 @@ export function prepararBanco() {
       lat double precision, lng double precision,
       nivel numeric NOT NULL DEFAULT 0, ver_min numeric NOT NULL DEFAULT 0, vis_min numeric NOT NULL DEFAULT 0, raio int,
       atualizado_em timestamptz NOT NULL DEFAULT now())`;
+    // Até 5 fotos por perfil (ids de midias, na ordem); foto_id continua sendo a principal.
+    await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS fotos jsonb`;
+    await sql`CREATE TABLE IF NOT EXISTS ia_uso (
+      id bigserial PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, criado_em timestamptz NOT NULL DEFAULT now())`;
     await sql`CREATE TABLE IF NOT EXISTS midias (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), dono_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
       tipo text NOT NULL, mime text NOT NULL, dados text NOT NULL, criado_em timestamptz NOT NULL DEFAULT now())`;

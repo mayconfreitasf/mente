@@ -1,13 +1,16 @@
 // Função de servidor (Vercel) que cria as perguntas do "Quiz do seu arquivo".
 // Usa a chave ANTHROPIC_API_KEY configurada no projeto da Vercel; ela nunca vai para o navegador.
 import Anthropic from "@anthropic-ai/sdk";
-import { cors } from "./_sessao.js";
+import { cors, usuarioDaSessao } from "./_sessao.js";
+import { sql, prepararBanco } from "./_banco.js";
 
 const client = new Anthropic();
 const MODELO = process.env.MODELO || "claude-opus-5-5";
 // Modelos que aceitam o parâmetro "fallbacks" (outro modelo assume se este recusar o pedido).
 const COM_FALLBACK = new Set(["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"]);
 const LIMITE_TEXTO = 40000;
+// Cada chamada ao Claude custa: só quem tem conta usa, com limite por hora e por dia.
+const IA_POR_HORA = 60, IA_POR_DIA = 300;
 const MAX_IMAGENS = 5;
 
 // Dificuldade por modo: 1 = Normal, 2 = Dobro nível, 3 = Triplo nível.
@@ -84,6 +87,17 @@ export default async function handler(req, res) {
 
   const codigo = process.env.CODIGO_ACESSO;
   if (codigo && b.codigo !== codigo) return res.status(401).json({ erro: "Código de acesso inválido." });
+  if (sql) {
+    try {
+      await prepararBanco();
+      const u = await usuarioDaSessao(req);
+      if (!u || u.banido) return res.status(403).json({ erro: "Entre na sua conta para criar perguntas com IA." });
+      const [{ h }] = await sql`SELECT count(*)::int AS h FROM ia_uso WHERE usuario_id = ${u.id} AND criado_em > now() - interval '1 hour'`;
+      const [{ d }] = await sql`SELECT count(*)::int AS d FROM ia_uso WHERE usuario_id = ${u.id} AND criado_em > now() - interval '1 day'`;
+      if (h >= IA_POR_HORA || d >= IA_POR_DIA) return res.status(429).json({ erro: "Você atingiu o limite de criações com IA por agora. Tente de novo mais tarde." });
+      await sql`INSERT INTO ia_uso (usuario_id) VALUES (${u.id})`;
+    } catch (e) { console.error(e); return res.status(500).json({ erro: "Erro no servidor." }); }
+  }
   if (typeof b.tema === "string") {
     const dificuldade = Object.hasOwn(DIFICULDADE_TEMA, b.dificuldade) ? b.dificuldade : "facil";
     const evitarTema = Array.isArray(b.evitar) ? b.evitar.filter(x => typeof x === "string").slice(-120).map(x => x.slice(0, 200)) : [];
