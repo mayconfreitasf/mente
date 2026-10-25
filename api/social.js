@@ -150,8 +150,16 @@ export default async function handler(req, res) {
       const [reciproco] = await sql`SELECT 1 FROM avaliacoes WHERE de_id = ${b.alvo} AND para_id = ${u.id} AND tipo = 'curtir'`;
       if (!reciproco) return res.status(200).json({ match: false });
       const [a, z] = [u.id, b.alvo].sort();
-      await sql`INSERT INTO matches (a_id, b_id) VALUES (${a}, ${z}) ON CONFLICT (a_id, b_id) DO NOTHING`;
+      const novo = (await sql`INSERT INTO matches (a_id, b_id) VALUES (${a}, ${z}) ON CONFLICT (a_id, b_id) DO NOTHING RETURNING id`).length > 0;
       const [m] = await sql`SELECT id FROM matches WHERE a_id = ${a} AND b_id = ${z}`;
+      // Prova padrão do perfil: quem ligou "pedir em todo match novo" já começa o match pedindo a prova.
+      if (novo) for (const [de, para] of [[u.id, b.alvo], [b.alvo, u.id]]) {
+        const [d] = await sql`SELECT estado FROM usuarios WHERE id = ${de}`;
+        const pp = d && d.estado && d.estado.provaPadrao;
+        if (!pp || !pp.auto || !nomeDoAssunto(String(pp.assunto || ""))) continue;
+        const qtd = pp.qtd === 10 ? 10 : 5, minimo = Math.min(qtd, Math.max(1, Math.round(Number(pp.minimo) || 0)));
+        await sql`INSERT INTO provas (match_id, de_id, para_id, assunto, qtd, minimo) VALUES (${m.id}, ${de}, ${para}, ${pp.assunto}, ${qtd}, ${minimo}) ON CONFLICT (match_id, de_id) DO NOTHING`;
+      }
       await avisar(b.alvo, "Deu match!", `Você e ${eu.nome || "alguém"} curtiram um ao outro.`, { tipo: "match", match: String(m.id) });
       return res.status(200).json({ match: true, matchId: Number(m.id) });
     }

@@ -908,7 +908,7 @@ function renderQuizInicio() {
       <button class="btn bloco ${classeModo(mult)}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
     </div>
     <div class="caixa extras">
-      <div><strong>Criar quiz</strong><div class="muted" style="font-size:13px">A IA cria as perguntas a partir de um arquivo seu ou de um tema.</div></div>
+      <strong>Criar quiz</strong>
       <div class="chave"><div><b style="font-size:14px">Com um arquivo</b><div class="muted" style="font-size:12px">PDF, texto ou fotos (até 5 MB cada)</div></div><label class="btn sec mini" for="fArq">Anexar</label></div>
       <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
       <div class="pilha" style="gap:10px" id="blocoCat">${htmlBlocoCat()}</div>
@@ -2077,7 +2077,9 @@ function denunciar(p, mostraNome) {
 const matchAtual = () => (matchesReal || []).find(x => x.id === chatAberto) || null;
 const provaPendenteParaMim = () => { const m = matchAtual(); return !!(m && m.provaParaMim && m.provaParaMim.status === "pendente"); };
 function htmlProvaPedida() {
-  const m = matchAtual(), pr = m && m.provaPedida; if (!pr) return "";
+  const m = matchAtual(), pr = m && m.provaPedida;
+  // Ainda sem prova pedida: atalho visível no topo da conversa (também fica no menu ⋯).
+  if (!pr) return m && !(msgsReal[m.id] || []).length ? `<div class="caixa" style="padding:10px 12px;margin-bottom:8px;flex-direction:row;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:13px">Quer uma prova antes de conversar?</span><button class="btn sec mini" type="button" id="pedirProvaTopo" style="flex:none">Pedir prova</button></div>` : "";
   const txt = pr.status === "aprovada" ? `Passou na sua prova: <b>${pr.ultima} de ${pr.qtd}</b> em ${esc(pr.nomeAssunto)}.`
     : `Você pediu uma prova: ${pr.qtd} perguntas de ${esc(pr.nomeAssunto)}, mínimo ${pr.minimo}.${pr.tentativas ? ` Tentativas: ${pr.tentativas} · melhor ${pr.melhor} de ${pr.qtd}.` : " Ainda não tentou."}`;
   return `<div class="caixa" style="padding:10px 12px;font-size:13px;margin-bottom:8px">${txt}</div>`;
@@ -2088,16 +2090,19 @@ function htmlProvaParaMim(p) {
     <span class="muted" style="font-size:13px">${pr.qtd} perguntas de ${esc(pr.nomeAssunto)}. Precisa acertar ${pr.minimo}.${pr.tentativas ? ` Sua última nota: ${pr.ultima} de ${pr.qtd}.` : ""}</span>
     ${pr.restantes >= pr.qtd ? `<button class="btn bloco" type="button" id="fazerProva">${pr.tentativas ? "Tentar de novo (perguntas novas)" : "Fazer a prova"}</button>` : `<span class="aviso" style="margin:0">Acabaram as perguntas novas desse assunto. ${esc(p.nome)} precisa trocar o assunto da prova.</span>`}</div>`;
 }
-function pedirProva(matchId, p) {
-  const m = (matchesReal || []).find(x => x.id === matchId), atual = m && m.provaPedida;
-  let qtd = atual ? atual.qtd : 5, assunto = atual ? atual.assunto : CATS[0].id;
-  const v = folha(`<span class="rotulo">Prova para ${esc(p.nome)}</span><h2>Antes de conversar, uma prova</h2>
-    <p class="muted" style="margin:0">${esc(p.nome)} só consegue escrever depois de passar. Pode tentar quantas vezes quiser, sempre com perguntas novas.</p>
-    <div class="campo"><label>Assunto</label><select id="pvAssunto">${CATS.map(c => `<option value="${c.id}" ${c.id === assunto ? "selected" : ""}>${esc(c.nome)}</option>`).join("")}</select></div>
+// Prova padrão (Perfil): assunto, tamanho e mínimo que já vêm preenchidos; "auto" pede em todo match novo.
+const provaPadrao = () => Object.assign({ assunto: CATS[0] ? CATS[0].id : "", qtd: 5, minimo: 3, auto: false }, S.provaPadrao || {});
+const nomeAssunto = id => (CATS.find(c => c.id === id) || {}).nome || id;
+// Formulário da prova (assunto, 5 ou 10 perguntas, mínimo). Devolve a folha e uma função que lê os valores.
+function folhaProva(topo, base, botao, extra = "") {
+  let qtd = base.qtd === 10 ? 10 : 5;
+  const v = folha(`${topo}
+    <div class="campo"><label>Assunto</label><select id="pvAssunto">${CATS.map(c => `<option value="${c.id}" ${c.id === base.assunto ? "selected" : ""}>${esc(c.nome)}</option>`).join("")}</select></div>
     <div class="campo"><label>Número de perguntas</label><div class="seg" id="pvQtd" style="grid-template-columns:1fr 1fr"><button type="button" data-q="5" aria-pressed="${qtd === 5}">5</button><button type="button" data-q="10" aria-pressed="${qtd === 10}">10</button></div></div>
-    <div class="campo"><label for="pvMin">Para passar, acertar pelo menos: <b id="pvMinTxt"></b></label><input id="pvMin" type="range" min="1" max="${qtd}" step="1" value="${atual ? atual.minimo : Math.ceil(qtd * 0.6)}"></div>
+    <div class="campo"><label for="pvMin">Para passar, acertar pelo menos: <b id="pvMinTxt"></b></label><input id="pvMin" type="range" min="1" max="${qtd}" step="1" value="${Math.min(qtd, base.minimo || Math.ceil(qtd * 0.6))}"></div>
+    ${extra}
     <div class="erro" id="pvErro"></div>
-    <button class="btn bloco" type="button" id="pvOk">${atual ? "Trocar a prova" : "Pedir a prova"}</button><button class="link" type="button" id="pvNao">Cancelar</button>`);
+    <button class="btn bloco" type="button" id="pvOk">${botao}</button><button class="link" type="button" id="pvNao">Cancelar</button>`);
   const min = v.querySelector("#pvMin"), pintar = () => { v.querySelector("#pvMinTxt").textContent = `${min.value} de ${qtd}`; };
   min.addEventListener("input", pintar); pintar();
   v.querySelectorAll("#pvQtd button").forEach(b => b.addEventListener("click", () => {
@@ -2105,9 +2110,22 @@ function pedirProva(matchId, p) {
     min.max = qtd; min.value = Math.ceil(qtd * 0.6); pintar();
   }));
   v.querySelector("#pvNao").addEventListener("click", () => v.remove());
+  return { v, ler: () => ({ assunto: v.querySelector("#pvAssunto").value, qtd, minimo: Number(min.value) }) };
+}
+function ajustarProvaPadrao() {
+  const pp = provaPadrao();
+  const { v, ler } = folhaProva(`<span class="rotulo">Prova para conversar</span><h2>Sua prova padrão</h2>
+    <p class="muted" style="margin:0">Vem preenchida quando você pede uma prova num match. Dá para mudar a cada pedido.</p>`, pp, "Salvar");
+  v.querySelector("#pvOk").addEventListener("click", () => { S.provaPadrao = Object.assign(provaPadrao(), ler()); salvar(); v.remove(); toast("Prova padrão salva"); render(); });
+}
+function pedirProva(matchId, p) {
+  const m = (matchesReal || []).find(x => x.id === matchId), atual = m && m.provaPedida;
+  const { v, ler } = folhaProva(`<span class="rotulo">Prova para ${esc(p.nome)}</span><h2>Antes de conversar, uma prova</h2>
+    <p class="muted" style="margin:0">${esc(p.nome)} só consegue escrever depois de passar. Pode tentar quantas vezes quiser, sempre com perguntas novas.</p>`,
+    atual || provaPadrao(), atual ? "Trocar a prova" : "Pedir a prova");
   v.querySelector("#pvOk").addEventListener("click", async () => {
     try {
-      const j = await chamarSocial({ acao: "pedirProva", match: matchId, assunto: v.querySelector("#pvAssunto").value, qtd, minimo: Number(min.value) });
+      const j = await chamarSocial(Object.assign({ acao: "pedirProva", match: matchId }, ler()));
       if (m) m.provaPedida = j.prova;
       v.remove(); toast("Prova pedida"); if (chatAberto === matchId) render();
     } catch (e) { v.querySelector("#pvErro").textContent = e.erro; }
@@ -2296,6 +2314,7 @@ function renderChat() {
   $("#opcoesChat").addEventListener("click", () => menuChat(p));
   $("#verPerfilChat").addEventListener("click", () => verPerfil(p));
   const fp = $("#fazerProva"); if (fp) fp.addEventListener("click", () => fazerProva(chatAberto, p));
+  const ppt = $("#pedirProvaTopo"); if (ppt) ppt.addEventListener("click", () => pedirProva(chatAberto, p));
   if (!$("#fMsg")) { pintarMensagens(); if (modoReal()) { clearInterval(timerChat); const id = chatAberto; atualizarChat(id); timerChat = setInterval(() => atualizarChat(id), 4000); } return; }
   $("#mic").addEventListener("click", gravarAudio);
   $("#fMsg").addEventListener("submit", e => {
@@ -2697,6 +2716,8 @@ function renderPerfil() {
       <div><strong>Quero conhecer</strong><div class="muted" style="font-size:13px">${semMatch() ? "Você está invisível e o match está desligado." : "Escolha \"Ninguém\" para ficar invisível e pausar o match."}</div></div>
       <div class="seg quatro" id="pInteresse">${[["F", "Mulheres"], ["M", "Homens"], ["T", "Ambos"], ["N", "Ninguém"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${pf.interesse === v}">${t}</button>`).join("")}</div>
     </div>
+    ${modoReal() ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Prova para conversar</strong><div class="muted" style="font-size:13px">${provaPadrao().qtd} perguntas de ${esc(nomeAssunto(provaPadrao().assunto))} · mínimo ${provaPadrao().minimo}</div></div><button class="btn sec" type="button" id="pProva" style="padding:8px 14px">Ajustar</button></div>
+      <div class="chave"><div style="min-width:0"><strong style="font-size:14px">Pedir em todo match novo</strong><div class="muted" style="font-size:12px">A pessoa só conversa com você depois de passar.</div></div><button class="toggle" type="button" role="switch" id="tProvaAuto" aria-checked="${provaPadrao().auto}" aria-label="Pedir prova em todo match novo"></button></div></div>` : ""}
     <div class="caixa"><div class="chave"><div><strong>Filtros</strong><div class="muted" style="font-size:13px">${resumoFiltros()}</div></div><button class="btn sec" type="button" id="pFiltros" style="padding:8px 14px">Ajustar</button></div></div>
     ${semServidor ? `<div class="caixa">
       <div class="chave"><div><strong>Meu Passe Direto</strong><div class="muted" style="font-size:13px">Quem ainda não chegou no seu nível pode furar a fila e aparecer pra você.</div></div>
@@ -2705,11 +2726,11 @@ function renderPerfil() {
     </div>` : ""}
     <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${modoReal() ? "Pessoas com quem você deu match" : `${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados`}</div></div><b style="font-family:var(--f-mono)">${modoReal() ? (matchesReal || []).length : S.matches.length}</b></div></div>
     ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho e o nível não passa para a conta.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
-    <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="editar">Editar perfil</button><button class="btn sec" type="button" id="previa">Como os outros me veem</button></div>
+    <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="editar">Editar perfil</button><button class="btn sec" type="button" id="previa" style="font-size:13px;white-space:nowrap;padding-inline:8px">Como os outros me veem</button></div>
     ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Conta</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div>
       <div class="linha" style="gap:6px">${conta.temSenha ? `<button class="btn sec mini" type="button" id="trocarSenha">Trocar senha</button>` : ""}<button class="btn sec mini" type="button" id="trocarContato">Trocar e-mail ou celular</button></div>
       ${nativo ? `<div class="chave"><div><strong style="font-size:14px">Avisos de match e mensagem</strong></div><button class="toggle" type="button" role="switch" id="tAvisos" aria-checked="${conta.avisos !== false}" aria-label="Avisos de match e mensagem"></button></div>` : ""}</div>` : ""}
-    <div class="caixa"><strong>Ajuda e privacidade</strong><div class="linha" style="gap:6px"><a class="btn sec mini" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a>${cfgConta.contato ? `<a class="btn sec mini" href="mailto:${esc(cfgConta.contato)}">Contato</a>` : ""}</div></div>
+    <div class="caixa"><strong>Ajuda e privacidade</strong><div style="display:grid;grid-template-columns:repeat(${cfgConta.contato ? 3 : 2}, minmax(0, 1fr));gap:6px"><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a>${cfgConta.contato ? `<a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="mailto:${esc(cfgConta.contato)}">Contato</a>` : ""}</div></div>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>
     ${conta ? `<button class="link" type="button" id="excluirConta" style="color:var(--bad)">Excluir conta</button>` : ""}
   </div>`;
@@ -2718,6 +2739,11 @@ function renderPerfil() {
     pf.interesse = b.dataset.v; salvar(); toast(b.dataset.v === "N" ? "Match desligado" : "Match ativado"); render();
   });
   $("#pFiltros").addEventListener("click", abrirFiltros);
+  const pp = $("#pProva"); if (pp) pp.addEventListener("click", ajustarProvaPadrao);
+  const tpa = $("#tProvaAuto"); if (tpa) tpa.addEventListener("click", () => {
+    S.provaPadrao = Object.assign(provaPadrao(), { auto: !provaPadrao().auto }); salvar();
+    toast(S.provaPadrao.auto ? "Prova pedida em todo match novo" : "Prova automática desligada"); render();
+  });
   const tp = $("#tPasse"); if (tp) tp.addEventListener("click", () => { S.meuPasse.ativo = !S.meuPasse.ativo; salvar(); render(); });
   const vp = $("#vPasse"); if (vp) vp.addEventListener("change", () => { const n = Math.max(10, Math.round(Number(vp.value) || 0)); S.meuPasse.valor = n; vp.value = n; salvar(); toast("Valor salvo"); });
   $("#editar").addEventListener("click", () => renderCadastro(true));
