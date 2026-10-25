@@ -23,6 +23,8 @@ export function prepararBanco() {
     // Nível calculado no servidor (as respostas são conferidas aqui) e avisos de match e mensagem ligados ou não.
     await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nivel numeric`;
     await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS avisos boolean NOT NULL DEFAULT true`;
+    // Tipos de aviso que a pessoa desligou no Perfil: "match", "mensagem", "desafio", "prova".
+    await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS avisos_desligados jsonb NOT NULL DEFAULT '[]'::jsonb`;
     await sql`CREATE TABLE IF NOT EXISTS sessoes (
       token_hash text PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, expira_em timestamptz NOT NULL)`;
     await sql`CREATE TABLE IF NOT EXISTS codigos (
@@ -103,6 +105,8 @@ export function prepararBanco() {
     await sql`CREATE TABLE IF NOT EXISTS desafios (
       codigo text PRIMARY KEY, criador_id uuid REFERENCES usuarios(id) ON DELETE SET NULL,
       dados jsonb NOT NULL, ip_hash text, criado_em timestamptz NOT NULL DEFAULT now())`;
+    // Desafio mandado num match: o resultado de cada tentativa aparece na conversa.
+    await sql`ALTER TABLE desafios ADD COLUMN IF NOT EXISTS match_id bigint`;
     await sql`CREATE TABLE IF NOT EXISTS desafio_respostas (
       id bigserial PRIMARY KEY, codigo text NOT NULL REFERENCES desafios(codigo) ON DELETE CASCADE,
       jogador text NOT NULL, usuario_id uuid REFERENCES usuarios(id) ON DELETE CASCADE, nome text NOT NULL,

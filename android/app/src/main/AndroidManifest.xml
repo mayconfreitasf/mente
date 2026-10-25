@@ -34,8 +34,6 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Áudio no chat, distância até outras pessoas, foto do perfil e avisos de match e mensagem. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />

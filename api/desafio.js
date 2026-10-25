@@ -1,8 +1,10 @@
 // Desafios por link curto: quem termina um quiz cria um código (jingar.com.br/Ab3x) com as mesmas perguntas.
-// Qualquer pessoa com o link joga, com ou sem conta, e entra no ranking daquele desafio. Vale a primeira tentativa.
+// Qualquer pessoa com o link joga, com ou sem conta, e entra no ranking daquele desafio. Pode jogar de novo: vale a melhor tentativa.
+// Desafio mandado num match: cada tentativa de um dos dois aparece na conversa com o placar.
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
 import { usuarioDaSessao, falha, cors } from "./_sessao.js";
+import { avisar } from "./_push.js";
 
 const LETRAS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODIGO_OK = /^[A-Za-z0-9]{4,6}$/, JOGADOR_OK = /^[A-Za-z0-9_-]{16,40}$/;
@@ -50,6 +52,21 @@ const publico = (linhas, jogador) => ({
   posicao: jogador ? (linhas.findIndex(r => r.jogador === jogador) + 1) || null : null
 });
 
+// Resultado na conversa do match: "Respondi o desafio: fiz 4 de 5. Placar: Ana 4 × 3 Bruno." com o link, que abre o ranking.
+async function contarNaConversa(desafio, u, nome, acertos, total, refez, req) {
+  const [m] = await sql`SELECT id, a_id, b_id FROM matches WHERE id = ${desafio.match_id} AND (a_id = ${u.id} OR b_id = ${u.id})`;
+  if (!m) return;
+  const outro = m.a_id === u.id ? m.b_id : m.a_id;
+  const [eu] = await sql`SELECT acertos FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND usuario_id = ${u.id}`;
+  const [ele] = await sql`SELECT nome, acertos FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND usuario_id = ${outro}`;
+  const placar = ele ? ` Placar: ${nome} ${eu ? eu.acertos : acertos} × ${ele.acertos} ${ele.nome}.` : "";
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "jingar.com.br").replace(/[^A-Za-z0-9.:-]/g, "");
+  const origem = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) ? "http://" + host : "https://jingar.com.br";
+  const texto = `${refez ? "Refiz" : "Respondi"} o desafio: fiz ${acertos} de ${total}.${placar} ${origem}/${desafio.codigo}`;
+  await sql`INSERT INTO mensagens (match_id, de_id, texto) VALUES (${m.id}, ${u.id}, ${texto})`;
+  await avisar(outro, `${nome} ${refez ? "refez o" : "respondeu seu"} desafio`, `Fez ${acertos} de ${total}.${placar}`, { tipo: "desafio", match: String(m.id) });
+}
+
 export default async function handler(req, res) {
   if (cors(req, res)) return;
   res.setHeader("Cache-Control", "no-store");
@@ -73,10 +90,12 @@ export default async function handler(req, res) {
       const ip = ipHash(req);
       const [{ n }] = await sql`SELECT count(*)::int AS n FROM desafios WHERE ip_hash = ${ip} AND criado_em > now() - interval '1 hour'`;
       if (n >= MAX_POR_HORA) throw falha(429, "Muitos desafios criados. Tente de novo mais tarde.");
+      // Mandado pelo chat: guarda o match (só se quem cria faz parte dele).
+      const [m] = u && b.match ? await sql`SELECT id FROM matches WHERE id = ${Number(b.match) || 0} AND (a_id = ${u.id} OR b_id = ${u.id})` : [];
       let codigo = null;
       for (let i = 0; i < 8 && !codigo; i++) {
         const c = sortear(i < 4 ? 4 : 5);
-        const r = await sql`INSERT INTO desafios (codigo, criador_id, dados, ip_hash) VALUES (${c}, ${u ? u.id : null}, ${JSON.stringify(d)}, ${ip}) ON CONFLICT (codigo) DO NOTHING RETURNING codigo`;
+        const r = await sql`INSERT INTO desafios (codigo, criador_id, dados, ip_hash, match_id) VALUES (${c}, ${u ? u.id : null}, ${JSON.stringify(d)}, ${ip}, ${m ? m.id : null}) ON CONFLICT (codigo) DO NOTHING RETURNING codigo`;
         if (r.length) codigo = c;
       }
       if (!codigo) throw falha(503, "Não foi possível criar o desafio. Tente de novo.");
@@ -86,21 +105,24 @@ export default async function handler(req, res) {
     }
 
     if (!CODIGO_OK.test(b.codigo || "")) throw falha(400, "Link de desafio inválido.");
-    const [desafio] = await sql`SELECT codigo, dados FROM desafios WHERE codigo = ${b.codigo}`;
+    const [desafio] = await sql`SELECT codigo, dados, criador_id, match_id FROM desafios WHERE codigo = ${b.codigo}`;
     if (!desafio) throw falha(404, "Esse desafio não existe ou foi removido.");
 
     if (b.acao === "abrir") {
       const linhas = await ranking(desafio.codigo);
       const meu = jogador ? linhas.find(r => r.jogador === jogador) : null;
-      return res.status(200).json({ desafio: desafio.dados, jaRespondeu: !!meu, ...publico(linhas, jogador) });
+      return res.status(200).json({ desafio: desafio.dados, jaRespondeu: !!meu, souCriador: !!u && String(desafio.criador_id) === String(u.id), ...publico(linhas, jogador) });
     }
 
     if (b.acao === "responder") {
       if (!jogador) throw falha(400, "Aparelho não identificado.");
       const total = inteiro(b.total, 0, desafio.dados.q.length), acertos = inteiro(b.acertos, 0, total);
       const nome = nomeLimpo(nomeConta || b.nome) || "Anônimo";
-      // Vale a primeira tentativa de cada pessoa.
-      await sql`INSERT INTO desafio_respostas (codigo, jogador, usuario_id, nome, acertos, total) VALUES (${desafio.codigo}, ${jogador}, ${u ? u.id : null}, ${nome}, ${acertos}, ${total}) ON CONFLICT (codigo, jogador) DO NOTHING`;
+      // Cada pessoa pode jogar de novo: no ranking fica a melhor tentativa.
+      const [antes] = await sql`SELECT acertos FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND jogador = ${jogador}`;
+      if (!antes) await sql`INSERT INTO desafio_respostas (codigo, jogador, usuario_id, nome, acertos, total) VALUES (${desafio.codigo}, ${jogador}, ${u ? u.id : null}, ${nome}, ${acertos}, ${total}) ON CONFLICT (codigo, jogador) DO NOTHING`;
+      else if (acertos > antes.acertos) await sql`UPDATE desafio_respostas SET acertos = ${acertos}, total = ${total}, nome = ${nome}, criado_em = now() WHERE codigo = ${desafio.codigo} AND jogador = ${jogador}`;
+      if (u && desafio.match_id && total) await contarNaConversa(desafio, u, nome, acertos, total, !!antes, req);
       return res.status(200).json(publico(await ranking(desafio.codigo), jogador));
     }
 

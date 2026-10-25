@@ -30,7 +30,8 @@ const mascaraEmail = e => e.replace(/^(.)[^@]*(@.*)$/, "$1***$2");
 const mascaraTelefone = t => `(${t.slice(3, 5)}) *****-${t.slice(-4)}`;
 const publico = u => ({
   usuario: u.usuario, email: u.email, telefone: u.telefone ? mascaraTelefone(u.telefone) : null, idade: idadeDe(u.nascimento),
-  temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub, teste: !!u.teste, avisos: u.avisos !== false
+  temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub, teste: !!u.teste, avisos: u.avisos !== false,
+  avisosDesligados: Array.isArray(u.avisos_desligados) ? u.avisos_desligados : []
 });
 // Nível da conta: só o servidor soma pontos (respostas conferidas aqui). Contas antigas começam com o nível do perfil.
 async function nivelDe(u) {
@@ -377,7 +378,13 @@ export default async function handler(req, res) {
       return res.status(200).json({ conta: publico(n) });
     }
     if (b.acao === "avisos") {
-      const [n] = await sql`UPDATE usuarios SET avisos = ${b.ligado !== false} WHERE id = ${u.id} RETURNING *`;
+      // Com "tipo", liga ou desliga só aquele aviso (match, mensagem, desafio ou prova).
+      const tipos = ["match", "mensagem", "desafio", "prova"];
+      let n;
+      if (tipos.includes(b.tipo)) {
+        const atual = (Array.isArray(u.avisos_desligados) ? u.avisos_desligados : []).filter(t => tipos.includes(t) && t !== b.tipo);
+        [n] = await sql`UPDATE usuarios SET avisos = true, avisos_desligados = ${JSON.stringify(b.ligado === false ? [...atual, b.tipo] : atual)}::jsonb WHERE id = ${u.id} RETURNING *`;
+      } else [n] = await sql`UPDATE usuarios SET avisos = ${b.ligado !== false} WHERE id = ${u.id} RETURNING *`;
       return res.status(200).json({ conta: publico(n) });
     }
     if (b.acao === "denunciar") {

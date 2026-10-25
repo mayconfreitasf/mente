@@ -2,7 +2,7 @@
 import { sql, prepararBanco } from "./_banco.js";
 import { usuarioDaSessao, falha, cors } from "./_sessao.js";
 import { avisar } from "./_push.js";
-import { guardarMidia, urlMidia, apagarMidias } from "./_perfil.js";
+import { urlMidia, apagarMidias } from "./_perfil.js";
 import { perguntasDoAssunto, nomeDoAssunto } from "./_bancos.js";
 
 // Prova como cada lado vê: quem pediu vê a nota; quem precisa fazer vê o que falta.
@@ -200,6 +200,9 @@ export default async function handler(req, res) {
       if (perguntasDoAssunto(assunto).length < qtd) throw falha(400, "Esse assunto não tem perguntas suficientes.");
       const [atual] = await sql`SELECT * FROM provas WHERE match_id = ${m.id} AND de_id = ${u.id}`;
       if (atual && atual.status === "aprovada") throw falha(409, "Essa pessoa já passou na sua prova.");
+      // A prova vem antes da conversa: quem já mandou mensagem nesta conversa não pode mais pedir.
+      const [{ n: minhas }] = await sql`SELECT count(*)::int AS n FROM mensagens WHERE match_id = ${m.id} AND de_id = ${u.id}`;
+      if (minhas) throw falha(409, "Você já mandou mensagem nesta conversa. A prova só pode ser pedida antes da primeira mensagem.");
       if (atual) await sql`UPDATE provas SET assunto = ${assunto}, qtd = ${qtd}, minimo = ${minimo}, usadas = ${atual.assunto === assunto ? JSON.stringify(atual.usadas) : "[]"}, atual = NULL WHERE id = ${atual.id}`;
       else await sql`INSERT INTO provas (match_id, de_id, para_id, assunto, qtd, minimo) VALUES (${m.id}, ${u.id}, ${outro}, ${assunto}, ${qtd}, ${minimo})`;
       await avisar(outro, "Pediram uma prova", `${eu && eu.nome ? eu.nome : "Seu match"} pede ${qtd} perguntas de ${nomeDoAssunto(assunto)} antes de conversar.`, { tipo: "prova", match: String(m.id) });
@@ -248,17 +251,15 @@ export default async function handler(req, res) {
       if (ultimas.length >= 20 && ultimas.every(x => x.de_id === u.id)) throw falha(429, "Você mandou 20 mensagens seguidas. Espere uma resposta para mandar mais.");
       const [{ n: porMinuto }] = await sql`SELECT count(*)::int AS n FROM mensagens WHERE de_id = ${u.id} AND criado_em > now() - interval '1 minute'`;
       if (porMinuto >= 30) throw falha(429, "Muitas mensagens em pouco tempo. Espere um pouco.");
-      let texto = null, midia = null, dur = null;
-      if (typeof b.audio === "string") {
-        midia = await guardarMidia(u.id, b.audio, "audio");
-        if (!midia) throw falha(400, "Áudio inválido ou grande demais.");
-        dur = Math.max(1, Math.min(10, Math.round(Number(b.dur) || 1)));
-      } else {
-        texto = typeof b.texto === "string" ? b.texto.trim().slice(0, MAX_TEXTO) : "";
-        if (!texto) throw falha(400, "Mensagem vazia.");
-      }
-      const [x] = await sql`INSERT INTO mensagens (match_id, de_id, texto, midia_id, dur) VALUES (${m.id}, ${u.id}, ${texto}, ${midia}, ${dur}) RETURNING *`;
-      await avisar(m.a_id === u.id ? m.b_id : m.a_id, eu && eu.nome ? eu.nome : "Nova mensagem", texto ? texto.slice(0, 120) : "Enviou um áudio", { tipo: "mensagem", match: String(m.id) });
+      // Só texto: o envio de áudio saiu do chat.
+      const texto = typeof b.texto === "string" ? b.texto.trim().slice(0, MAX_TEXTO) : "";
+      if (!texto) throw falha(400, "Mensagem vazia.");
+      const [x] = await sql`INSERT INTO mensagens (match_id, de_id, texto) VALUES (${m.id}, ${u.id}, ${texto}) RETURNING *`;
+      // O desafio mandado pelo chat chega como aviso de desafio, sem o link no texto.
+      const desafio = texto.match(/^Te desafiei no Jingar em (.+): fiz (\d+) de (\d+)\./);
+      const nome = eu && eu.nome ? eu.nome : "Seu match";
+      if (desafio) await avisar(m.a_id === u.id ? m.b_id : m.a_id, `${nome} te desafiou`, `${desafio[1]}: fez ${desafio[2]} de ${desafio[3]}. Toque para responder.`, { tipo: "desafio", match: String(m.id) });
+      else await avisar(m.a_id === u.id ? m.b_id : m.a_id, eu && eu.nome ? eu.nome : "Nova mensagem", texto.slice(0, 120), { tipo: "mensagem", match: String(m.id) });
       return res.status(200).json({ mensagem: mensagemPublica(x, u.id) });
     }
 

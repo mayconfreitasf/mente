@@ -1,4 +1,4 @@
-// Notificações push de match e mensagem nova.
+// Notificações push de match, mensagem, desafio e prova. Cada tipo pode ser desligado no Perfil.
 // Android: Firebase Cloud Messaging (FIREBASE_SERVICE_ACCOUNT com o JSON da conta de serviço do Firebase).
 // iPhone: Apple Push Notification service (APNS_KEY com o conteúdo do arquivo .p8, APNS_KEY_ID, APNS_TEAM_ID;
 // APNS_PRODUCAO=1 para apps da App Store e do TestFlight). Sem essas variáveis, nada é enviado.
@@ -64,8 +64,9 @@ function enviarIos(token, titulo, texto, dados) {
 // Envia para todos os aparelhos da pessoa. Tokens recusados pelo Google ou pela Apple são apagados.
 export async function avisar(usuarioId, titulo, texto, dados = {}) {
   try {
-    const [u] = await sql`SELECT avisos FROM usuarios WHERE id = ${usuarioId}`;
-    if (u && u.avisos === false) return;
+    const [u] = await sql`SELECT avisos, avisos_desligados FROM usuarios WHERE id = ${usuarioId}`;
+    if (!u || u.avisos === false) return;
+    if (dados.tipo && Array.isArray(u.avisos_desligados) && u.avisos_desligados.includes(dados.tipo)) return;
     const aparelhos = await sql`SELECT token, plataforma FROM dispositivos WHERE usuario_id = ${usuarioId}`;
     await comLimite(Promise.all(aparelhos.map(async a => {
       const r = await (a.plataforma === "ios" ? enviarIos : enviarAndroid)(a.token, titulo, texto, dados).catch(() => "erro");

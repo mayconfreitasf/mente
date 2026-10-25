@@ -183,17 +183,11 @@ h2 { font-size: 21px; line-height: 1.2; }
 .msg.ela { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 6px; }
 .digitando { color: var(--muted); font-size: 13px; font-style: italic; }
 .envio { display: flex; gap: 8px; padding-top: 8px; }
-.envio .mic { padding: 0 12px; flex: none; }
 .msg.eu[data-i] { cursor: pointer; }
 .msg.apagada { font-style: italic; opacity: .7; }
 .msg.audio { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
 .msg audio { height: 36px; max-width: 200px; }
 .msg .dur { font-size: 12px; opacity: .8; }
-.gravando { display: flex; align-items: center; gap: 10px; flex: 1; min-height: 46px; }
-.gravando #gravT { flex: 1; font-variant-numeric: tabular-nums; }
-.gravando .ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); animation: pisca 1s ease-in-out infinite; }
-@keyframes pisca { 50% { opacity: .25; } }
-@media (prefers-reduced-motion: reduce) { .gravando .ponto { animation: none; } }
 .opcao-radio { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .opcao-radio input { accent-color: var(--accent); }
 .sugestoes-email { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -10px; }
@@ -682,7 +676,7 @@ function renderPedirLocal() {
 
 // ---------- Navegação ----------
 let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
-function irPara(a) { formPerfilAberto = false; pararGravacao(true); clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
+function irPara(a) { formPerfilAberto = false; clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
 $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
 
 function render() {
@@ -1182,14 +1176,22 @@ async function abrirDesafioDoLink() {
   try {
     const j = await chamarDesafio({ acao: "abrir", codigo: codigoDoLink });
     const d = montarDesafio(j.desafio);
-    if (d) desafioAberto = Object.assign(d, { codigo: codigoDoLink, ranking: j.ranking, jogadores: j.jogadores, posicao: j.posicao, jaRespondeu: j.jaRespondeu });
+    if (d) desafioAberto = Object.assign(d, { codigo: codigoDoLink, ranking: j.ranking, jogadores: j.jogadores, posicao: j.posicao, jaRespondeu: j.jaRespondeu, souCriador: j.souCriador });
     else toast("Esse desafio não pode ser aberto.");
   } catch (e) { toast(e.erro); limparLinkDesafio(); }
   carregandoDesafio = false; render();
 }
+// Quem está vencendo: o primeiro do ranking, ou empate se os dois primeiros têm os mesmos acertos.
+function textoLider(x) {
+  const [a, b] = x.ranking;
+  if (!a || !b) return "";
+  if (a.acertos === b.acertos) return `Empate em ${a.acertos} ${a.acertos === 1 ? "acerto" : "acertos"}`;
+  return `${a.voce ? "Você está" : esc(a.nome) + " está"} vencendo com ${a.acertos} de ${a.total}`;
+}
 function htmlRanking(x) {
   if (!x || !x.ranking || !x.ranking.length) return "";
-  return `<div class="caixa ranking"><div class="linha" style="justify-content:space-between"><strong>Ranking</strong><span class="muted" style="font-size:13px">${x.jogadores} ${x.jogadores === 1 ? "pessoa jogou" : "pessoas jogaram"}</span></div>
+  const lider = textoLider(x);
+  return `<div class="caixa ranking">${lider ? `<p style="margin:0;font-weight:700;color:var(--gold)">${lider}</p>` : ""}<div class="linha" style="justify-content:space-between"><strong>Ranking</strong><span class="muted" style="font-size:13px">${x.jogadores} ${x.jogadores === 1 ? "pessoa jogou" : "pessoas jogaram"}</span></div>
     <ol>${x.ranking.map(r => `<li${r.voce ? ' class="voce"' : ""}><span class="pos">${r.pos}º</span><span class="nome">${esc(r.nome)}${r.voce ? " (você)" : ""}</span><b>${r.acertos}/${r.total}</b></li>`).join("")}</ol>
     ${x.posicao && x.posicao > x.ranking.length ? `<p class="muted" style="margin:0;font-size:13px">Você está em ${x.posicao}º lugar.</p>` : ""}</div>`;
 }
@@ -1237,15 +1239,15 @@ function renderDesafioIntro() {
   <div class="pilha entra" style="padding-top:8px">
     <div class="resultado">
       <span class="rotulo">Desafio${d.peso != null ? " · peso " + fmtNivel(d.peso) : d.m > 1 ? " · " + modoDe(d.m).nome : ""}</span>
-      <h1>${esc(d.nome)} te desafiou</h1>
+      <h1>${d.souCriador ? "Seu desafio" : esc(d.nome) + " te desafiou"}</h1>
       <div class="grande">${d.a}/${d.t}</div>
       <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${fmtNivel(d.peso ?? d.m)} ${(d.peso ?? d.m) === 1 ? "nível" : "níveis"}.</p>
     </div>
     ${htmlRanking(d)}
-    ${d.jaRespondeu ? `<p class="aviso" style="margin:0">Você já respondeu este desafio. Pode jogar de novo, mas no ranking vale a primeira tentativa.</p>` : ""}
+    ${d.jaRespondeu ? `<p class="aviso" style="margin:0">Você já respondeu este desafio. Pode responder de novo: no ranking fica a sua melhor tentativa.</p>` : ""}
     ${pedeNome ? `<div class="campo"><label for="nomeR">Seu nome no ranking</label><input id="nomeR" maxlength="20" autocomplete="given-name" value="${esc(nomeGuardado())}"></div><div class="erro" id="nomeErro"></div>` : ""}
-    <button class="btn bloco ${d.peso != null ? "" : classeModo(d.m)}" type="button" id="aceitarD">Aceitar desafio</button>
-    <button class="link" type="button" id="recusarD">Agora não</button>
+    <button class="btn bloco ${d.peso != null ? "" : classeModo(d.m)}" type="button" id="aceitarD">${d.jaRespondeu ? "Responder de novo" : "Aceitar desafio"}</button>
+    <button class="link" type="button" id="recusarD">${d.jaRespondeu ? "Voltar" : "Agora não"}</button>
   </div>`;
   $("#aceitarD").addEventListener("click", () => {
     if (pedeNome) {
@@ -1273,13 +1275,13 @@ function renderResultadoDesafio() {
       .then(j => { r.rank = j; }).catch(e => { r.rank = { erro: e.erro }; })
       .then(() => { if (rodada === r && aba === "quiz") render(); });
   }
-  const veredito = r.acertos > d.a ? "Você venceu!" : r.acertos === d.a ? "Empatou!" : `${d.nome} venceu`;
+  const veredito = d.souCriador ? `Você fez ${r.acertos} de ${r.n}` : r.acertos > d.a ? "Você venceu!" : r.acertos === d.a ? "Empatou!" : `${d.nome} venceu`;
   tela.innerHTML = `
   <div class="pilha entra" style="padding-top:8px">
     <div class="resultado">
       <span class="rotulo">${esc(r.nome)}</span>
       <h1>${esc(veredito)}</h1>
-      <div class="placar-desafio"><div><b>${r.acertos}/${r.n}</b><span>você</span></div><div><b>${d.a}/${d.t}</b><span>${esc(d.nome)}</span></div></div>
+      ${d.souCriador ? "" : `<div class="placar-desafio"><div><b>${r.acertos}/${r.n}</b><span>você</span></div><div><b>${d.a}/${d.t}</b><span>${esc(d.nome)}</span></div></div>`}
       <p style="margin:0">Você ganhou <b>+${fmtNivel(r.pontos)}</b> ${r.pontos === 1 ? "nível" : "níveis"} e está no nível ${fmtNivel(S.nivel)}.</p>
       ${r.n < d.fila.length ? `<p class="muted" style="margin:0;font-size:14px">Você encerrou antes do fim: respondeu ${r.n} de ${d.fila.length}.</p>` : ""}
     </div>
@@ -1959,9 +1961,7 @@ function abrirChat(id) {
   if (!modoReal()) { S.novos = S.novos.filter(x => x !== id); salvar(); }
   render();
 }
-let digitando = null, gravacao = null;
-const MAX_AUDIO = 10;
-const ICONE_MIC = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
+let digitando = null;
 const previa = m => m.apagada ? "Mensagem apagada" : m.audio ? "Áudio" : m.t;
 // "ref" é o índice da mensagem no aparelho (demonstração) ou o id dela no servidor (pessoas reais).
 function htmlMsg(m, i) {
@@ -1972,7 +1972,7 @@ function htmlMsg(m, i) {
   const desafio = !audio && String(m.t || "").match(/https?:\/\/[^\s]+\/([A-Za-z0-9]{4,6})(?=\s|$)/);
   const hora = m.quando ? `<span class="hora">${horaCurta(m.quando)}</span>` : "";
   const corpo = (audio ? `<audio controls preload="metadata" src="${esc(comApi(m.audio))}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t))
-    + (desafio ? `<button class="btn sec mini desafio-link" type="button" data-desafio="${desafio[1]}">Responder desafio</button>` : "") + hora;
+    + (desafio ? `<button class="btn sec mini desafio-link" type="button" data-desafio="${desafio[1]}">${/^Te desafiei/.test(m.t) && lado === "ela" ? "Responder desafio" : "Ver ranking"}</button>` : "") + hora;
   return lado === "eu" ? `<div class="msg eu${audio ? " audio" : ""}" data-i="${ref}" tabindex="0" title="Toque e segure para apagar">${corpo}</div>` : `<div class="msg ela${audio ? " audio" : ""}">${corpo}</div>`;
 }
 function mensagensDoChat() {
@@ -2006,45 +2006,6 @@ function enviarMsg(alvo, msg) {
     if (chatAberto === alvo && aba === "matches") render();
     else if (!S.novos.includes(alvo)) { S.novos.push(alvo); salvar(); render(); }
   }, 1400 + Math.random() * 1600);
-}
-async function gravarAudio() {
-  if (gravacao) return;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") { toast("Este navegador não grava áudio"); return; }
-  if (!(await explicarPermissao("avisoMic", "Usar o microfone", "O Jingar usa o microfone só para gravar os áudios que você envia no chat. Nada é gravado sem você tocar no botão."))) return;
-  let stream;
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { toast("Permita o uso do microfone para gravar"); return; }
-  const tipo = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"].find(t => MediaRecorder.isTypeSupported(t));
-  const rec = new MediaRecorder(stream, Object.assign({ audioBitsPerSecond: 24000 }, tipo ? { mimeType: tipo } : {}));
-  const g = gravacao = { alvo: chatAberto, rec, stream, partes: [], inicio: Date.now(), cancelado: false, timer: 0 };
-  rec.ondataavailable = e => { if (e.data.size) g.partes.push(e.data); };
-  rec.onstop = () => {
-    clearInterval(g.timer); g.stream.getTracks().forEach(t => t.stop());
-    gravacao = null;
-    const dur = Math.max(1, Math.min(MAX_AUDIO, Math.round((Date.now() - g.inicio) / 1000)));
-    if (g.cancelado || !g.partes.length) { render(); return; }
-    const rd = new FileReader();
-    rd.onload = () => {
-      if (String(rd.result).length > 300000) { toast("Áudio grande demais"); render(); return; }
-      if (modoReal()) render();
-      enviarMsg(g.alvo, { audio: rd.result, dur });
-    };
-    rd.readAsDataURL(new Blob(g.partes, { type: rec.mimeType || "audio/webm" }));
-  };
-  rec.start();
-  g.timer = setInterval(() => {
-    const seg = Math.floor((Date.now() - g.inicio) / 1000), el = $("#gravT");
-    if (el) el.textContent = `${Math.min(seg, MAX_AUDIO)}s de ${MAX_AUDIO}s`;
-    if (seg >= MAX_AUDIO) pararGravacao(false);
-  }, 250);
-  mostrarGravando();
-}
-function pararGravacao(cancelar) { const g = gravacao; if (!g || g.rec.state === "inactive") return; g.cancelado = cancelar; g.rec.stop(); }
-function mostrarGravando() {
-  const f = $("#fMsg"); if (!f) return;
-  f.innerHTML = `<div class="gravando"><span class="ponto" aria-hidden="true"></span><span id="gravT" aria-live="polite">0s de ${MAX_AUDIO}s</span><button class="link" type="button" id="gravCancelar">Cancelar</button><button class="btn" type="button" id="gravEnviar" style="padding:12px 16px">Enviar áudio</button></div>`;
-  $("#gravCancelar").addEventListener("click", () => pararGravacao(true));
-  $("#gravEnviar").addEventListener("click", () => pararGravacao(false));
 }
 function apagarMsg(ref) {
   const real = modoReal();
@@ -2113,7 +2074,7 @@ const provaPendenteParaMim = () => { const m = matchAtual(); return !!(m && m.pr
 function htmlProvaPedida() {
   const m = matchAtual(), pr = m && m.provaPedida;
   // Ainda sem prova pedida: atalho visível no topo da conversa (também fica no menu ⋯).
-  if (!pr) return m && !(msgsReal[m.id] || []).length ? `<div class="caixa" style="padding:10px 12px;margin-bottom:8px;flex-direction:row;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:13px">Quer uma prova antes de conversar?</span><button class="btn sec mini" type="button" id="pedirProvaTopo" style="flex:none">Pedir prova</button></div>` : "";
+  if (!pr) return m && !(msgsReal[m.id] || []).some(x => x.meu) ? `<div class="caixa" style="padding:10px 12px;margin-bottom:8px;flex-direction:row;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:13px">Quer uma prova antes de conversar?</span><button class="btn sec mini" type="button" id="pedirProvaTopo" style="flex:none">Pedir prova</button></div>` : "";
   const txt = pr.status === "aprovada" ? `Passou na sua prova: <b>${pr.ultima} de ${pr.qtd}</b> em ${esc(pr.nomeAssunto)}.`
     : `Você pediu uma prova: ${pr.qtd} perguntas de ${esc(pr.nomeAssunto)}, mínimo ${pr.minimo}.${pr.tentativas ? ` Tentativas: ${pr.tentativas} · melhor ${pr.melhor} de ${pr.qtd}.` : " Ainda não tentou."}`;
   return `<div class="caixa" style="padding:10px 12px;font-size:13px;margin-bottom:8px">${txt}</div>`;
@@ -2238,7 +2199,7 @@ function desafioParaChat(matchId, p) {
 async function enviarDesafioNoChat(r) {
   if (r.enviado || !r.n) return; r.enviado = true;
   try {
-    if (!r.codigo) r.codigo = (await chamarDesafio({ acao: "criar", desafio: { v: 1, n: S.perfil ? S.perfil.nome : "Alguém", m: r.mult, a: r.acertos, t: r.n, q: r.hist } })).codigo;
+    if (!r.codigo) r.codigo = (await chamarDesafio({ acao: "criar", match: r.paraChat, desafio: { v: 1, n: S.perfil ? S.perfil.nome : "Alguém", m: r.mult, a: r.acertos, t: r.n, q: r.hist } })).codigo;
     await chamarSocial({ acao: "enviar", match: r.paraChat, texto: `Te desafiei no Jingar em ${r.assunto}: fiz ${r.acertos} de ${r.n}. ${linkCurto(r.codigo)}` });
     r.desafioEnviado = true;
   } catch (e) { r.enviado = false; r.erroEnvio = e.erro; }
@@ -2249,7 +2210,7 @@ async function abrirDesafio(codigo) {
     const j = await chamarDesafio({ acao: "abrir", codigo });
     const d = montarDesafio(j.desafio);
     if (!d) { toast("Esse desafio não pode ser aberto."); return; }
-    desafioAberto = Object.assign(d, { codigo, ranking: j.ranking, jogadores: j.jogadores, posicao: j.posicao, jaRespondeu: j.jaRespondeu });
+    desafioAberto = Object.assign(d, { codigo, ranking: j.ranking, jogadores: j.jogadores, posicao: j.posicao, jaRespondeu: j.jaRespondeu, souCriador: j.souCriador });
     clearInterval(timerChat); chatAberto = null; aba = "quiz"; rodada = null; render();
   } catch (e) { toast(e.erro); }
 }
@@ -2266,7 +2227,7 @@ function bloquear(p, mostraNome) {
 function menuChat(p) {
   const v = folha(`<h2>${esc(p.nome)}</h2>
     ${modoReal() ? `<button class="btn bloco" type="button" id="mDesafio">Mandar um desafio</button>` : ""}
-    ${modoReal() && !(matchAtual() && matchAtual().provaPedida && matchAtual().provaPedida.status === "aprovada") ? `<button class="btn sec bloco" type="button" id="mProva">${matchAtual() && matchAtual().provaPedida ? "Trocar a prova pedida" : "Pedir uma prova"}</button>` : ""}
+    ${modoReal() && !(msgsReal[chatAberto] || []).some(x => x.meu) && !(matchAtual() && matchAtual().provaPedida && matchAtual().provaPedida.status === "aprovada") ? `<button class="btn sec bloco" type="button" id="mProva">${matchAtual() && matchAtual().provaPedida ? "Trocar a prova pedida" : "Pedir uma prova"}</button>` : ""}
     <button class="btn sec bloco" type="button" id="mDesfazer">Desfazer match</button>
     <button class="btn sec bloco" type="button" id="mBloquear">Bloquear</button>
     <button class="btn sec bloco" type="button" id="mDenunciar" style="color:var(--bad)">Denunciar</button>
@@ -2278,6 +2239,8 @@ function menuChat(p) {
   v.querySelector("#mBloquear").addEventListener("click", () => { v.remove(); bloquear(p, true); });
   v.querySelector("#mDenunciar").addEventListener("click", () => { v.remove(); denunciar(p, true); });
 }
+// Avisos que a pessoa pode ligar ou desligar um por um no Perfil.
+const TIPOS_AVISO = [["match", "Novos matches"], ["mensagem", "Mensagens"], ["desafio", "Desafios"], ["prova", "Provas"]];
 const horaCurta = q => new Date(q).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 function rotuloDia(q) {
   const d = new Date(q), hoje = new Date(), ontem = new Date(); ontem.setDate(hoje.getDate() - 1);
@@ -2311,6 +2274,8 @@ function pintarMensagens() {
     el.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === el) apagarMsg(Number(el.dataset.i)); });
   });
   ms.querySelectorAll("[data-desafio]").forEach(b => b.addEventListener("click", () => abrirDesafio(b.dataset.desafio)));
+  // Prova só antes da primeira mensagem sua: some a sugestão quando as mensagens chegam.
+  const bp = $("#pedirProvaTopo"); if (bp && ch.some(m => m.de === "eu")) bp.closest(".caixa").remove();
   if (noFim) ms.scrollTop = ms.scrollHeight;
 }
 function perfilDoChat() {
@@ -2340,24 +2305,22 @@ function renderChat() {
     <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button><button class="quem" type="button" id="verPerfilChat" aria-label="Ver o perfil de ${esc(p.nome)}">${avatarHTML(p, 40)}<div style="min-width:0"><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc([p.prof, "nível " + fmtNivel(p.nivel)].filter(Boolean).join(" · "))} · ver perfil</div></div></button><button class="btn sec mini" type="button" id="opcoesChat" aria-label="Opções da conversa">⋯</button></div>
     ${htmlProvaPedida()}
     <div class="msgs" id="msgs"></div>
-    ${provaPendenteParaMim() ? htmlProvaParaMim(p) : `<form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn sec mic" type="button" id="mic" aria-label="Gravar áudio de até ${MAX_AUDIO} segundos">${ICONE_MIC}</button><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>`}
+    ${provaPendenteParaMim() ? htmlProvaParaMim(p) : `<form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>`}
   </div>`;
   pintarMensagens();
   const ms = $("#msgs"); ms.scrollTop = ms.scrollHeight;
-  $("#voltar").addEventListener("click", () => { pararGravacao(true); clearInterval(timerChat); chatAberto = null; render(); });
+  $("#voltar").addEventListener("click", () => { clearInterval(timerChat); chatAberto = null; render(); });
   $("#opcoesChat").addEventListener("click", () => menuChat(p));
   $("#verPerfilChat").addEventListener("click", () => verPerfil(p));
   const fp = $("#fazerProva"); if (fp) fp.addEventListener("click", () => fazerProva(chatAberto, p));
   const ppt = $("#pedirProvaTopo"); if (ppt) ppt.addEventListener("click", () => pedirProva(chatAberto, p));
   if (!$("#fMsg")) { pintarMensagens(); if (modoReal()) { clearInterval(timerChat); const id = chatAberto; atualizarChat(id); timerChat = setInterval(() => atualizarChat(id), 4000); } return; }
-  $("#mic").addEventListener("click", gravarAudio);
   $("#fMsg").addEventListener("submit", e => {
     e.preventDefault();
     const inp = $("#txtMsg"), t = inp.value.trim(); if (!t) return;
     if (modoReal()) inp.value = "";
     enviarMsg(chatAberto, { t }); const novo = $("#txtMsg"); if (novo) novo.focus();
   });
-  if (gravacao && gravacao.alvo === chatAberto) mostrarGravando();
   if (modoReal()) {
     clearInterval(timerChat);
     const id = chatAberto;
@@ -2666,7 +2629,7 @@ async function registrarPushApp() {
     }
     let perm = await P.checkPermissions();
     if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
-      if (!(await explicarPermissao("avisoPush", "Receber avisos", "Avisamos quando alguém der match com você ou mandar uma mensagem."))) return;
+      if (!(await explicarPermissao("avisoPush", "Receber avisos", "Avisamos quando alguém der match com você, mandar uma mensagem, um desafio ou uma prova. Dá para desligar cada tipo no Perfil."))) return;
       perm = await P.requestPermissions();
     }
     if (perm.receive === "granted") await P.register();
@@ -2679,7 +2642,7 @@ function ligarNativo() {
   if (App) App.addListener("backButton", () => {
     const veu = document.querySelector(".veu"); if (veu) return veu.remove();
     const match = document.querySelector(".match-tela"); if (match) { match.remove(); return render(); }
-    if (chatAberto != null) { pararGravacao(true); clearInterval(timerChat); chatAberto = null; return render(); }
+    if (chatAberto != null) { clearInterval(timerChat); chatAberto = null; return render(); }
     if (rodada) return;
     if (S.perfil && aba !== "quiz") return irPara("quiz");
     App.minimizeApp();
@@ -2764,7 +2727,7 @@ function renderPerfil() {
     <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="editar">Editar perfil</button><button class="btn sec" type="button" id="previa" style="font-size:13px;white-space:nowrap;padding-inline:8px">Como os outros me veem</button></div>
     ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Conta</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div>
       <div class="linha" style="gap:6px">${conta.temSenha ? `<button class="btn sec mini" type="button" id="trocarSenha">Trocar senha</button>` : ""}<button class="btn sec mini" type="button" id="trocarContato">Trocar e-mail ou celular</button></div>
-      ${nativo ? `<div class="chave"><div><strong style="font-size:14px">Avisos de match e mensagem</strong></div><button class="toggle" type="button" role="switch" id="tAvisos" aria-checked="${conta.avisos !== false}" aria-label="Avisos de match e mensagem"></button></div>` : ""}</div>` : ""}
+      ${nativo ? `<strong style="font-size:14px">Avisos no celular</strong>${TIPOS_AVISO.map(([t, nome]) => `<div class="chave"><span style="font-size:14px">${nome}</span><button class="toggle" type="button" role="switch" data-aviso="${t}" aria-checked="${conta.avisos !== false && !(conta.avisosDesligados || []).includes(t)}" aria-label="Avisos de ${nome.toLowerCase()}"></button></div>`).join("")}` : ""}</div>` : ""}
     <div class="caixa"><strong>Ajuda e privacidade</strong><div style="display:grid;grid-template-columns:repeat(${cfgConta.contato ? 3 : 2}, minmax(0, 1fr));gap:6px"><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a>${cfgConta.contato ? `<a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="mailto:${esc(cfgConta.contato)}">Contato</a>` : ""}</div></div>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>
     ${conta ? `<button class="link" type="button" id="excluirConta" style="color:var(--bad)">Excluir conta</button>` : ""}
@@ -2794,9 +2757,9 @@ function renderPerfil() {
   $("#previa").addEventListener("click", () => verPerfil(Object.assign({}, pf, { nivel: S.nivel, melhores: meusMelhores(), hue: 340 }), "Como os outros veem você"));
   const ts = $("#trocarSenha"); if (ts) ts.addEventListener("click", trocarSenha);
   const tc = $("#trocarContato"); if (tc) tc.addEventListener("click", trocarContato);
-  const ta = $("#tAvisos"); if (ta) ta.addEventListener("click", async () => {
-    try { conta = (await chamarConta({ acao: "avisos", ligado: conta.avisos === false })).conta; render(); } catch (e) { toast(e.erro); }
-  });
+  document.querySelectorAll("[data-aviso]").forEach(b => b.addEventListener("click", async () => {
+    try { conta = (await chamarConta({ acao: "avisos", tipo: b.dataset.aviso, ligado: b.getAttribute("aria-checked") !== "true" })).conta; render(); } catch (e) { toast(e.erro); }
+  }));
   const sc = $("#sairConta"); if (sc) sc.addEventListener("click", sairDaConta);
   const ex = $("#excluirConta"); if (ex) ex.addEventListener("click", excluirConta);
   const ct = $("#criarContaTeste"); if (ct) ct.addEventListener("click", () => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = "criar"; render(); });
@@ -2809,7 +2772,7 @@ function renderPerfil() {
       // Com conta, o nível fica no servidor: zera lá (e as perguntas respondidas) e mantém o perfil e as fotos.
       if (conta) {
         try { await chamarConta({ acao: "zerarNivel" }); } catch (e) { toast(e.erro); return; }
-        S = Object.assign(PADRAO(), { perfil: S.perfil, filtros: S.filtros, local: S.local, avisoIA: S.avisoIA, avisoPush: S.avisoPush, avisoMic: S.avisoMic });
+        S = Object.assign(PADRAO(), { perfil: S.perfil, filtros: S.filtros, local: S.local, avisoIA: S.avisoIA, avisoPush: S.avisoPush });
       } else { S = PADRAO(); rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null, fotos: [] }; }
       pulados.clear(); selecao = null; salvar(); aba = "quiz"; render();
     });
