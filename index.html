@@ -651,10 +651,14 @@ function renderPedirLocal() {
 
 // ---------- Navegação ----------
 let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
-function irPara(a) { pararGravacao(true); clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
+function irPara(a) { formPerfilAberto = false; pararGravacao(true); clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
 $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
 
 function render() {
+  // Com o formulário do perfil na tela (por exemplo, enquanto a galeria está aberta), as atualizações automáticas
+  // (matches, fila, resumo) não redesenham a tela: só a navegação (irPara) ou salvar o perfil fecham o formulário.
+  if (formPerfilAberto && tela.querySelector("#fCad")) return;
+  formPerfilAberto = false;
   pararTimer();
   if (semConexao) return renderSemConexao();
   if (carregandoDesafio) { $("#abas").hidden = true; $("#chipNivel").hidden = true; tela.innerHTML = `<div class="vazio"><p class="muted" style="margin:0">Abrindo o desafio…</p></div>`; return; }
@@ -692,21 +696,25 @@ const MAX_FOTOS = 5;
 // As contas de teste da revisão das lojas não precisam de foto.
 const isentoFoto = () => !!(conta && conta.teste);
 const fotosDe = pf => pf ? (Array.isArray(pf.fotos) ? pf.fotos : pf.foto ? [pf.foto] : []).slice(0, MAX_FOTOS) : [];
-let enviandoFoto = false;
+let enviandoFoto = false, carregandoFoto = false, formPerfilAberto = false;
 // Abre a câmera ou a galeria. No app usa o plugin Camera; no site, um campo de arquivo (com "capture" para a câmera).
 function escolherImagem(origem) {
   const C = plugin("Camera");
+  // Cancelar não é erro; qualquer outra falha do plugin vira mensagem na tela.
   if (C) return C.getPhoto({ source: origem === "camera" ? "CAMERA" : "PHOTOS", resultType: "dataUrl", quality: 85, width: 1280, correctOrientation: true })
-    .then(f => f.dataUrl).catch(() => null);
+    .then(f => f.dataUrl).catch(e => /cancel/i.test(String(e && e.message)) ? null : "falhou");
   return new Promise(ok => {
+    // Alguns navegadores de celular ignoram a escolha quando o campo de arquivo não está na página.
     const inp = document.createElement("input");
-    inp.type = "file"; inp.accept = "image/*";
+    inp.type = "file"; inp.accept = "image/*"; inp.hidden = true;
     if (origem === "camera") inp.setAttribute("capture", "user");
     inp.addEventListener("change", () => {
-      const f = inp.files[0]; if (!f) return ok(null);
-      if (f.size > MAX_IMAGEM) return ok("grande");
-      const rd = new FileReader(); rd.onload = () => ok(rd.result); rd.onerror = () => ok(null); rd.readAsDataURL(f);
-    });
+      const f = inp.files[0]; inp.remove();
+      if (!f) return ok(null);
+      ok(f.size > MAX_IMAGEM ? "grande" : URL.createObjectURL(f));
+    }, { once: true });
+    inp.addEventListener("cancel", () => { inp.remove(); ok(null); }, { once: true });
+    document.body.appendChild(inp);
     inp.click();
   });
 }
@@ -718,10 +726,13 @@ function recortarFoto(dataUrl) {
       const lado = Math.min(720, img.width, img.height), c = document.createElement("canvas"); c.width = c.height = lado;
       const m = Math.min(img.width, img.height);
       c.getContext("2d").drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, lado, lado);
+      if (dataUrl.startsWith("blob:")) URL.revokeObjectURL(dataUrl);
       ok(c.toDataURL("image/jpeg", 0.82));
     };
     img.onerror = () => ok(null);
     img.src = dataUrl;
+    // Foto que não carrega em 20 segundos (formato não suportado, falta de memória) vira erro, sem travar a tela.
+    setTimeout(() => ok(null), 20000);
   });
 }
 // "manter" redesenha a edição sem voltar aos dados salvos (por exemplo, depois de escolher uma foto).
@@ -730,7 +741,8 @@ function renderCadastro(editando, manter) {
   if (editando && !manter) rascunho = r;
   if (!Array.isArray(r.fotos)) r.fotos = fotosDe(r);
   const slots = r.fotos.map((f, i) => `<div class="foto-slot" style="background-image:url(${comApi(f)})"><button class="tirar" type="button" data-tirar="${i}" aria-label="Remover foto ${i + 1}">×</button>${i === 0 ? `<span class="selo">Principal</span>` : `<button class="principal" type="button" data-principal="${i}">Tornar principal</button>`}</div>`).join("")
-    + (enviandoFoto ? `<div class="foto-slot">Verificando a foto…</div>` : "");
+    + (carregandoFoto ? `<div class="foto-slot">Abrindo a foto…</div>` : enviandoFoto ? `<div class="foto-slot">Verificando a foto…</div>` : "");
+  formPerfilAberto = true;
   const seg = (campo, ops) => `<div class="seg${ops.length === 4 ? " quatro" : ""}" data-campo="${campo}">${ops.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${r[campo] === v}">${t}</button>`).join("")}</div>`;
   tela.innerHTML = `
   <form class="pilha entra" id="fCad" novalidate>
@@ -740,8 +752,8 @@ function renderCadastro(editando, manter) {
       <p class="muted" style="margin:0">${S.nivel ? `Você já está no nível ${fmtNivel(S.nivel)}.` : "Você começa no nível 0."} Cada resposta certa vale +1 nível e desbloqueia pessoas do mesmo nível.</p>
     </div>`}
     <div class="campo"><label>Fotos <span class="muted" style="font-weight:400">${r.fotos.length} de ${MAX_FOTOS}</span></label>
-      ${r.fotos.length || enviandoFoto ? `<div class="fotos-grade">${slots}</div>` : ""}
-      ${r.fotos.length + (enviandoFoto ? 1 : 0) < MAX_FOTOS ? `<div class="linha" style="gap:8px"><button class="btn sec" type="button" id="fGaleria" ${enviandoFoto ? "disabled" : ""}>Escolher da galeria</button><button class="btn sec" type="button" id="fCamera" ${enviandoFoto ? "disabled" : ""}>Tirar foto</button></div>` : ""}
+      ${r.fotos.length || enviandoFoto || carregandoFoto ? `<div class="fotos-grade">${slots}</div>` : ""}
+      ${r.fotos.length + (enviandoFoto || carregandoFoto ? 1 : 0) < MAX_FOTOS ? `<div class="linha" style="gap:8px"><button class="btn sec" type="button" id="fGaleria" ${enviandoFoto || carregandoFoto ? "disabled" : ""}>Escolher da galeria</button><button class="btn sec" type="button" id="fCamera" ${enviandoFoto || carregandoFoto ? "disabled" : ""}>Tirar foto</button></div>` : ""}
       <span class="muted" style="font-size:12px">${isentoFoto() ? "Conta de teste: as fotos são opcionais." : "Pelo menos 1 foto. Cada foto precisa mostrar você; fotos sem pessoa ou com nudez são recusadas."}</span>
       <div class="erro" id="fotoErro"></div></div>
     <div class="campo"><label for="fNome">Nome</label><input id="fNome" value="${esc(r.nome)}" maxlength="30" autocomplete="given-name"></div>
@@ -765,10 +777,13 @@ function renderCadastro(editando, manter) {
   // Com conta, cada foto vai para o servidor na hora: o Claude confere se há uma pessoa antes de entrar no perfil.
   const adicionarFoto = async origem => {
     const bruta = await escolherImagem(origem); if (!bruta) return;
+    if (!tela.querySelector("#fCad")) return;
     if (bruta === "grande") { $("#fotoErro").textContent = "A foto pode ter até 5 MB."; return; }
+    if (bruta === "falhou") { $("#fotoErro").textContent = "Não consegui pegar a foto. Tente de novo."; return; }
+    ler(); carregandoFoto = true; redesenhar();
     const foto = await recortarFoto(bruta);
-    if (!foto) { $("#fotoErro").textContent = "Não consegui abrir essa imagem. Tente outra."; return; }
-    ler();
+    carregandoFoto = false;
+    if (!foto) { redesenhar(); $("#fotoErro").textContent = "Não consegui abrir essa imagem. Tente outra (JPG ou PNG)."; return; }
     if (!conta || semServidor) { rascunho.fotos.push(foto); return redesenhar(); }
     enviandoFoto = true; redesenhar();
     let msg = "";
@@ -789,7 +804,7 @@ function renderCadastro(editando, manter) {
     else if (!(idade >= 18 && idade <= 99)) erro = "O Jingar é só para maiores de 18 anos.";
     else if (!rascunho.sexo) erro = "Escolha como você se identifica.";
     else if (!rascunho.interesse) erro = "Escolha quem você quer conhecer.";
-    else if (enviandoFoto) erro = "Espere a verificação da foto terminar.";
+    else if (enviandoFoto || carregandoFoto) erro = "Espere a foto terminar de carregar.";
     else if (!rascunho.fotos.length && !isentoFoto()) erro = "Adicione pelo menos uma foto sua.";
     if (erro) { $("#fErro").textContent = erro; return; }
     const fotos = rascunho.fotos.slice(0, MAX_FOTOS);
