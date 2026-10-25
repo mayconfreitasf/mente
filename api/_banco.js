@@ -46,6 +46,8 @@ export function prepararBanco() {
     // Até 5 fotos por perfil (ids de midias, na ordem); foto_id continua sendo a principal.
     await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS fotos jsonb`;
     await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS idade_min int`;
+    // Quando a pessoa autorizou usar quem ela quer conhecer (dado sensível, art. 11 da LGPD). Sem autorização, o match fica desligado.
+    await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS consentimento_em timestamptz`;
     await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS idade_max int`;
     await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS melhores jsonb`;
     // Cada pergunta respondida (primeira tentativa); repetida não soma nível.

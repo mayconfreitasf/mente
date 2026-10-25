@@ -78,7 +78,10 @@ export async function sincronizarPerfil(u, estado, local) {
   const km = n => Math.round(n * 100) / 100;
   const lat = local && Number.isFinite(Number(local.lat)) ? km(numero(local.lat, -90, 90, null)) : null;
   const lng = local && Number.isFinite(Number(local.lng)) ? km(numero(local.lng, -180, 180, null)) : null;
-  const interesse = ["F", "M", "T", "N"].includes(p.interesse) ? p.interesse : "N";
+  // Quem a pessoa quer conhecer revela a orientação sexual: só é usado com autorização específica dela.
+  const quando = p.consentimento ? new Date(p.consentimento) : null;
+  const consentimento = quando && !isNaN(quando) ? quando.toISOString() : null;
+  const interesse = consentimento && ["F", "M", "T", "N"].includes(p.interesse) ? p.interesse : "N";
   const sexo = ["F", "M", "O"].includes(p.sexo) ? p.sexo : "O";
   const nivel = numero(estado.nivel, 0, 1e6, 0);
   const raio = f.raio == null ? null : Math.round(numero(f.raio, 1, 20000, 0)) || null;
@@ -88,12 +91,12 @@ export async function sincronizarPerfil(u, estado, local) {
     .filter(([id, c]) => c && Number(c.r) >= 5 && nomeDoAssunto(id))
     .sort((a, b) => Number(b[1].a) / Number(b[1].r) - Number(a[1].a) / Number(a[1].r) || Number(b[1].a) - Number(a[1].a))
     .slice(0, 3).map(([id]) => nomeDoAssunto(id));
-  await sql`INSERT INTO perfis (usuario_id, nome, idade, sexo, interesse, cidade, bio, foto_id, fotos, lat, lng, nivel, ver_min, vis_min, raio, idade_min, idade_max, melhores, atualizado_em)
+  await sql`INSERT INTO perfis (usuario_id, nome, idade, sexo, interesse, cidade, bio, foto_id, fotos, lat, lng, nivel, ver_min, vis_min, raio, idade_min, idade_max, melhores, consentimento_em, atualizado_em)
     VALUES (${u.id}, ${curto(p.nome, 30)}, ${Math.round(numero(p.idade, 18, 120, 18))}, ${sexo}, ${interesse}, ${curto(p.cidade, 40)}, ${curto(p.bio, 140)}, ${fotoId}, ${JSON.stringify(ids)},
-      ${lat}, ${lng}, ${nivel}, ${numero(f.verMin, 0, 1e6, 0)}, ${numero(f.visMin, 0, 1e6, 0)}, ${raio}, ${idadeMin}, ${idadeMax}, ${JSON.stringify(melhores)}, now())
+      ${lat}, ${lng}, ${nivel}, ${numero(f.verMin, 0, 1e6, 0)}, ${numero(f.visMin, 0, 1e6, 0)}, ${raio}, ${idadeMin}, ${idadeMax}, ${JSON.stringify(melhores)}, ${consentimento}, now())
     ON CONFLICT (usuario_id) DO UPDATE SET nome = EXCLUDED.nome, idade = EXCLUDED.idade, sexo = EXCLUDED.sexo, interesse = EXCLUDED.interesse,
       cidade = EXCLUDED.cidade, bio = EXCLUDED.bio, foto_id = EXCLUDED.foto_id, fotos = EXCLUDED.fotos, lat = EXCLUDED.lat, lng = EXCLUDED.lng, nivel = EXCLUDED.nivel,
       ver_min = EXCLUDED.ver_min, vis_min = EXCLUDED.vis_min, raio = EXCLUDED.raio, idade_min = EXCLUDED.idade_min, idade_max = EXCLUDED.idade_max,
-      melhores = EXCLUDED.melhores, atualizado_em = now()`;
+      melhores = EXCLUDED.melhores, consentimento_em = EXCLUDED.consentimento_em, atualizado_em = now()`;
   return { fotos: ids.map(urlMidia), recusadas };
 }

@@ -546,7 +546,16 @@ function noFiltro(p) {
 }
 const faixaIdade = () => { const f = S.filtros || {}; const a = Math.min(99, Math.max(18, f.idadeMin || 18)); return [a, Math.min(99, Math.max(a, f.idadeMax || 99))]; };
 const elegivel = p => { const [a, b] = faixaIdade(); return noFiltro(p) && interesseOk(p) && p.idade >= a && p.idade <= b; };
-const semMatch = () => !!S.perfil && S.perfil.interesse === "N";
+// Quem a pessoa quer conhecer revela a orientação sexual (dado sensível na LGPD): só vale com autorização específica.
+const TEXTO_CONSENTIMENTO = "Autorizo o Jingar a usar quem eu quero conhecer, que revela minha orientação sexual, só para mostrar perfis compatíveis e formar matches. Posso retirar quando quiser no Perfil.";
+const semMatch = () => !!S.perfil && (S.perfil.interesse === "N" || !S.perfil.consentimento);
+function pedirConsentimento(depois) {
+  const v = folha(`<h2>Autorizar uso deste dado</h2><p style="margin:0">${TEXTO_CONSENTIMENTO}</p>
+    <p class="muted" style="margin:0;font-size:13px">Sem a autorização, os quizzes continuam liberados, mas o match fica desligado. Veja a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</p>
+    <button class="btn bloco" type="button" id="sim">Autorizo</button><button class="link" type="button" id="nao">Agora não</button>`);
+  v.querySelector("#nao").addEventListener("click", () => v.remove());
+  v.querySelector("#sim").addEventListener("click", () => { v.remove(); S.perfil.consentimento = new Date().toISOString(); depois(); });
+}
 // Quem está abaixo do nível mínimo de visibilidade não vê você, então não dá match. Do seu nível para cima, todos veem.
 function meVe(p) { return p.nivel >= Math.min(S.filtros.visMin, S.nivel); }
 function resumoFiltros() {
@@ -594,12 +603,13 @@ function abrirFiltros() {
 }
 function renderSemMatch() {
   tela.innerHTML = `<div class="vazio entra"><h2>Match desligado</h2>
-    <p class="muted" style="margin:0">Você escolheu não conhecer ninguém por enquanto. Seu perfil fica invisível e o match fica desligado, mas os quizzes continuam liberados.</p>
+    <p class="muted" style="margin:0">${S.perfil.interesse !== "N" && !S.perfil.consentimento ? "Para conhecer pessoas, falta autorizar o uso de quem você quer conhecer." : "Você escolheu não conhecer ninguém por enquanto."} Seu perfil fica invisível e o match fica desligado, mas os quizzes continuam liberados.</p>
     <p style="margin:0">Quer ativar? Escolha quem você quer conhecer:</p>
     <div class="seg" style="width:100%" id="ativarMatch"><button type="button" data-v="F">Mulheres</button><button type="button" data-v="M">Homens</button><button type="button" data-v="T">Ambos</button></div></div>`;
   $("#ativarMatch").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
-    S.perfil.interesse = b.dataset.v; salvar(); toast("Match ativado"); render();
+    const ativar = () => { S.perfil.interesse = b.dataset.v; salvar(); toast("Match ativado"); render(); };
+    S.perfil.consentimento ? ativar() : pedirConsentimento(ativar);
   });
 }
 
@@ -782,7 +792,8 @@ function renderCadastro(editando, manter) {
     <div class="campo"><label for="fIdade">Idade</label>${conta && conta.idade ? `<input id="fIdade" type="number" value="${conta.idade}" readonly title="Calculada pela sua data de nascimento">` : `<input id="fIdade" type="number" inputmode="numeric" min="18" max="99" value="${esc(r.idade)}">`}</div>
     <div class="campo"><label>Eu sou</label>${seg("sexo", [["F", "Mulher"], ["M", "Homem"], ["O", "Outro"]])}</div>
     <div class="campo"><label>Quero conhecer</label>${seg("interesse", [["F", "Mulheres"], ["M", "Homens"], ["T", "Ambos"], ["N", "Ninguém"]])}
-      <p class="aviso" id="avisoN" style="margin:0;text-align:left" ${r.interesse === "N" ? "" : "hidden"}>Com "Ninguém" seu perfil fica invisível e o match fica desligado. Dá pra mudar depois no Perfil.</p></div>
+      <p class="aviso" id="avisoN" style="margin:0;text-align:left" ${r.interesse === "N" ? "" : "hidden"}>Com "Ninguém" seu perfil fica invisível e o match fica desligado. Dá pra mudar depois no Perfil.</p>
+      <label class="aceite" id="caixaConsentimento" style="${r.interesse && r.interesse !== "N" ? "" : "display:none"}"><input type="checkbox" id="fConsentimento" ${r.consentimento ? "checked" : ""}><span>${TEXTO_CONSENTIMENTO}</span></label></div>
     <div class="campo"><label for="fBio">Sobre você</label><textarea id="fBio" maxlength="140" placeholder="Uma frase que puxe conversa">${esc(r.bio)}</textarea></div>
     <div class="erro" id="fErro"></div>
     <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : `Começar no nível ${fmtNivel(S.nivel)}`}</button>
@@ -794,7 +805,9 @@ function renderCadastro(editando, manter) {
     rascunho[g.dataset.campo] = b.dataset.v;
     g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
     const av = $("#avisoN"); if (av) av.hidden = rascunho.interesse !== "N";
+    const cc = $("#caixaConsentimento"); if (cc) cc.style.display = rascunho.interesse && rascunho.interesse !== "N" ? "" : "none";
   }));
+  $("#fConsentimento").addEventListener("change", e => { rascunho.consentimento = e.target.checked ? rascunho.consentimento || new Date().toISOString() : null; });
   const redesenhar = () => { const topo = tela.scrollTop; renderCadastro(editando, true); tela.scrollTop = topo; };
   // Com conta, cada foto vai para o servidor na hora: o Claude confere se há uma pessoa antes de entrar no perfil.
   const adicionarFoto = async origem => {
@@ -826,11 +839,12 @@ function renderCadastro(editando, manter) {
     else if (!(idade >= 18 && idade <= 99)) erro = "O Jingar é só para maiores de 18 anos.";
     else if (!rascunho.sexo) erro = "Escolha como você se identifica.";
     else if (!rascunho.interesse) erro = "Escolha quem você quer conhecer.";
+    else if (rascunho.interesse !== "N" && !rascunho.consentimento) erro = "Marque a autorização para conhecer pessoas, ou escolha \"Ninguém\".";
     else if (enviandoFoto || carregandoFoto) erro = "Espere a foto terminar de carregar.";
     else if (!rascunho.fotos.length && !isentoFoto()) erro = "Adicione pelo menos uma foto sua.";
     if (erro) { $("#fErro").textContent = erro; return; }
     const fotos = rascunho.fotos.slice(0, MAX_FOTOS);
-    S.perfil = { nome: rascunho.nome, idade, sexo: rascunho.sexo, interesse: rascunho.interesse, cidade: rascunho.cidade, bio: rascunho.bio, fotos, foto: fotos[0] || null };
+    S.perfil = { nome: rascunho.nome, idade, sexo: rascunho.sexo, interesse: rascunho.interesse, consentimento: rascunho.consentimento || null, cidade: rascunho.cidade, bio: rascunho.bio, fotos, foto: fotos[0] || null };
     salvar(); irPara(editando ? "perfil" : "quiz");
   });
 }
@@ -2733,8 +2747,9 @@ function renderPerfil() {
     </div>
     <div class="caixa"><div class="chave"><div><strong>Melhor categoria</strong><div class="muted" style="font-size:13px">Com pelo menos 5 respostas</div></div><b>${esc(melhorNome)}</b></div></div>
     <div class="caixa">
-      <div><strong>Quero conhecer</strong><div class="muted" style="font-size:13px">${semMatch() ? "Você está invisível e o match está desligado." : "Escolha \"Ninguém\" para ficar invisível e pausar o match."}</div></div>
+      <div><strong>Quero conhecer</strong><div class="muted" style="font-size:13px">${semMatch() ? (pf.interesse !== "N" ? "Autorize o uso deste dado para ativar o match." : "Você está invisível e o match está desligado.") : "Escolha \"Ninguém\" para ficar invisível e pausar o match."}</div></div>
       <div class="seg quatro" id="pInteresse">${[["F", "Mulheres"], ["M", "Homens"], ["T", "Ambos"], ["N", "Ninguém"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${pf.interesse === v}">${t}</button>`).join("")}</div>
+      ${pf.consentimento ? `<button class="link" type="button" id="retirarConsentimento" style="font-size:13px;margin:0">Retirar autorização de uso deste dado</button>` : ""}
     </div>
     ${modoReal() ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Prova para conversar</strong><div class="muted" style="font-size:13px">${provaPadrao().qtd} perguntas de ${esc(nomeAssunto(provaPadrao().assunto))} · mínimo ${provaPadrao().minimo}</div></div><button class="btn sec" type="button" id="pProva" style="padding:8px 14px">Ajustar</button></div>
       <div class="chave"><div style="min-width:0"><strong style="font-size:14px">Pedir em todo match novo</strong><div class="muted" style="font-size:12px">A pessoa só conversa com você depois de passar.</div></div><button class="toggle" type="button" role="switch" id="tProvaAuto" aria-checked="${provaPadrao().auto}" aria-label="Pedir prova em todo match novo"></button></div></div>` : ""}
@@ -2755,8 +2770,17 @@ function renderPerfil() {
     ${conta ? `<button class="link" type="button" id="excluirConta" style="color:var(--bad)">Excluir conta</button>` : ""}
   </div>`;
   $("#pInteresse").addEventListener("click", e => {
-    const b = e.target.closest("button"); if (!b || b.dataset.v === pf.interesse) return;
-    pf.interesse = b.dataset.v; salvar(); toast(b.dataset.v === "N" ? "Match desligado" : "Match ativado"); render();
+    const b = e.target.closest("button"); if (!b) return;
+    const precisa = b.dataset.v !== "N" && !pf.consentimento;
+    if (b.dataset.v === pf.interesse && !precisa) return;
+    const mudar = () => { pf.interesse = b.dataset.v; salvar(); toast(b.dataset.v === "N" ? "Match desligado" : "Match ativado"); render(); };
+    precisa ? pedirConsentimento(mudar) : mudar();
+  });
+  const rc = $("#retirarConsentimento"); if (rc) rc.addEventListener("click", () => {
+    const v = folha(`<h2>Retirar autorização?</h2><p class="muted" style="margin:0">Deixamos de usar quem você quer conhecer. Seu perfil fica invisível e o match desliga. Os quizzes continuam liberados.</p>
+      <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Retirar</button><button class="link" type="button" id="nao">Cancelar</button>`);
+    v.querySelector("#nao").addEventListener("click", () => v.remove());
+    v.querySelector("#sim").addEventListener("click", () => { v.remove(); pf.consentimento = null; salvar(); toast("Match desligado"); render(); });
   });
   $("#pFiltros").addEventListener("click", abrirFiltros);
   const pp = $("#pProva"); if (pp) pp.addEventListener("click", ajustarProvaPadrao);

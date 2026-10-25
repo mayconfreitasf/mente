@@ -154,7 +154,7 @@ ol.perguntas .certa { color: var(--ok); font-weight: 700; }
         <dt>Localização</dt><dd>${p.lat != null ? `${p.lat}, ${p.lng} (arredondada)` : "não informada"}</dd>
         <dt>Atualizado</dt><dd>${data(p.atualizado_em)}</dd>
       </dl></div>` : ""}
-      <div class="caixa"><h2>Denúncias recebidas (${u.denunciasRecebidas})</h2>${u.denuncias.length ? u.denuncias.map(d => `<div><strong>${esc(d.motivo)}</strong> <span class="muted">· ${esc(d.status)} · por ${d.denunciante ? "@" + esc(d.denunciante) : "conta excluída"} · ${data(d.criado_em)}</span>${d.texto ? `<div>${esc(d.texto)}</div>` : ""}</div>`).join("") : `<span class="muted">Nenhuma.</span>`}
+      <div class="caixa"><h2>Denúncias recebidas (${u.denunciasRecebidas})</h2>${u.denuncias.length ? u.denuncias.map(d => `<div><strong>${esc(d.motivo)}</strong> <span class="muted">· ${esc(d.status)} · por ${d.denunciante ? "@" + esc(d.denunciante) : "conta excluída"} · ${data(d.criado_em)}</span>${d.texto ? `<div>${esc(d.texto)}</div>` : ""}${d.denunciante ? `<button class="sec mini" data-conversa="${d.id}">Ver conversa</button><div class="conversa" id="conversa-${d.id}" hidden></div>` : ""}</div>`).join("") : `<span class="muted">Nenhuma.</span>`}
         <span class="muted">Denúncias feitas por esta pessoa: ${u.denunciasFeitas}</span></div>`);
     $("#voltar").addEventListener("click", () => abrir());
     $("#exportar").addEventListener("click", async () => {

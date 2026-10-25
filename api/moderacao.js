@@ -19,7 +19,7 @@ async function usuarioAdmin(u, completo) {
     criado_em: u.criado_em, verificado: u.verificado, banido: u.banido, teste: u.teste, nivel: u.nivel == null ? (p ? Number(p.nivel) : 0) : Number(u.nivel),
     google: !!u.google_sub, apple: !!u.apple_sub, avisos: u.avisos !== false, denunciasRecebidas: recebidas,
     perfil: p ? { nome: p.nome, idade: p.idade, sexo: p.sexo, interesse: p.interesse, bio: p.bio, lat: p.lat, lng: p.lng,
-      idadeMin: p.idade_min, idadeMax: p.idade_max, melhores: p.melhores || [], atualizado_em: p.atualizado_em, fotos: fotos.map(urlMidia) } : null
+      idadeMin: p.idade_min, idadeMax: p.idade_max, consentimento: p.consentimento_em, melhores: p.melhores || [], atualizado_em: p.atualizado_em, fotos: fotos.map(urlMidia) } : null
   };
   if (completo) {
     const [{ n: matches }] = await sql`SELECT count(*)::int AS n FROM matches WHERE a_id = ${u.id} OR b_id = ${u.id}`;
@@ -38,7 +38,7 @@ const DEMO = [
   { usuario: "testelucas", fotos: "lucas", nome: "Lucas", nasc: "1993-08-20", sexo: "M", nivel: 8, bio: "Engenheiro. Me pergunte sobre história do Brasil.", lat: 37.35, lng: -122.01 },
   { usuario: "testebia", fotos: "bia", nome: "Bia", nasc: "1995-02-03", sexo: "F", nivel: 45, bio: "Professora de matemática. Me alcance no nível 45.", lat: 37.32, lng: -122.05 }
 ];
-const REVISOR = { usuario: "revisao", email: "revisao@jingar.com.br", nasc: "1994-01-01", perfil: { nome: "Alex", idade: 32, sexo: "O", interesse: "T", cidade: "", bio: "Conta de revisão do Jingar." }, nivel: 20 };
+const REVISOR = { usuario: "revisao", email: "revisao@jingar.com.br", nasc: "1994-01-01", perfil: { nome: "Alex", idade: 32, sexo: "O", interesse: "T", cidade: "", bio: "Conta de revisão do Jingar.", consentimento: "2026-10-25T00:00:00Z" }, nivel: 20 };
 
 async function contaTeste(usuario, email, nasc, senha) {
   const [u] = await sql`INSERT INTO usuarios (usuario, email, senha_hash, nascimento, verificado, teste)
@@ -72,7 +72,7 @@ async function criarContasTeste(senhaRevisor) {
     const idade = new Date().getFullYear() - Number(d.nasc.slice(0, 4));
     await sql`UPDATE usuarios SET nivel = ${d.nivel} WHERE id = ${u.id}`;
     const fotos = await fotosDemo(u, d.fotos);
-    await sincronizarPerfil(u, { perfil: { nome: d.nome, idade, sexo: d.sexo, interesse: "T", cidade: "", bio: d.bio, fotos, foto: fotos[0] }, nivel: d.nivel, filtros: { verMin: 0, visMin: 0, raio: null } }, { lat: d.lat, lng: d.lng });
+    await sincronizarPerfil(u, { perfil: { nome: d.nome, idade, sexo: d.sexo, interesse: "T", cidade: "", bio: d.bio, fotos, foto: fotos[0], consentimento: "2026-10-25T00:00:00Z" }, nivel: d.nivel, filtros: { verMin: 0, visMin: 0, raio: null } }, { lat: d.lat, lng: d.lng });
     if (d.curtiu) await sql`INSERT INTO avaliacoes (de_id, para_id, tipo) VALUES (${u.id}, ${rev.id}, 'curtir') ON CONFLICT (de_id, para_id) DO UPDATE SET tipo = 'curtir'`;
   }
   return { revisor: REVISOR.usuario, demo: DEMO.map(d => d.usuario) };
