@@ -29,7 +29,7 @@ const MODELO = process.env.MODELO || "claude-opus-5-5";
 const COM_FALLBACK = new Set(["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"]);
 const LIMITE_TEXTO = 40000;
 // Cada chamada ao Claude custa: só quem tem conta usa, com limite por hora e por dia.
-const IA_POR_HORA = 60, IA_POR_DIA = 300;
+const IA_POR_HORA = 20, IA_POR_DIA = 20;
 const MAX_IMAGENS = 5;
 
 // Dificuldade por modo: 1 = Normal, 2 = Dobro nível, 3 = Triplo nível.

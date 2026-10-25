@@ -12,10 +12,10 @@ export default async function handler(req, res) {
   if (!sql) return res.status(503).end();
   const id = String(req.query && req.query.id || ""), s = String(req.query && req.query.s || "");
   if (!/^[0-9a-f-]{36}$/.test(id)) return res.status(400).end();
-  const esperado = Buffer.from(assinaturaMidia(id)), recebido = Buffer.from(s);
-  if (esperado.length !== recebido.length || !crypto.timingSafeEqual(esperado, recebido)) return res.status(403).end();
   try {
     await prepararBanco();
+    const esperado = Buffer.from(assinaturaMidia(id)), recebido = Buffer.from(s);
+    if (esperado.length !== recebido.length || !crypto.timingSafeEqual(esperado, recebido)) return res.status(403).end();
     const [m] = await sql`SELECT mime, dados, url FROM midias WHERE id = ${id}`;
     if (!m) return res.status(404).end();
     // Arquivo no Vercel Blob (privado): o servidor busca e repassa. Os antigos ainda vêm do banco.

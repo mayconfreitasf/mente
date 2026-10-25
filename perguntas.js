@@ -291,23 +291,6 @@ window.MENTE_CATEGORIAS = [
     ["O olho grego é usado contra:", "Mau-olhado", "Falta de chuva", "Doenças"],
     ["Deus nórdico do trovão?", "Thor", "Odin", "Loki"]
   ]},
-  { id: "alucinogenos", nome: "Alucinógenos", q: [
-    ["Quem sintetizou o LSD pela primeira vez?", "Albert Hofmann", "Timothy Leary", "Sigmund Freud"],
-    ["Em que ano o LSD foi sintetizado?", "1938", "1960", "1912"],
-    ["Substância dos cogumelos mágicos?", "Psilocibina", "Mescalina", "THC"],
-    ["A mescalina vem principalmente do cacto:", "Peiote", "Mandacaru", "Saguaro"],
-    ["A ayahuasca é tradicional da:", "Amazônia", "Patagônia", "Caatinga"],
-    ["Religião brasileira que usa ayahuasca?", "Santo Daime", "Candomblé", "Espiritismo"],
-    ["Principal alucinógeno da ayahuasca?", "DMT", "Psilocibina", "LSD"],
-    ["O LSD veio de um fungo que ataca o:", "Centeio", "Milho", "Café"],
-    ["Bad trip significa:", "Experiência ruim na viagem", "Overdose fatal", "Abstinência"],
-    ["No Brasil, a ayahuasca em uso religioso é:", "Permitida", "Proibida", "Só com receita"],
-    ["A psicodelia marcou a música dos anos:", "1960", "1920", "1990"],
-    ["Qual NÃO é um alucinógeno clássico?", "Cafeína", "LSD", "Psilocibina"],
-    ["Pesquisas estudam a psilocibina contra:", "Depressão", "Diabetes", "Miopia"],
-    ["Festival de 1969 ligado à contracultura?", "Woodstock", "Rock in Rio", "Lollapalooza"],
-    ["Set and setting se refere a:", "Estado mental e ambiente", "Dose e horário", "Preço e qualidade"]
-  ]},
   { id: "policial", nome: "Policial", q: [
     ["Polícia que patrulha rodovias federais?", "PRF", "PF", "PM"],
     ["Quem investiga crimes federais?", "Polícia Federal", "Polícia Militar", "Guarda Municipal"],

@@ -205,18 +205,6 @@ window.MENTE_DIFICEIS = {
     ["Hermes Trismegisto está ligado ao:", "Hermetismo", "Budismo", "Xintoísmo"],
     ["Pedra amarela associada à prosperidade?", "Citrino", "Ônix", "Turmalina negra"]
   ],
-  alucinogenos: [
-    ["O que significa LSD?", "Dietilamida do ácido lisérgico", "Ácido lisérgico metilado", "Lisergamida sintética"],
-    ["O Bicycle Day, 19 de abril, lembra:", "A primeira viagem intencional de Hofmann", "A proibição do LSD", "A descoberta da ayahuasca"],
-    ["No corpo, a psilocibina vira:", "Psilocina", "Serotonina", "Dopamina"],
-    ["Receptor mais ligado aos psicodélicos clássicos?", "Serotonina 5-HT2A", "Dopamina D2", "GABA-A"],
-    ["A ayahuasca une o cipó mariri à folha de:", "Chacrona", "Coca", "Tabaco"],
-    ["O cipó da ayahuasca contém inibidores de:", "MAO", "Acetilcolina", "Insulina"],
-    ["Professor de Harvard que promoveu o LSD nos anos 60?", "Timothy Leary", "Carl Jung", "B. F. Skinner"],
-    ["Autor de As Portas da Percepção, sobre mescalina?", "Aldous Huxley", "Jack Kerouac", "Hunter S. Thompson"],
-    ["Princípio ativo da Amanita muscaria?", "Muscimol", "Psilocibina", "DMT"],
-    ["A ibogaína vem de uma planta de qual continente?", "África", "Ásia", "Oceania"]
-  ],
   policial: [
     ["Prazo do inquérito com indiciado preso, pelo CPP?", "10 dias", "30 dias", "90 dias"],
     ["Prazo do inquérito com indiciado solto, pelo CPP?", "30 dias", "10 dias", "60 dias"],

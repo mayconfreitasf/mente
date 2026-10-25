@@ -4,6 +4,7 @@ import { usuarioDaSessao, falha, cors } from "./_sessao.js";
 import { avisar } from "./_push.js";
 import { urlMidia, apagarMidias } from "./_perfil.js";
 import { perguntasDoAssunto, nomeDoAssunto } from "./_bancos.js";
+import { mascarar } from "./_filtro.js";
 
 // Prova como cada lado vê: quem pediu vê a nota; quem precisa fazer vê o que falta.
 const provaPublica = (p, eu) => p && ({
@@ -35,13 +36,20 @@ function distancia(a, b) {
 }
 
 // Candidatos compatíveis: interesse dos dois lados, sem avaliação ou bloqueio, dentro dos filtros de nível e visibilidade.
+// O banco já tira quem foi avaliado ou bloqueado e traz os 500 mais próximos; o resto dos filtros é feito aqui.
 async function candidatos(eu, { incluirAvaliados = false } = {}) {
   const lista = await sql`SELECT p.usuario_id AS id, p.nome, p.idade, p.sexo, p.interesse, p.cidade, p.bio, p.foto_id, p.fotos, p.melhores, p.idade_min, p.idade_max, p.lat, p.lng, p.nivel, p.vis_min
     FROM perfis p JOIN usuarios u ON u.id = p.usuario_id
+      LEFT JOIN avaliacoes a ON a.de_id = ${eu.usuario_id} AND a.para_id = p.usuario_id
+      LEFT JOIN bloqueios b1 ON b1.usuario_id = ${eu.usuario_id} AND b1.alvo = p.usuario_id::text
+      LEFT JOIN bloqueios b2 ON b2.usuario_id = p.usuario_id AND b2.alvo = ${String(eu.usuario_id)}
     WHERE p.usuario_id <> ${eu.usuario_id} AND NOT u.banido AND u.verificado AND p.interesse <> 'N' AND u.teste = ${!!eu.teste}
       AND (p.foto_id IS NOT NULL OR u.teste)
       AND (${eu.interesse} = 'T' OR p.sexo = ${eu.interesse})
       AND (p.interesse = 'T' OR p.interesse = ${eu.sexo})
+      AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+      AND (${incluirAvaliados} OR a.de_id IS NULL) AND b1.usuario_id IS NULL AND b2.usuario_id IS NULL
+    ORDER BY (p.lat - ${Number(eu.lat) || 0}) * (p.lat - ${Number(eu.lat) || 0}) + (p.lng - ${Number(eu.lng) || 0}) * (p.lng - ${Number(eu.lng) || 0})
     LIMIT 500`;
   // Bloqueios valem nos dois sentidos: quem eu bloqueei e quem me bloqueou.
   const bloqueados = new Set([
@@ -75,8 +83,10 @@ async function meuPerfil(u) {
   return eu || null;
 }
 
+// Conversa de um match da pessoa. Com quem foi banido, a conversa some (404).
 async function matchDoUsuario(u, id) {
-  const [m] = await sql`SELECT * FROM matches WHERE id = ${Number(id) || 0} AND (a_id = ${u.id} OR b_id = ${u.id})`;
+  const [m] = await sql`SELECT m.* FROM matches m JOIN usuarios x ON x.id = (CASE WHEN m.a_id = ${u.id} THEN m.b_id ELSE m.a_id END)
+    WHERE m.id = ${Number(id) || 0} AND (m.a_id = ${u.id} OR m.b_id = ${u.id}) AND NOT x.banido`;
   if (!m) throw falha(404, "Conversa não encontrada.");
   return m;
 }
@@ -164,10 +174,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ match: true, matchId: Number(m.id) });
     }
 
+    // Desfazer o último "Passar": a pessoa volta para o Descobrir (só passes das últimas 24 horas).
+    if (b.acao === "desfazerPasse") {
+      if (!uuidValido(b.alvo)) throw falha(400, "Perfil inválido.");
+      await sql`DELETE FROM avaliacoes WHERE de_id = ${u.id} AND para_id = ${b.alvo} AND tipo = 'passar' AND criado_em > now() - interval '1 day'`;
+      return res.status(200).json({ ok: true });
+    }
+
     if (b.acao === "matches") {
       const lista = await sql`SELECT m.id, m.criado_em, p.usuario_id AS outro, p.nome, p.idade, p.cidade, p.bio, p.foto_id, p.fotos, p.melhores, p.nivel
         FROM matches m JOIN perfis p ON p.usuario_id = (CASE WHEN m.a_id = ${u.id} THEN m.b_id ELSE m.a_id END)
-        WHERE m.a_id = ${u.id} OR m.b_id = ${u.id} ORDER BY m.id DESC LIMIT 200`;
+        JOIN usuarios x ON x.id = p.usuario_id
+        WHERE (m.a_id = ${u.id} OR m.b_id = ${u.id}) AND NOT x.banido ORDER BY m.id DESC LIMIT 200`;
       const out = [];
       for (const m of lista) {
         const [ult] = await sql`SELECT * FROM mensagens WHERE match_id = ${m.id} ORDER BY id DESC LIMIT 1`;
@@ -252,7 +270,7 @@ export default async function handler(req, res) {
       const [{ n: porMinuto }] = await sql`SELECT count(*)::int AS n FROM mensagens WHERE de_id = ${u.id} AND criado_em > now() - interval '1 minute'`;
       if (porMinuto >= 30) throw falha(429, "Muitas mensagens em pouco tempo. Espere um pouco.");
       // Só texto: o envio de áudio saiu do chat.
-      const texto = typeof b.texto === "string" ? b.texto.trim().slice(0, MAX_TEXTO) : "";
+      const texto = mascarar(typeof b.texto === "string" ? b.texto.trim().slice(0, MAX_TEXTO) : "");
       if (!texto) throw falha(400, "Mensagem vazia.");
       const [x] = await sql`INSERT INTO mensagens (match_id, de_id, texto) VALUES (${m.id}, ${u.id}, ${texto}) RETURNING *`;
       // O desafio mandado pelo chat chega como aviso de desafio, sem o link no texto.

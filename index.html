@@ -395,11 +395,16 @@ const PADRAO = () => ({
   meuPasse: { ativo: true, valor: 150 }, selecao: [], modo: "normal", atualizado: 0,
   filtros: { verMin: 0, visMin: 0, raio: null, idadeMin: 18, idadeMax: 99 }, local: null, minhas: [], criacoes: [], denuncias: [], bloqueados: []
 });
+// Progresso salvo (no aparelho ou na conta) completado com o padrão; os filtros campo a campo, para nenhum faltar.
+function comPadroes(e) {
+  const base = PADRAO(), x = e && typeof e === "object" ? e : {};
+  return Object.assign(base, x, { filtros: Object.assign(base.filtros, x.filtros && typeof x.filtros === "object" ? x.filtros : {}) });
+}
 let S = carregarLocal() || PADRAO();
 let db = null, uid = null, salvarTimer = null;
 
 function carregarLocal() {
-  try { const t = localStorage.getItem(CHAVE); return t ? Object.assign(PADRAO(), JSON.parse(t)) : null; } catch { return null; }
+  try { const t = localStorage.getItem(CHAVE); return t ? comPadroes(JSON.parse(t)) : null; } catch { return null; }
 }
 function salvar() {
   S.atualizado = Date.now();
@@ -428,7 +433,7 @@ async function conectarNuvem() {
     const snap = await db.doc("data/users/" + uid + "/estado").get();
     const remoto = snap.exists ? snap.data() : null;
     if (remoto && (remoto.atualizado || 0) > (S.atualizado || 0)) {
-      S = Object.assign(PADRAO(), JSON.parse(JSON.stringify(remoto)));
+      S = comPadroes(JSON.parse(JSON.stringify(remoto)));
       try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {}
       if (!rodada) render();
     } else if (S.perfil) {
@@ -783,7 +788,7 @@ function renderCadastro(editando, manter) {
       <span class="muted" style="font-size:12px">${isentoFoto() ? "Conta de teste: as fotos são opcionais." : "Pelo menos 1 foto. Cada foto precisa mostrar você; fotos sem pessoa ou com nudez são recusadas."}</span>
       <div class="erro" id="fotoErro"></div></div>
     <div class="campo"><label for="fNome">Nome</label><input id="fNome" value="${esc(r.nome)}" maxlength="30" autocomplete="given-name"></div>
-    <div class="campo"><label for="fIdade">Idade</label>${conta && conta.idade ? `<input id="fIdade" type="number" value="${conta.idade}" readonly title="Calculada pela sua data de nascimento">` : `<input id="fIdade" type="number" inputmode="numeric" min="18" max="99" value="${esc(r.idade)}">`}</div>
+    ${conta && conta.idade ? "" : `<div class="campo"><label for="fNasc">Data de nascimento</label><input id="fNasc" type="date" min="1900-01-01" max="${dataMaxima18()}" value="${esc(r.nascimento || "")}"></div>`}
     <div class="campo"><label>Eu sou</label>${seg("sexo", [["F", "Mulher"], ["M", "Homem"], ["O", "Outro"]])}</div>
     <div class="campo"><label>Quero conhecer</label>${seg("interesse", [["F", "Mulheres"], ["M", "Homens"], ["T", "Ambos"], ["N", "Ninguém"]])}
       <p class="aviso" id="avisoN" style="margin:0;text-align:left" ${r.interesse === "N" ? "" : "hidden"}>Com "Ninguém" seu perfil fica invisível e o match fica desligado. Dá pra mudar depois no Perfil.</p>
@@ -793,7 +798,7 @@ function renderCadastro(editando, manter) {
     <button class="btn bloco" type="submit">${editando ? "Salvar perfil" : `Começar no nível ${fmtNivel(S.nivel)}`}</button>
     ${editando ? `<button class="link" type="button" id="fCancelar">Cancelar</button>` : semServidor ? `<p class="aviso">Protótipo: os outros perfis são fictícios e seus dados ficam só com você.</p>` : ""}
   </form>`;
-  const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), idade: $("#fIdade").value, bio: $("#fBio").value.trim() });
+  const ler = () => Object.assign(rascunho, { nome: $("#fNome").value.trim(), nascimento: $("#fNasc") ? $("#fNasc").value : rascunho.nascimento, bio: $("#fBio").value.trim() });
   tela.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     rascunho[g.dataset.campo] = b.dataset.v;
@@ -827,10 +832,12 @@ function renderCadastro(editando, manter) {
   if (editando) $("#fCancelar").addEventListener("click", () => irPara("perfil"));
   $("#fCad").addEventListener("submit", e => {
     e.preventDefault(); ler();
-    const idade = parseInt(rascunho.idade, 10);
+    // A idade vem sempre da data de nascimento: a da conta ou, sem ela (modo teste, Google ou Apple), a do formulário.
+    const idade = conta && conta.idade ? conta.idade : idadePorData(rascunho.nascimento);
     let erro = "";
     if (!rascunho.nome) erro = "Informe seu nome.";
-    else if (!(idade >= 18 && idade <= 99)) erro = "O Jingar é só para maiores de 18 anos.";
+    else if (idade == null) erro = "Informe sua data de nascimento.";
+    else if (!(idade >= 18 && idade <= 120)) erro = "O Jingar é só para maiores de 18 anos.";
     else if (!rascunho.sexo) erro = "Escolha como você se identifica.";
     else if (!rascunho.interesse) erro = "Escolha quem você quer conhecer.";
     else if (rascunho.interesse !== "N" && !rascunho.consentimento) erro = "Marque a autorização para conhecer pessoas, ou escolha \"Ninguém\".";
@@ -838,7 +845,7 @@ function renderCadastro(editando, manter) {
     else if (!rascunho.fotos.length && !isentoFoto()) erro = "Adicione pelo menos uma foto sua.";
     if (erro) { $("#fErro").textContent = erro; return; }
     const fotos = rascunho.fotos.slice(0, MAX_FOTOS);
-    S.perfil = { nome: rascunho.nome, idade, sexo: rascunho.sexo, interesse: rascunho.interesse, consentimento: rascunho.consentimento || null, cidade: rascunho.cidade, bio: rascunho.bio, fotos, foto: fotos[0] || null };
+    S.perfil = { nome: rascunho.nome, idade, nascimento: conta && conta.idade ? undefined : rascunho.nascimento, sexo: rascunho.sexo, interesse: rascunho.interesse, consentimento: rascunho.consentimento || null, cidade: rascunho.cidade, bio: rascunho.bio, fotos, foto: fotos[0] || null };
     salvar(); irPara(editando ? "perfil" : "quiz");
   });
 }
@@ -884,7 +891,9 @@ function renderQuizInicio() {
   const alvo = alea ? "assuntos aleatórios" : qtd === 1 ? "1 assunto" : qtd + " assuntos";
   // Mensagem do cartão de nível: quando falta foto ou localização, diz isso (e não "sem pessoas compatíveis").
   const semFotoAgora = modoReal() && !isentoFoto() && !fotosDe(S.perfil).length;
-  const aviso = semMatch() ? "Match desligado: por enquanto você está jogando só pelo quiz."
+  const soTeste = modoTeste && !conta;
+  const aviso = soTeste ? "No modo teste você joga à vontade. Crie uma conta para conhecer pessoas."
+    : semMatch() ? "Match desligado: por enquanto você está jogando só pelo quiz."
     : semFotoAgora || (resumoReal && resumoReal.semFoto) ? "Adicione uma foto ao seu perfil para ver pessoas."
     : modoReal() && (!S.local || (resumoReal && resumoReal.semLocal)) ? "Ative a localização no Descobrir para ver pessoas perto de você."
     : modoReal() && !liberados ? "Ainda não há pessoas compatíveis com seus filtros. Novas pessoas entram todo dia."
@@ -894,7 +903,7 @@ function renderQuizInicio() {
     <section class="placar">
       <div class="num">${fmtNivel(S.nivel)}</div>
       <span class="rotulo">Seu nível</span>
-      <p>${liberados} ${liberados === 1 ? "pessoa liberada" : "pessoas liberadas"} para você</p>
+      <p>${soTeste ? "Modo teste" : `${liberados} ${liberados === 1 ? "pessoa liberada" : "pessoas liberadas"} para você`}</p>
       ${g ? `<div class="prox"><div class="trilho"><i style="width:${pct}%"></i></div>
         <span class="muted" style="font-size:13px">${textoFalta(g)} no nível ${g.nivel}.</span></div>` : `<div class="prox muted" style="font-size:13px">${aviso}</div>`}
     </section>
@@ -1836,7 +1845,8 @@ function renderDescobrir() {
       ${g ? `<p class="muted" style="margin:0">${textoFalta(g)}.</p>` : ""}
       <button class="btn" type="button" id="irQuiz">Jogar um quiz</button>
       <button class="btn sec" type="button" id="abrirF">Ajustar filtros</button>
-      ${pulados.size ? `<button class="link" type="button" id="rever">Rever perfis bloqueados</button>` : ""}</div>`;
+      ${pulados.size ? `<button class="link" type="button" id="rever">Rever perfis bloqueados</button>` : ""}${botaoDesfazer()}</div>`;
+    ligarDesfazer();
     $("#irQuiz").addEventListener("click", () => irPara("quiz"));
     $("#abrirF").addEventListener("click", abrirFiltros);
     const rv = $("#rever"); if (rv) rv.addEventListener("click", () => { pulados.clear(); render(); });
@@ -1872,7 +1882,7 @@ function renderDescobrir() {
       ${livre ? `<button class="btn sec" type="button" id="passar">Passar</button><button class="btn" type="button" id="curtir">Curtir</button>`
               : `<button class="btn sec" type="button" id="pular" style="grid-column:1/-1">Ver próximo</button>`}
     </div>
-    <div class="linha" style="justify-content:center;gap:20px;margin-top:10px"><button class="link" type="button" id="bloquearP" style="font-size:13px">Bloquear</button><button class="link" type="button" id="denunciar" style="font-size:13px">Denunciar perfil</button></div>
+    <div class="linha" style="justify-content:center;gap:20px;margin-top:10px">${botaoDesfazer()}<button class="link" type="button" id="bloquearP" style="font-size:13px">Bloquear</button><button class="link" type="button" id="denunciar" style="font-size:13px">Denunciar perfil</button></div>
   </div>`;
   $("#filtros").addEventListener("click", abrirFiltros);
   if (fotos.length > 1) $("#fotoCartao").addEventListener("click", e => {
@@ -1881,10 +1891,12 @@ function renderDescobrir() {
     e.currentTarget.style.backgroundImage = `url(${comApi(fotos[fotoIdx])})`;
     e.currentTarget.querySelectorAll(".pontos i").forEach((x, i) => x.classList.toggle("on", i === fotoIdx));
   });
+  ligarDesfazer();
   $("#bloquearP").addEventListener("click", () => bloquear(p, livre));
   $("#denunciar").addEventListener("click", () => denunciar(p, livre));
   if (livre) {
     $("#passar").addEventListener("click", () => {
+      ultimoPassado = p;
       if (p.real) { chamarSocial({ acao: "passar", alvo: p.id }).catch(() => {}); filaReal = filaReal.filter(x => x.id !== p.id); return render(); }
       S.passados.push(p.id); salvar(); render();
     });
@@ -1893,6 +1905,21 @@ function renderDescobrir() {
     $("#pular").addEventListener("click", () => { pulados.add(p.id); render(); });
     const bp = $("#passe"); if (bp) bp.addEventListener("click", () => abrirPasse(p));
   }
+}
+// Desfazer o último "Passar": a pessoa volta para a frente da fila.
+let ultimoPassado = null;
+const botaoDesfazer = () => ultimoPassado ? `<button class="link" type="button" id="desfazerPasse" style="font-size:13px">Desfazer passar</button>` : "";
+function ligarDesfazer() {
+  const b = $("#desfazerPasse"); if (!b) return;
+  b.addEventListener("click", async () => {
+    const p = ultimoPassado; if (!p) return;
+    ultimoPassado = null;
+    if (p.real) {
+      try { await chamarSocial({ acao: "desfazerPasse", alvo: p.id }); } catch (e) { toast(e.erro); return render(); }
+      filaReal = [p, ...(filaReal || []).filter(x => x.id !== p.id)];
+    } else { S.passados = S.passados.filter(id => id !== p.id); salvar(); }
+    render();
+  });
 }
 function abrirPasse(p) {
   const v = folha(`
@@ -2339,6 +2366,9 @@ const limpaUsuario = x => x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase(
 // "Testar sem login" vale até fechar a aba: o progresso fica só neste aparelho.
 let modoTeste = (() => { try { return sessionStorage.getItem("mente.teste") === "1"; } catch { return false; } })();
 let conta = null, contaPronta = false, semServidor = false, cfgConta = {}, telaConta = "entrar";
+// Sem SMS configurado no servidor, o cadastro e a recuperação pedem só e-mail.
+const comSms = () => !!cfgConta.sms;
+const rotuloContato = () => comSms() ? "E-mail ou celular" : "E-mail";
 // Confirmação confirmacao: { finalidade: "verificar" | "recuperar", login, contato, destino, desde }.
 let confirmacao = null, timerReenvio = 0;
 let timerConta = 0, avisouTamanho = false, googlePronto = false, applePronto = false;
@@ -2372,7 +2402,7 @@ function aplicarConta(j) {
   setTimeout(iniciarAcompanhamento, 0);
   try { sessionStorage.removeItem("mente.teste"); } catch {}
   if (j.estado && typeof j.estado === "object") {
-    S = Object.assign(PADRAO(), j.estado);
+    S = comPadroes(j.estado);
     try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch {}
   } else if (S.perfil) salvarConta();
 }
@@ -2465,6 +2495,11 @@ function ligarSugestoesEmail(input, caixa) {
     (prox || input).focus();
   });
 }
+const idadePorData = iso => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || "")) return null;
+  const [a, m, d] = iso.split("-").map(Number), h = new Date();
+  return h.getFullYear() - a - (h.getMonth() + 1 < m || (h.getMonth() + 1 === m && h.getDate() < d) ? 1 : 0);
+};
 const dataMaxima18 = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 18); return d.toISOString().slice(0, 10); };
 function renderConta() {
   $("#abas").hidden = true; $("#chipNivel").hidden = true;
@@ -2480,9 +2515,9 @@ function renderConta() {
   if (t === "criar") corpo = `
     ${campo("cUsuario", "Usuário", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="15"')}
     ${dica(DICA_U + " Ele é único no Jingar.")}
-    ${campo("cContato", "E-mail ou celular", 'autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"')}
+    ${campo("cContato", rotuloContato(), `${comSms() ? "" : 'type="email" inputmode="email" '}autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"`)}
     <div class="sugestoes-email" id="sugEmail" hidden></div>
-    ${dica("Enviamos um código para confirmar. Celular com DDD.")}
+    ${dica(comSms() ? "Enviamos um código para confirmar. Celular com DDD." : "Enviamos um código para confirmar.")}
     ${campo("cNasc", "Data de nascimento", `type="date" max="${dataMaxima18()}" min="1900-01-01"`)}
     ${campo("cSenha", "Senha", 'type="password" autocomplete="new-password" maxlength="128"')}
     ${dica(DICA_SENHA)}
@@ -2499,8 +2534,8 @@ function renderConta() {
     <button class="link" type="button" id="reenviar" disabled>Reenviar código</button>
     <button class="link" type="button" data-ir="entrar">Voltar</button>`;
   else if (t === "recuperar") corpo = `
-    <p class="muted" style="margin:0">Digite o e-mail ou o celular da sua conta. Enviamos um código para você criar uma nova senha.</p>
-    ${campo("cContato", "E-mail ou celular", 'autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"')}
+    <p class="muted" style="margin:0">Digite o ${comSms() ? "e-mail ou o celular" : "e-mail"} da sua conta. Enviamos um código para você criar uma nova senha.</p>
+    ${campo("cContato", rotuloContato(), `${comSms() ? "" : 'type="email" inputmode="email" '}autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"`)}
     <div class="sugestoes-email" id="sugEmail" hidden></div>
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Enviar código</button>
@@ -2515,7 +2550,7 @@ function renderConta() {
     <button class="btn bloco" type="submit">Salvar nova senha</button>
     <button class="link" type="button" data-ir="entrar">Voltar</button>`;
   else corpo = `
-    ${campo("cLogin", "Usuário, e-mail ou celular", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120"')}
+    ${campo("cLogin", comSms() ? "Usuário, e-mail ou celular" : "Usuário ou e-mail", 'autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120"')}
     ${campo("cSenha", "Senha", 'type="password" autocomplete="current-password" maxlength="128"')}
     <div class="erro" id="contaErro"></div>
     <button class="btn bloco" type="submit">Entrar</button>
@@ -2548,7 +2583,7 @@ function renderConta() {
     const val = id => { const x = $("#" + id); return x ? x.value : ""; };
     if (t === "criar") {
       if (!USUARIO_OK.test(val("cUsuario"))) { erro.textContent = "O usuário precisa ter " + DICA_U.charAt(0).toLowerCase() + DICA_U.slice(1); return; }
-      if (!val("cContato").trim()) { erro.textContent = "Digite seu e-mail ou celular."; return; }
+      if (!val("cContato").trim()) { erro.textContent = comSms() ? "Digite seu e-mail ou celular." : "Digite seu e-mail."; return; }
       if (!val("cNasc")) { erro.textContent = "Informe sua data de nascimento."; return; }
       if (val("cNasc") > dataMaxima18()) { erro.textContent = "O Jingar é só para maiores de 18 anos."; return; }
       if (!$("#cAceite").checked) { erro.textContent = "Aceite os Termos de Uso e a Política de Privacidade para continuar."; return; }
@@ -2671,8 +2706,8 @@ function trocarSenha() {
 }
 // Trocar e-mail ou celular: código para o endereço novo; ele só passa a valer depois de confirmado.
 function trocarContato() {
-  const v = folha(`<h2>Trocar e-mail ou celular</h2>
-    <div class="campo"><label for="tcNovo">Novo e-mail ou celular</label><input id="tcNovo" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"></div>
+  const v = folha(`<h2>Trocar ${comSms() ? "e-mail ou celular" : "e-mail"}</h2>
+    <div class="campo"><label for="tcNovo">Novo ${comSms() ? "e-mail ou celular" : "e-mail"}</label><input id="tcNovo" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"></div>
     ${conta.temSenha ? `<div class="campo"><label for="tcSenha">Sua senha</label><input id="tcSenha" type="password" autocomplete="current-password" maxlength="128"></div>` : ""}
     <div class="erro" id="tcErro"></div>
     <button class="btn bloco" type="button" id="tcOk">Enviar código</button><button class="link" type="button" id="tcNao">Cancelar</button>`);
@@ -2726,7 +2761,7 @@ function renderPerfil() {
     ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho e o nível não passa para a conta.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
     <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="editar">Editar perfil</button><button class="btn sec" type="button" id="previa" style="font-size:13px;white-space:nowrap;padding-inline:8px">Como os outros me veem</button></div>
     ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Conta</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div>
-      <div class="linha" style="gap:6px">${conta.temSenha ? `<button class="btn sec mini" type="button" id="trocarSenha">Trocar senha</button>` : ""}<button class="btn sec mini" type="button" id="trocarContato">Trocar e-mail ou celular</button></div>
+      <div class="linha" style="gap:6px">${conta.temSenha ? `<button class="btn sec mini" type="button" id="trocarSenha">Trocar senha</button>` : ""}<button class="btn sec mini" type="button" id="trocarContato">Trocar ${comSms() ? "e-mail ou celular" : "e-mail"}</button></div>
       ${nativo ? `<strong style="font-size:14px">Avisos no celular</strong>${TIPOS_AVISO.map(([t, nome]) => `<div class="chave"><span style="font-size:14px">${nome}</span><button class="toggle" type="button" role="switch" data-aviso="${t}" aria-checked="${conta.avisos !== false && !(conta.avisosDesligados || []).includes(t)}" aria-label="Avisos de ${nome.toLowerCase()}"></button></div>`).join("")}` : ""}</div>` : ""}
     <div class="caixa"><strong>Ajuda e privacidade</strong><div style="display:grid;grid-template-columns:repeat(${cfgConta.contato ? 3 : 2}, minmax(0, 1fr));gap:6px"><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a>${cfgConta.contato ? `<a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="mailto:${esc(cfgConta.contato)}">Contato</a>` : ""}</div></div>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>

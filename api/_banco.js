@@ -1,8 +1,16 @@
 // Banco Postgres compartilhado pelas funções (contas e moderação). Cria e atualiza as tabelas na primeira chamada.
+import crypto from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 
 const URL_BANCO = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 export const sql = URL_BANCO ? neon(URL_BANCO) : null;
+
+// Segredos das assinaturas (endereços de fotos e perguntas da IA). Eram calculados a partir do endereço do banco;
+// agora ficam guardados na tabela "segredos" com esse mesmo valor, e continuam valendo se a senha do banco mudar.
+// MIDIA_SEGREDO e PONTOS_SEGREDO na Vercel, se existirem, têm prioridade.
+const derivado = nome => crypto.createHash("sha256").update(`jingar-${nome}:` + (URL_BANCO || "")).digest("hex");
+const segredos = {};
+export const segredo = nome => process.env[nome === "midia" ? "MIDIA_SEGREDO" : "PONTOS_SEGREDO"] || segredos[nome] || derivado(nome);
 
 let pronto = null;
 export function prepararBanco() {
@@ -56,6 +64,9 @@ export function prepararBanco() {
     await sql`CREATE TABLE IF NOT EXISTS respostas (
       usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, chave text NOT NULL,
       criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (usuario_id, chave))`;
+    // Limites por endereço de IP (guardado só como hash), por exemplo cadastros por hora.
+    await sql`CREATE TABLE IF NOT EXISTS limites (
+      id bigserial PRIMARY KEY, chave text NOT NULL, criado_em timestamptz NOT NULL DEFAULT now())`;
     await sql`CREATE TABLE IF NOT EXISTS ia_uso (
       id bigserial PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, criado_em timestamptz NOT NULL DEFAULT now())`;
     await sql`CREATE TABLE IF NOT EXISTS midias (
@@ -111,6 +122,9 @@ export function prepararBanco() {
       id bigserial PRIMARY KEY, codigo text NOT NULL REFERENCES desafios(codigo) ON DELETE CASCADE,
       jogador text NOT NULL, usuario_id uuid REFERENCES usuarios(id) ON DELETE CASCADE, nome text NOT NULL,
       acertos int NOT NULL, total int NOT NULL, criado_em timestamptz NOT NULL DEFAULT now(), UNIQUE (codigo, jogador))`;
+    await sql`CREATE TABLE IF NOT EXISTS segredos (nome text PRIMARY KEY, valor text NOT NULL)`;
+    for (const nome of ["midia", "pontos"]) await sql`INSERT INTO segredos (nome, valor) VALUES (${nome}, ${derivado(nome)}) ON CONFLICT (nome) DO NOTHING`;
+    for (const r of await sql`SELECT nome, valor FROM segredos`) segredos[r.nome] = r.valor;
   })().catch(e => { pronto = null; throw e; });
   return pronto;
 }

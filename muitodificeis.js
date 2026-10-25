@@ -205,18 +205,6 @@ window.MENTE_MUITO_DIFICEIS = {
     ["Orixá ligado à justiça, ao trovão e ao fogo?", "Xangô", "Ogum", "Oxóssi"],
     ["Livro chinês das mutações usado como oráculo?", "I Ching", "Tao Te Ching", "Bhagavad Gita"]
   ],
-  alucinogenos: [
-    ["Laboratório onde Albert Hofmann criou o LSD?", "Sandoz", "Bayer", "Merck"],
-    ["Cacto mexicano clássico que contém mescalina?", "Peiote", "Saguaro", "Mandacaru"],
-    ["Psicodélico do veneno do sapo Bufo alvarius?", "5-MeO-DMT", "Psilocina", "Mescalina"],
-    ["Gênero mais conhecido de cogumelos com psilocibina?", "Psilocybe", "Amanita", "Agaricus"],
-    ["Classe química da mescalina?", "Fenetilamina", "Triptamina", "Ergolina"],
-    ["Classe química da psilocibina e do DMT?", "Triptamina", "Fenetilamina", "Benzodiazepina"],
-    ["Planta de onde vem a salvinorina A?", "Salvia divinorum", "Cannabis sativa", "Datura"],
-    ["Receptor principal da salvinorina A?", "Opioide kappa", "Serotonina 5-HT2A", "NMDA"],
-    ["Anestésico dissociativo usado também contra depressão?", "Cetamina", "Propofol", "Midazolam"],
-    ["Químico que sintetizou centenas de fenetilaminas (PiHKAL)?", "Alexander Shulgin", "Albert Hofmann", "Terence McKenna"]
-  ],
   policial: [
     ["Número da Lei Maria da Penha?", "11.340/2006", "11.343/2006", "12.015/2009"],
     ["Número da atual Lei de Abuso de Autoridade?", "13.869/2019", "4.898/1965", "12.850/2013"],

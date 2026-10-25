@@ -1,5 +1,6 @@
 // Sessão das funções de conta, pessoas e quiz. No site vale o cookie; no app (iPhone e Android), um token
 // enviado no cabeçalho Authorization, porque o app roda em outra origem e não recebe cookies do servidor.
+import crypto from "node:crypto";
 import { sql } from "./_banco.js";
 import { hashToken } from "./_auth.js";
 
@@ -35,6 +36,9 @@ export function cors(req, res) {
   if (req.method === "OPTIONS") { res.status(204).end(); return true; }
   return false;
 }
+
+// Endereço de IP de quem chamou, só como hash (para limites, sem guardar o IP).
+export const ipHash = req => crypto.createHash("sha256").update("jingar-ip:" + String(req.headers["x-real-ip"] || req.headers["x-forwarded-for"] || "").split(",")[0].trim()).digest("hex").slice(0, 32);
 
 // Erro com status HTTP, devolvido como { erro } pelos handlers.
 export const falha = (status, erro, extra) => Object.assign(new Error(erro), { status, erro, extra });

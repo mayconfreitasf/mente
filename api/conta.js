@@ -5,7 +5,7 @@
 // TWILIO_FROM ou TWILIO_MESSAGING_SERVICE_SID (SMS). Opcionais: GOOGLE_CLIENT_ID, APPLE_CLIENT_ID, CONTATO_EMAIL.
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
-import { lerToken, gravarCookie, usuarioDaSessao, falha, cors } from "./_sessao.js";
+import { lerToken, gravarCookie, usuarioDaSessao, falha, cors, ipHash } from "./_sessao.js";
 import { sincronizarPerfil, guardarFotoConferida, urlMidia, apagarMidias, MAX_FOTOS } from "./_perfil.js";
 import { perguntaDoBanco } from "./_bancos.js";
 import { assinarPergunta, pesoValido, iguais } from "./_pontos.js";
@@ -122,7 +122,17 @@ async function acharPorLogin(login) {
   return u || null;
 }
 
-async function cadastrar(b, res) {
+// Cadastros por endereço: até 5 por hora e 20 por dia, contra contas e e-mails em massa.
+async function limiteCadastro(req) {
+  const chave = "cadastro:" + ipHash(req);
+  const [c] = await sql`SELECT count(*) FILTER (WHERE criado_em > now() - interval '1 hour') AS hora, count(*) AS dia
+    FROM limites WHERE chave = ${chave} AND criado_em > now() - interval '1 day'`;
+  if (Number(c.hora) >= 5 || Number(c.dia) >= 20) throw falha(429, "Muitos cadastros feitos desta rede. Tente de novo mais tarde.");
+  await sql`INSERT INTO limites (chave) VALUES (${chave})`;
+  await sql`DELETE FROM limites WHERE criado_em < now() - interval '2 days'`;
+}
+
+async function cadastrar(b, res, req) {
   const usuario = texto(b.usuario, 40), contato = lerContato(b.contato);
   if (!usuarioValido(usuario)) throw falha(400, "O usuário precisa ter de 4 a 15 letras minúsculas, sem números nem símbolos.");
   if (!contato) throw falha(400, "Digite um e-mail válido ou um celular com DDD.");
@@ -131,6 +141,7 @@ async function cadastrar(b, res) {
   if (idade == null || isNaN(idade) || idade > 120) throw falha(400, "Informe sua data de nascimento.");
   if (idade < 18) throw falha(403, "O Jingar é só para maiores de 18 anos.");
   if (b.aceite !== true) throw falha(400, "Aceite os Termos de Uso e a Política de Privacidade para continuar.");
+  await limiteCadastro(req);
   // Cadastros não confirmados há mais de 15 minutos liberam o usuário, e-mail ou celular para quem confirmar primeiro.
   await sql`DELETE FROM usuarios WHERE verificado = false AND criado_em < now() - interval '15 minutes'
     AND (usuario = ${usuario} OR email = ${contato.tipo === "email" ? contato.valor : null} OR telefone = ${contato.tipo === "telefone" ? contato.valor : null})`;
@@ -267,7 +278,7 @@ export default async function handler(req, res) {
   if (!sql) return res.status(503).json({ erro: "O login ainda não está configurado no servidor." });
   try {
     await prepararBanco();
-    if (b.acao === "cadastrar") return await cadastrar(b, res);
+    if (b.acao === "cadastrar") return await cadastrar(b, res, req);
     if (b.acao === "entrar") return await entrar(b, res);
     if (b.acao === "verificar") return await verificar(b, res);
     if (b.acao === "reenviar") return await reenviar(b, res);
@@ -298,6 +309,15 @@ export default async function handler(req, res) {
       // O perfil público acompanha o progresso; a foto enviada vira mídia e o progresso guarda só o endereço dela.
       // O nível que vale é o do servidor, não o que o app mandou.
       b.estado.nivel = await nivelDe(u);
+      // Conta sem data de nascimento (Google ou Apple): vale a que a pessoa informou no perfil, gravada uma vez.
+      const nasc = b.estado.perfil && String(b.estado.perfil.nascimento || "");
+      if (!u.nascimento && /^\d{4}-\d{2}-\d{2}$/.test(nasc)) {
+        const idade = idadeDe(nasc);
+        if (idade == null || isNaN(idade) || idade > 120) throw falha(400, "Data de nascimento inválida.");
+        if (idade < 18) throw falha(403, "O Jingar é só para maiores de 18 anos.");
+        await sql`UPDATE usuarios SET nascimento = ${nasc} WHERE id = ${u.id}`;
+        u.nascimento = nasc;
+      }
       const r = await sincronizarPerfil(u, b.estado, b.local);
       if (r.fotos && b.estado.perfil) { b.estado.perfil.fotos = r.fotos; b.estado.perfil.foto = r.fotos[0] || null; }
       await sql`UPDATE usuarios SET estado = ${JSON.stringify(b.estado)}::jsonb WHERE id = ${u.id}`;

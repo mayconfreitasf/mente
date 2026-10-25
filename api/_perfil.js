@@ -1,17 +1,26 @@
 // Perfil público de cada pessoa, montado a partir do progresso salvo pelo app.
 import crypto from "node:crypto";
-import { sql } from "./_banco.js";
+import { sql, segredo } from "./_banco.js";
 import { conferirFoto } from "./_foto.js";
 import { put, del } from "@vercel/blob";
 import { nomeDoAssunto } from "./_bancos.js";
+import { mascarar } from "./_filtro.js";
 
 const MAX_FOTO = 400000, MAX_AUDIO = 300000;
 export const MAX_FOTOS = 5;
 // Endereços de fotos e áudios levam uma assinatura: quem não recebeu o endereço do servidor não consegue montar outro.
 // Assim o app nativo carrega a mídia direto numa <img> ou <audio>, sem cookie.
-const SEGREDO = process.env.MIDIA_SEGREDO || crypto.createHash("sha256").update("jingar-midia:" + (process.env.DATABASE_URL || process.env.POSTGRES_URL || "")).digest("hex");
-export const assinaturaMidia = id => crypto.createHmac("sha256", SEGREDO).update(String(id)).digest("base64url").slice(0, 32);
+export const assinaturaMidia = id => crypto.createHmac("sha256", segredo("midia")).update(String(id)).digest("base64url").slice(0, 32);
 export const urlMidia = id => id ? `/api/midia?id=${id}&s=${assinaturaMidia(id)}` : null;
+// Idade pela data de nascimento da conta (quem entrou com Google ou Apple pode não ter: aí vale a do perfil).
+function idadeDe(nasc) {
+  if (!nasc) return null;
+  const d = new Date(nasc), h = new Date();
+  if (isNaN(d)) return null;
+  let i = h.getUTCFullYear() - d.getUTCFullYear();
+  if (h.getUTCMonth() < d.getUTCMonth() || (h.getUTCMonth() === d.getUTCMonth() && h.getUTCDate() < d.getUTCDate())) i--;
+  return i;
+}
 const curto = (x, max) => typeof x === "string" ? x.trim().slice(0, max) : null;
 const numero = (x, min, max, padrao) => { const n = Number(x); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : padrao; };
 
@@ -56,14 +65,21 @@ const idDaUrl = u => { const m = typeof u === "string" && u.match(/^\/api\/midia
 export async function sincronizarPerfil(u, estado, local) {
   const p = estado && estado.perfil;
   if (!p || typeof p !== "object") return {};
+  // Nome e "sobre você" aparecem para outras pessoas: palavrões e ofensas viram asteriscos (também no progresso salvo).
+  if (typeof p.nome === "string") p.nome = mascarar(p.nome);
+  if (typeof p.bio === "string") p.bio = mascarar(p.bio);
   const entrada = (Array.isArray(p.fotos) ? p.fotos : p.foto ? [p.foto] : []).slice(0, MAX_FOTOS);
   const linhasFotos = await sql`SELECT id, url, criado_em FROM midias WHERE dono_id = ${u.id} AND tipo = 'foto'`;
   const minhas = new Set(linhasFotos.map(r => String(r.id)));
   const ids = []; let recusadas = 0;
+  // Fotos novas passam pela conferência do Claude: no máximo 20 por hora, como no envio direto.
+  let novasNaHora = linhasFotos.filter(x => new Date(x.criado_em).getTime() > Date.now() - 3600000).length;
   for (const f of entrada) {
     let id = idDaUrl(f);
     if (id && !minhas.has(id)) id = null;
     if (!id && typeof f === "string" && f.startsWith("data:image/")) {
+      if (novasNaHora >= 20) { recusadas++; continue; }
+      novasNaHora++;
       try { id = await guardarFotoConferida(u.id, f); } catch { recusadas++; }
     }
     if (id && !ids.includes(id)) ids.push(id);
@@ -92,7 +108,7 @@ export async function sincronizarPerfil(u, estado, local) {
     .sort((a, b) => Number(b[1].a) / Number(b[1].r) - Number(a[1].a) / Number(a[1].r) || Number(b[1].a) - Number(a[1].a))
     .slice(0, 3).map(([id]) => nomeDoAssunto(id));
   await sql`INSERT INTO perfis (usuario_id, nome, idade, sexo, interesse, cidade, bio, foto_id, fotos, lat, lng, nivel, ver_min, vis_min, raio, idade_min, idade_max, melhores, consentimento_em, atualizado_em)
-    VALUES (${u.id}, ${curto(p.nome, 30)}, ${Math.round(numero(p.idade, 18, 120, 18))}, ${sexo}, ${interesse}, ${curto(p.cidade, 40)}, ${curto(p.bio, 140)}, ${fotoId}, ${JSON.stringify(ids)},
+    VALUES (${u.id}, ${curto(p.nome, 30)}, ${Math.round(numero(idadeDe(u.nascimento) ?? p.idade, 18, 120, 18))}, ${sexo}, ${interesse}, ${curto(p.cidade, 40)}, ${curto(p.bio, 140)}, ${fotoId}, ${JSON.stringify(ids)},
       ${lat}, ${lng}, ${nivel}, ${numero(f.verMin, 0, 1e6, 0)}, ${numero(f.visMin, 0, 1e6, 0)}, ${raio}, ${idadeMin}, ${idadeMax}, ${JSON.stringify(melhores)}, ${consentimento}, now())
     ON CONFLICT (usuario_id) DO UPDATE SET nome = EXCLUDED.nome, idade = EXCLUDED.idade, sexo = EXCLUDED.sexo, interesse = EXCLUDED.interesse,
       cidade = EXCLUDED.cidade, bio = EXCLUDED.bio, foto_id = EXCLUDED.foto_id, fotos = EXCLUDED.fotos, lat = EXCLUDED.lat, lng = EXCLUDED.lng, nivel = EXCLUDED.nivel,
