@@ -34,6 +34,8 @@ export function prepararBanco() {
       id bigserial PRIMARY KEY, denunciante_id uuid REFERENCES usuarios(id) ON DELETE SET NULL,
       alvo text NOT NULL, motivo text NOT NULL, texto text, status text NOT NULL DEFAULT 'aberta',
       criado_em timestamptz NOT NULL DEFAULT now(), resolvido_em timestamptz)`;
+    // Cópia das últimas mensagens da conversa denunciada (a conversa é apagada ao denunciar; a moderação lê esta cópia).
+    await sql`ALTER TABLE denuncias ADD COLUMN IF NOT EXISTS conversa jsonb`;
     // Pessoas reais: perfil público, fotos e áudios, curtidas, matches e mensagens.
     await sql`CREATE TABLE IF NOT EXISTS perfis (
       usuario_id uuid PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -73,6 +75,20 @@ export function prepararBanco() {
     await sql`CREATE TABLE IF NOT EXISTS bloqueios (
       usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, alvo text NOT NULL,
       criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (usuario_id, alvo))`;
+    // Categorias criadas pela IA, guardadas para todo mundo: quem pede o mesmo tema (e dificuldade) recebe as
+    // perguntas prontas (as perguntas ficam em categoria_partes).
+    await sql`CREATE TABLE IF NOT EXISTS categorias (
+      id bigserial PRIMARY KEY, tema_norm text NOT NULL, dificuldade text NOT NULL, tema text, titulo text, titulo_norm text,
+      aprovado boolean NOT NULL DEFAULT true, motivo text, sugestoes jsonb, peso numeric, subtemas jsonb,
+      criador_id uuid REFERENCES usuarios(id) ON DELETE SET NULL, usos int NOT NULL DEFAULT 1,
+      criado_em timestamptz NOT NULL DEFAULT now(), UNIQUE (tema_norm, dificuldade))`;
+    // Perguntas de cada subtema numa linha própria: as partes chegam ao mesmo tempo e uma não apaga a outra.
+    await sql`CREATE TABLE IF NOT EXISTS categoria_partes (
+      categoria_id bigint NOT NULL REFERENCES categorias(id) ON DELETE CASCADE, subtema text NOT NULL, perguntas jsonb NOT NULL,
+      criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (categoria_id, subtema))`;
+    // Registro das ações da área admin (quem foi banido, desbanido, quando), para auditoria.
+    await sql`CREATE TABLE IF NOT EXISTS admin_log (
+      id bigserial PRIMARY KEY, acao text NOT NULL, alvo text, detalhe text, criado_em timestamptz NOT NULL DEFAULT now())`;
     // Prova pedida num match: quem pede (de_id) escolhe assunto, tamanho e mínimo de acertos; a outra pessoa (para_id)
     // só conversa depois de passar. Tentativas livres, sem repetir perguntas (usadas).
     await sql`CREATE TABLE IF NOT EXISTS provas (

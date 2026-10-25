@@ -1538,7 +1538,9 @@ function pedirCodigo(depois) {
 }
 async function gerarPerguntasTema(titulo, subtemas, dificuldade, evitar, progresso, peso, pesoToken) {
   let feitas = 0;
-  const partes = await Promise.allSettled(subtemas.map(st => pedirCategoria({ tema: titulo, subtema: st, dificuldade, evitar, peso, pesoToken })
+  // Uma parte que falhar (resposta cortada ou erro passageiro) é pedida de novo uma vez.
+  const pedir = st => pedirCategoria({ tema: titulo, subtema: st, dificuldade, evitar, peso, pesoToken });
+  const partes = await Promise.allSettled(subtemas.map(st => pedir(st).catch(e => e && e.code === "codigo" ? Promise.reject(e) : pedir(st))
     .finally(() => progresso(++feitas, subtemas.length))));
   const vistos = new Set(evitar.map(q => q.trim().toLowerCase()));
   const perguntas = partes.flatMap(x => x.status === "fulfilled" && x.value && Array.isArray(x.value.perguntas) ? x.value.perguntas : []).filter(q =>
@@ -1550,6 +1552,15 @@ async function gerarPerguntasTema(titulo, subtemas, dificuldade, evitar, progres
   return { perguntas, erro: erro ? erro.reason : null, assinaturas };
 }
 const limpaLista = (l, n, max) => (Array.isArray(l) ? l : []).filter(x => typeof x === "string" && x.trim()).slice(0, n).map(x => x.trim().slice(0, max));
+// Sugestões do campo de tema: um assunto divertido e uma matéria de concurso ou faculdade, trocando a cada 2,5 s.
+// Os 12 temas têm perguntas prontas no servidor (api/_temas-prontos.js).
+const SUGESTOES_TEMA = ["Ex.: Friends, Maria da Penha", "Ex.: Harry Potter, Anatomia", "Ex.: Novelas, Direito Penal", "Ex.: Beatles, Contabilidade", "Ex.: Star Wars, Farmacologia", "Ex.: Futebol, Raciocínio lógico"];
+let sugTema = 0;
+setInterval(() => {
+  const i = document.getElementById("fTema");
+  if (!i || i.value || document.activeElement === i) return;
+  sugTema = (sugTema + 1) % SUGESTOES_TEMA.length; i.placeholder = SUGESTOES_TEMA[sugTema];
+}, 2500);
 function htmlBlocoCat() {
   const t = tarefaCat, ocupado = t && (t.etapa === "avaliando" || t.etapa === "criando"), lotado = !podeCriar();
   let status = "";
@@ -1561,7 +1572,7 @@ function htmlBlocoCat() {
   else if (lotado) status = `<span class="muted" style="font-size:12px">${esc(textoLimite())}</span>`;
   return `<div><b style="font-size:14px">Com um tema</b><div class="muted" style="font-size:12px">Digite um tema e o Jingar cria as perguntas.</div></div>
     <div class="seg pequeno" id="difCat">${DIFICULDADES.map(d => `<button type="button" data-dif="${d.id}" aria-pressed="${d.id === difCat}">${d.nome}</button>`).join("")}</div>
-    <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Hollywood" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
+    <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="${SUGESTOES_TEMA[sugTema]}" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
     ${status}`;
 }
 function ligarBlocoCat() {
@@ -1627,6 +1638,15 @@ async function criarCategoria(tema) {
     return avisar("Tema recusado");
   }
   const titulo = textoCurto(res.titulo, 40) || tema;
+  // Tema que alguém já criou (ou categoria pronta do app): as perguntas vêm na hora e não contam no limite.
+  if (res.pronta && Array.isArray(res.perguntas) && res.perguntas.length >= MIN_PERGUNTAS_TEMA) {
+    desfazerCriacao();
+    const cat = { id: "m" + Date.now(), nome: titulo, peso: pesoValido(res.peso), pesoToken: res.pesoToken, sig: res.assinaturas || {}, dificuldade, subtemas: limpaLista(res.subtemas, 3, 120), q: res.perguntas, criada: Date.now() };
+    S.minhas = [cat, ...(S.minhas || [])]; salvar();
+    mostrar({ tema, etapa: "pronta", titulo, n: cat.q.length, peso: cat.peso, catId: cat.id });
+    pintarMinhas(); avisar(`Categoria ${titulo} pronta`);
+    return;
+  }
   const subtemas = limpaLista(res.subtemas, 3, 120);
   const lista = subtemas.length ? subtemas : [titulo];
   mostrar({ tema, etapa: "criando", titulo, feitas: 0, total: lista.length });

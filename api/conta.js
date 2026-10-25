@@ -384,7 +384,11 @@ export default async function handler(req, res) {
       const alvo = typeof b.alvo === "string" ? b.alvo.slice(0, 64) : "";
       if (!alvo || !MOTIVOS.includes(b.motivo)) throw falha(400, "Escolha um motivo.");
       const detalhe = typeof b.texto === "string" ? b.texto.trim().slice(0, 300) : "";
-      await sql`INSERT INTO denuncias (denunciante_id, alvo, motivo, texto) VALUES (${u.id}, ${alvo}, ${b.motivo}, ${detalhe})`;
+      // Antes de desfazer o match, guarda as últimas 60 mensagens da conversa para a moderação analisar esta denúncia.
+      const [mt] = /^[0-9a-f-]{36}$/.test(alvo) ? await sql`SELECT id FROM matches WHERE (a_id = ${u.id} AND b_id::text = ${alvo}) OR (b_id = ${u.id} AND a_id::text = ${alvo})` : [];
+      const conversa = mt ? (await sql`SELECT de_id, texto, midia_id, apagada, criado_em FROM mensagens WHERE match_id = ${mt.id} ORDER BY id DESC LIMIT 60`).reverse()
+        .map(x => ({ denunciado: String(x.de_id) === alvo, texto: x.apagada ? "(apagada)" : x.midia_id ? "(áudio)" : x.texto, quando: x.criado_em })) : null;
+      await sql`INSERT INTO denuncias (denunciante_id, alvo, motivo, texto, conversa) VALUES (${u.id}, ${alvo}, ${b.motivo}, ${detalhe}, ${conversa ? JSON.stringify(conversa) : null})`;
       await sql`INSERT INTO bloqueios (usuario_id, alvo) VALUES (${u.id}, ${alvo}) ON CONFLICT DO NOTHING`;
       await desfazerContato(u.id, alvo);
       return res.status(200).json({ ok: true });

@@ -4,67 +4,230 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Jingar · Moderação</title>
+<title>Jingar · Admin</title>
 <style>
-:root { --bg: #f6efec; --surface: #fffaf8; --line: #e2d0cb; --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --bad: #c23a52; color-scheme: light; }
+:root { --bg: #f6efec; --surface: #fffaf8; --line: #e2d0cb; --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --bad: #c23a52; --ok: #2e7d4f; color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
-main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 h1 { margin: 0; font-size: 24px; }
+h2 { margin: 0; font-size: 18px; }
 .caixa { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
 button { border: 0; border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 700; background: var(--accent); color: #fff; cursor: pointer; }
 button.sec { background: #f1e5e1; color: var(--fg); }
 button.perigo { background: var(--bad); }
+button.mini { padding: 6px 10px; font-size: 13px; }
+.abas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.numeros div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.numeros b { display: block; font-size: 26px; }
+.foto-moderar { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.conversa { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.conversa .msg { padding: 6px 10px; border-radius: 10px; background: #f1e5e1; }
+.conversa .msg.denunciado { background: #f6d6dc; }
+.abas button { background: #f1e5e1; color: var(--fg); }
+.abas button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .muted { color: var(--muted); font-size: 13px; }
 .erro { color: var(--bad); }
+.selo { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #f1e5e1; }
+.selo.bad { background: #f6d6dc; color: var(--bad); }
+.selo.ok { background: #d9efe2; color: var(--ok); }
+.item { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.item img, .foto { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #e9dcd8; flex: none; }
+.fotos { display: flex; gap: 8px; flex-wrap: wrap; }
+.fotos img { width: 110px; height: 110px; border-radius: 12px; object-fit: cover; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; overflow-wrap: anywhere; }
+ol.perguntas { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+ol.perguntas .certa { color: var(--ok); font-weight: 700; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Moderação de denúncias</h1>
-  <p class="muted" style="margin:0">A Apple exige agir sobre denúncias em até 24 horas. Revise esta página todos os dias.</p>
-  <div class="caixa">
-    <div class="linha"><input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off"><button id="entrar">Carregar</button></div>
+  <h1>Jingar · Admin</h1>
+  <div class="caixa" id="acesso">
+    <div class="linha"><input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off"><button id="entrar">Entrar</button></div>
     <span class="erro" id="erro"></span>
   </div>
-  <div id="lista"></div>
+  <div class="abas" id="abas" hidden>
+    <button type="button" data-aba="painel" aria-pressed="true">Painel</button>
+    <button type="button" data-aba="denuncias" aria-pressed="false">Denúncias</button>
+    <button type="button" data-aba="usuarios" aria-pressed="false">Usuários</button>
+    <button type="button" data-aba="categorias" aria-pressed="false">Categorias</button>
+  </div>
+  <div id="conteudo"></div>
 </main>
 <script>
 (() => {
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const $ = s => document.querySelector(s);
-  let token = "";
+  const data = d => d ? new Date(d).toLocaleString("pt-BR") : "—";
+  const SEXO = { F: "Mulher", M: "Homem", O: "Outro" }, INTERESSE = { F: "Mulheres", M: "Homens", T: "Ambos", N: "Ninguém" };
+  let token = "", aba = "painel", busca = "", pagina = 0;
   try { token = sessionStorage.getItem("mente.admin") || ""; } catch {}
   $("#token").value = token;
-  async function api(metodo, corpo) {
-    const r = await fetch("/api/moderacao", { method: metodo, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : undefined });
+  async function api(metodo, consulta, corpo) {
+    const r = await fetch("/api/moderacao" + (consulta ? "?" + new URLSearchParams(consulta) : ""), { method: metodo, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : undefined });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.erro || "Erro " + r.status);
     return j;
   }
-  async function carregar() {
-    $("#erro").textContent = "";
-    try {
-      const { denuncias } = await api("GET");
-      $("#lista").innerHTML = denuncias.length ? denuncias.map(d => `
-        <div class="caixa" data-id="${d.id}">
-          <strong>${esc(d.motivo)}</strong>
-          <span class="muted">Denunciado: ${d.alvo_usuario ? "@" + esc(d.alvo_usuario) : "perfil de teste (" + esc(d.alvo) + ")"} · por ${d.denunciante ? "@" + esc(d.denunciante) : "conta excluída"} · ${new Date(d.criado_em).toLocaleString("pt-BR")}</span>
-          ${d.texto ? `<p style="margin:0">${esc(d.texto)}</p>` : ""}
-          <div class="linha"><button class="sec" data-acao="resolver">Marcar como resolvida</button>${d.alvo_usuario && !d.alvo_banido ? `<button class="perigo" data-acao="banir">Banir usuário</button>` : ""}</div>
-        </div>`).join("") : `<p class="muted">Nenhuma denúncia aberta.</p>`;
-    } catch (e) { $("#erro").textContent = e.message; }
+  const falhou = e => { $("#erro").textContent = e.message; };
+  const conteudo = html => { $("#conteudo").innerHTML = html; };
+
+  // ---------- Painel ----------
+  async function painel() {
+    const { painel: n } = await api("GET", { ver: "painel" });
+    const item = (rotulo, v) => `<div><b>${v}</b><span class="muted">${rotulo}</span></div>`;
+    conteudo(`<div class="numeros">${[
+      item("contas (sem as de teste)", n.contas), item("novas hoje", n.novasHoje), item("novas em 7 dias", n.novas7dias), item("com perfil", n.comPerfil),
+      item("denúncias abertas", n.denunciasAbertas), item("contas banidas", n.banidas), item("matches", n.matches), item("mensagens em 24 h", n.mensagens24h),
+      item("respostas em 24 h", n.respostas24h), item("chamadas de IA em 24 h", n.usoIA24h), item("categorias criadas pela IA", n.categoriasIA), item("desafios criados", n.desafios)
+    ].join("")}</div>`);
   }
-  $("#entrar").addEventListener("click", () => { token = $("#token").value.trim(); try { sessionStorage.setItem("mente.admin", token); } catch {} carregar(); });
-  $("#lista").addEventListener("click", async e => {
+
+  // ---------- Denúncias ----------
+  async function denuncias() {
+    const { denuncias } = await api("GET");
+    conteudo(`<p class="muted" style="margin:0">A Apple e o Google exigem agir sobre denúncias em até 24 horas. Revise esta lista todos os dias.</p>` + (denuncias.length ? denuncias.map(d => `
+      <div class="caixa" data-id="${d.id}">
+        <strong>${esc(d.motivo)}</strong>
+        <span class="muted">Denunciado: ${d.alvo_usuario ? `<a href="#" data-usuario="${esc(d.alvo)}">@${esc(d.alvo_usuario)}</a>` : "perfil de teste (" + esc(d.alvo) + ")"} · por ${d.denunciante ? "@" + esc(d.denunciante) : "conta excluída"} · ${data(d.criado_em)}</span>
+        ${d.texto ? `<p style="margin:0">${esc(d.texto)}</p>` : ""}
+        <div class="linha"><button class="sec" data-acao="resolver">Marcar como resolvida</button>${d.alvo_usuario && !d.alvo_banido ? `<button class="perigo" data-acao="banir">Banir usuário</button>` : ""}${d.alvo_usuario && d.denunciante ? `<button class="sec" data-conversa="${d.id}">Ver conversa</button>` : ""}</div>
+        <div class="conversa" id="conversa-${d.id}" hidden></div>
+      </div>`).join("") : `<p class="muted">Nenhuma denúncia aberta.</p>`));
+  }
+
+  // ---------- Usuários ----------
+  async function usuarios() {
+    const j = await api("GET", { ver: "usuarios", busca, pagina });
+    conteudo(`<div class="caixa"><div class="linha"><input id="busca" placeholder="Buscar por usuário, e-mail, celular ou nome" value="${esc(busca)}"><button id="buscar">Buscar</button></div>
+      <span class="muted">${j.total} contas no total${busca ? " · resultados da busca" : ""} · página ${j.pagina + 1}</span></div>
+      ${j.usuarios.map(u => `<div class="caixa item" data-usuario="${esc(u.id)}">
+        ${u.perfil && u.perfil.fotos[0] ? `<img src="${esc(u.perfil.fotos[0])}" alt="">` : `<span class="foto"></span>`}
+        <div style="flex:1;min-width:0"><strong>${esc(u.perfil && u.perfil.nome || "(sem perfil)")}</strong> <span class="muted">@${esc(u.usuario || "—")} · ${esc(u.email || u.telefone || "")}</span>
+          <div class="linha" style="gap:6px;margin-top:4px">${u.banido ? `<span class="selo bad">banido</span>` : ""}${u.teste ? `<span class="selo">teste</span>` : ""}${!u.verificado ? `<span class="selo">não verificado</span>` : ""}${u.denunciasRecebidas ? `<span class="selo bad">${u.denunciasRecebidas} denúncia(s)</span>` : ""}<span class="selo">nível ${u.nivel}</span></div></div>
+      </div>`).join("") || `<p class="muted">Nenhum usuário encontrado.</p>`}
+      <div class="linha">${j.pagina > 0 ? `<button class="sec" id="anterior">Página anterior</button>` : ""}${j.usuarios.length === 50 ? `<button class="sec" id="proxima">Próxima página</button>` : ""}</div>`);
+    $("#buscar").addEventListener("click", () => { busca = $("#busca").value.trim(); pagina = 0; abrir(); });
+    $("#busca").addEventListener("keydown", e => { if (e.key === "Enter") $("#buscar").click(); });
+    const a = $("#anterior"); if (a) a.addEventListener("click", () => { pagina--; abrir(); });
+    const p = $("#proxima"); if (p) p.addEventListener("click", () => { pagina++; abrir(); });
+  }
+  async function usuario(id) {
+    const { usuario: u } = await api("GET", { ver: "usuario", id });
+    const p = u.perfil;
+    conteudo(`<button class="sec" id="voltar" style="align-self:flex-start">← Voltar</button>
+      <div class="caixa">
+        <div class="linha" style="justify-content:space-between"><h2>${esc(p && p.nome || "(sem perfil)")} <span class="muted">@${esc(u.usuario || "—")}</span></h2>
+          ${u.banido ? `<button class="sec" data-banir="desbanirUsuario">Desbanir</button>` : `<button class="perigo" data-banir="banirUsuario">Banir usuário</button>`}</div>
+        <div class="linha"><button class="sec mini" id="exportar">Exportar dados (LGPD)</button><button class="perigo mini" id="excluirConta">Excluir conta (LGPD)</button>${p && p.bio ? `<button class="sec mini" id="limparBio">Apagar texto "sobre"</button>` : ""}</div>
+        <div class="linha" style="gap:6px">${u.banido ? `<span class="selo bad">banido</span>` : `<span class="selo ok">ativo</span>`}${u.teste ? `<span class="selo">conta de teste</span>` : ""}${u.verificado ? "" : `<span class="selo">não verificado</span>`}</div>
+        ${p && p.fotos.length ? `<div class="fotos">${p.fotos.map(f => `<div class="foto-moderar"><a href="${esc(f)}" target="_blank" rel="noopener"><img src="${esc(f)}" alt="Foto do perfil"></a><button class="sec mini" data-remover-foto="${esc(f)}">Remover</button></div>`).join("")}</div>` : ""}
+      </div>
+      <div class="caixa"><h2>Conta</h2><dl>
+        <dt>ID</dt><dd>${esc(u.id)}</dd>
+        <dt>E-mail</dt><dd>${esc(u.email || "—")}</dd>
+        <dt>Celular</dt><dd>${esc(u.telefone || "—")}</dd>
+        <dt>Nascimento</dt><dd>${u.nascimento ? esc(String(u.nascimento).slice(0, 10)) + ` (${u.idade} anos)` : "—"}</dd>
+        <dt>Entrada</dt><dd>${data(u.criado_em)}</dd>
+        <dt>Login social</dt><dd>${[u.google && "Google", u.apple && "Apple"].filter(Boolean).join(", ") || "—"}</dd>
+        <dt>Nível</dt><dd>${u.nivel}</dd>
+        <dt>Respostas</dt><dd>${u.respostas}</dd>
+        <dt>Matches</dt><dd>${u.matches}</dd>
+        <dt>Avisos</dt><dd>${u.avisos ? "ligados" : "desligados"}</dd>
+      </dl></div>
+      ${p ? `<div class="caixa"><h2>Perfil</h2><dl>
+        <dt>Nome</dt><dd>${esc(p.nome || "—")}</dd>
+        <dt>Idade</dt><dd>${esc(p.idade || "—")}</dd>
+        <dt>Eu sou</dt><dd>${esc(SEXO[p.sexo] || "—")}</dd>
+        <dt>Quer conhecer</dt><dd>${esc(INTERESSE[p.interesse] || "—")}</dd>
+        <dt>Faixa de idade</dt><dd>${p.idadeMin || 18} a ${p.idadeMax || 99}</dd>
+        <dt>Sobre</dt><dd>${esc(p.bio || "—")}</dd>
+        <dt>Manda bem em</dt><dd>${esc((p.melhores || []).join(", ") || "—")}</dd>
+        <dt>Localização</dt><dd>${p.lat != null ? `${p.lat}, ${p.lng} (arredondada)` : "não informada"}</dd>
+        <dt>Atualizado</dt><dd>${data(p.atualizado_em)}</dd>
+      </dl></div>` : ""}
+      <div class="caixa"><h2>Denúncias recebidas (${u.denunciasRecebidas})</h2>${u.denuncias.length ? u.denuncias.map(d => `<div><strong>${esc(d.motivo)}</strong> <span class="muted">· ${esc(d.status)} · por ${d.denunciante ? "@" + esc(d.denunciante) : "conta excluída"} · ${data(d.criado_em)}</span>${d.texto ? `<div>${esc(d.texto)}</div>` : ""}</div>`).join("") : `<span class="muted">Nenhuma.</span>`}
+        <span class="muted">Denúncias feitas por esta pessoa: ${u.denunciasFeitas}</span></div>`);
+    $("#voltar").addEventListener("click", () => abrir());
+    $("#exportar").addEventListener("click", async () => {
+      try {
+        const dados = await api("GET", { ver: "exportar", id: u.id });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" }));
+        a.download = `jingar-dados-${u.usuario || u.id}.json`; a.click(); URL.revokeObjectURL(a.href);
+      } catch (x) { falhou(x); }
+    });
+    $("#excluirConta").addEventListener("click", async () => {
+      if (!confirm(`Excluir a conta @${u.usuario} para sempre? Apaga perfil, fotos, matches e conversas.`)) return;
+      if (prompt("Para confirmar, digite o nome de usuário:") !== u.usuario) return alert("Nome não confere. Nada foi excluído.");
+      try { await api("POST", null, { acao: "excluirUsuario", usuario: u.id }); alert("Conta excluída."); abrir(); } catch (x) { falhou(x); }
+    });
+    const lb = $("#limparBio"); if (lb) lb.addEventListener("click", async () => {
+      if (!confirm('Apagar o texto "sobre você" deste perfil?')) return;
+      try { await api("POST", null, { acao: "limparBio", usuario: u.id }); usuario(u.id); } catch (x) { falhou(x); }
+    });
+    document.querySelectorAll("[data-remover-foto]").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Remover esta foto do perfil?")) return;
+      try { await api("POST", null, { acao: "removerFoto", usuario: u.id, foto: b.dataset.removerFoto }); usuario(u.id); } catch (x) { falhou(x); }
+    }));
+    $("[data-banir]").addEventListener("click", async e => {
+      const acao = e.target.dataset.banir;
+      if (acao === "banirUsuario" && !confirm("Banir este usuário? Ele perde o acesso ao app na hora.")) return;
+      try { await api("POST", null, { acao, usuario: u.id }); usuario(u.id); } catch (x) { falhou(x); }
+    });
+  }
+
+  // ---------- Categorias ----------
+  async function categorias() {
+    const { categorias } = await api("GET", { ver: "categorias" });
+    const DIF = { facil: "Fácil", dificil: "Difícil", expert: "Expert" };
+    conteudo(`<p class="muted" style="margin:0">Categorias prontas do app e as criadas pela IA a pedido dos usuários (guardadas e reaproveitadas por todos).</p>` +
+      categorias.map(c => `<div class="caixa item" data-categoria="${esc(c.id)}"><div style="flex:1;min-width:0">
+        <strong>${esc(c.titulo || c.tema)}</strong> <span class="muted">· ${esc(DIF[c.dificuldade] || c.dificuldade)} · peso ${c.peso}</span>
+        <div class="linha" style="gap:6px;margin-top:4px">${c.origem === "pronta" ? `<span class="selo ok">pronta do app</span>` : `<span class="selo">criada pela IA</span>`}${c.aprovado ? `<span class="selo">${c.perguntas} perguntas</span>` : `<span class="selo bad">tema recusado</span>`}${c.usos != null ? `<span class="selo">${c.usos} pedido(s)</span>` : ""}${c.criador ? `<span class="muted">por @${esc(c.criador)}</span>` : ""}</div></div></div>`).join(""));
+  }
+  async function categoria(id) {
+    const { categoria: c } = await api("GET", { ver: "categoria", id });
+    const partes = Object.entries(c.partes || {});
+    conteudo(`<button class="sec" id="voltar" style="align-self:flex-start">← Voltar</button>
+      <div class="caixa"><h2>${esc(c.titulo)}</h2><span class="muted">${c.origem === "pronta" ? "Pronta do app" : "Criada pela IA"} · peso ${c.peso}${c.aprovado === false ? " · recusada: " + esc(c.motivo || "") : ""}</span></div>
+      ${partes.map(([nome, lista]) => `<div class="caixa"><h2>${esc(nome)} <span class="muted">(${lista.length})</span></h2>
+        <ol class="perguntas">${lista.map(q => `<li>${esc(q[0])}<br><span class="certa">${esc(q[1])}</span> <span class="muted">· ${esc(q[2])} · ${esc(q[3])}</span></li>`).join("")}</ol></div>`).join("") || `<p class="muted">Ainda sem perguntas.</p>`}`);
+    $("#voltar").addEventListener("click", () => abrir());
+  }
+
+  async function abrir() {
+    $("#erro").textContent = "";
+    document.querySelectorAll("#abas button").forEach(b => b.setAttribute("aria-pressed", b.dataset.aba === aba));
+    try { await ({ painel, denuncias, usuarios, categorias })[aba](); $("#abas").hidden = false; } catch (e) { falhou(e); }
+  }
+  $("#entrar").addEventListener("click", () => { token = $("#token").value.trim(); try { sessionStorage.setItem("mente.admin", token); } catch {} abrir(); });
+  $("#abas").addEventListener("click", e => { const b = e.target.closest("[data-aba]"); if (b) { aba = b.dataset.aba; abrir(); } });
+  $("#conteudo").addEventListener("click", async e => {
+    const u = e.target.closest("[data-usuario]"); if (u) { e.preventDefault(); try { await usuario(u.dataset.usuario); } catch (x) { falhou(x); } return; }
+    const c = e.target.closest("[data-categoria]"); if (c) { try { await categoria(c.dataset.categoria); } catch (x) { falhou(x); } return; }
+    const cv = e.target.closest("[data-conversa]"); if (cv) {
+      const caixa = $("#conversa-" + cv.dataset.conversa);
+      try {
+        const j = await api("GET", { ver: "conversa", denuncia: cv.dataset.conversa });
+        caixa.innerHTML = j.semConversa || !j.mensagens.length ? `<span class="muted">Não há conversa entre as duas pessoas.</span>`
+          : `<span class="muted">Últimas ${j.mensagens.length} mensagens (em rosa, as de quem foi denunciado). O acesso fica registrado.</span>` +
+            j.mensagens.map(m => `<div class="msg${m.denunciado ? " denunciado" : ""}"><b>@${esc(m.de)}</b> <span class="muted">${data(m.quando)}</span><br>${m.audio ? `<audio controls preload="none" src="${esc(m.audio)}"></audio>` : esc(m.texto)}</div>`).join("");
+        caixa.hidden = false;
+      } catch (x) { falhou(x); }
+      return;
+    }
     const b = e.target.closest("[data-acao]"); if (!b) return;
     if (b.dataset.acao === "banir" && !confirm("Banir este usuário? Ele perde o acesso ao app.")) return;
-    try { await api("POST", { id: Number(b.closest("[data-id]").dataset.id), acao: b.dataset.acao }); carregar(); }
-    catch (x) { $("#erro").textContent = x.message; }
+    try { await api("POST", null, { id: Number(b.closest("[data-id]").dataset.id), acao: b.dataset.acao }); abrir(); } catch (x) { falhou(x); }
   });
-  if (token) carregar();
+  if (token) abrir();
 })();
 </script>
 </body>
