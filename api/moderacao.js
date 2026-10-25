@@ -1,8 +1,8 @@
-// Área admin: denúncias, usuários (dados, banir e desbanir) e categorias criadas no app. Acesso só com ADMIN_TOKEN
-// (Authorization: Bearer). Também cria (ou zera) as contas de teste usadas pela revisão da App Store e do Google Play.
+// Área admin: denúncias, usuários (dados, banir e desbanir) e categorias criadas no app. Entrada com usuário e senha
+// (ADMIN_USUARIO e ADMIN_SENHA_HASH); a sessão é assinada com ADMIN_TOKEN e vale 12 horas (Authorization: Bearer). Também cria (ou zera) as contas de teste usadas pela revisão da App Store e do Google Play.
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
-import { hashSenha, novoToken, senhaValida } from "./_auth.js";
+import { hashSenha, confereSenha, novoToken, senhaValida } from "./_auth.js";
 import { sincronizarPerfil, guardarMidia, urlMidia, apagarMidias, assinaturaMidia } from "./_perfil.js";
 import { FOTOS_DEMO } from "./_demo-fotos.js";
 import { TEMAS_PRONTOS } from "./_temas-prontos.js";
@@ -78,19 +78,42 @@ async function criarContasTeste(senhaRevisor) {
   return { revisor: REVISOR.usuario, demo: DEMO.map(d => d.usuario) };
 }
 
+const SESSAO_HORAS = 12;
+const assinar = validade => crypto.createHmac("sha256", process.env.ADMIN_TOKEN).update("admin:" + validade).digest("base64url");
+const iguais = (x, y) => { const a = Buffer.from(String(x)), b = Buffer.from(String(y)); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+
 function autorizado(req) {
-  const admin = process.env.ADMIN_TOKEN || "";
-  const recebido = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  if (admin.length < 16 || !recebido) return false;
-  const a = Buffer.from(admin), r = Buffer.from(recebido);
-  return a.length === r.length && crypto.timingSafeEqual(a, r);
+  const [validade, assinatura] = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "").split(".");
+  if (!validade || !assinatura || !(Number(validade) > Date.now())) return false;
+  return iguais(assinatura, assinar(validade));
+}
+
+// Entrada com usuário e senha. Depois de 5 erros em 15 minutos, bloqueia novas tentativas por um tempo.
+async function entrar(req, res) {
+  if (!process.env.ADMIN_USUARIO || !process.env.ADMIN_SENHA_HASH) return res.status(503).json({ erro: "Configure ADMIN_USUARIO e ADMIN_SENHA_HASH na Vercel." });
+  await prepararBanco();
+  const [{ n }] = await sql`SELECT count(*)::int AS n FROM admin_log WHERE acao = 'login falhou' AND criado_em > now() - interval '15 minutes'`;
+  if (n >= 5) return res.status(429).json({ erro: "Muitas tentativas. Espere 15 minutos." });
+  const b = req.body || {};
+  const usuarioCerto = iguais(String(b.usuario || "").trim().toLowerCase(), process.env.ADMIN_USUARIO.toLowerCase());
+  const senhaCerta = confereSenha(String(b.senha || ""), process.env.ADMIN_SENHA_HASH);
+  if (!usuarioCerto || !senhaCerta) {
+    await sql`INSERT INTO admin_log (acao, detalhe) VALUES ('login falhou', ${String(b.usuario || "").slice(0, 40)})`;
+    return res.status(401).json({ erro: "Usuário ou senha incorretos." });
+  }
+  await sql`INSERT INTO admin_log (acao, detalhe) VALUES ('login', ${process.env.ADMIN_USUARIO})`;
+  const validade = String(Date.now() + SESSAO_HORAS * 3600e3);
+  return res.status(200).json({ token: validade + "." + assinar(validade) });
 }
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (!sql) return res.status(503).json({ erro: "Banco não configurado." });
   if (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN.length < 16) return res.status(503).json({ erro: "Configure ADMIN_TOKEN (16 caracteres ou mais) na Vercel." });
-  if (!autorizado(req)) return res.status(401).json({ erro: "Token inválido." });
+  if (req.method === "POST" && req.body && req.body.acao === "entrar") {
+    try { return await entrar(req, res); } catch (e) { console.error(e); return res.status(500).json({ erro: "Erro ao entrar." }); }
+  }
+  if (!autorizado(req)) return res.status(401).json({ erro: "Sessão expirada. Entre de novo." });
   try {
     await prepararBanco();
     const q = req.query || {};

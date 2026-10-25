@@ -43,15 +43,17 @@ dt { color: var(--muted); }
 dd { margin: 0; overflow-wrap: anywhere; }
 ol.perguntas { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 ol.perguntas .certa { color: var(--ok); font-weight: 700; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
   <h1>Jingar · Admin</h1>
   <div class="caixa" id="acesso">
-    <div class="linha"><input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off"><button id="entrar">Entrar</button></div>
-    <span class="erro" id="erro"></span>
+    <form class="linha" id="login"><input id="usuario" placeholder="Usuário" autocomplete="username" autocapitalize="none" required><input id="senha" type="password" placeholder="Senha" autocomplete="current-password" required><button>Entrar</button></form>
   </div>
+  <span class="erro" id="erro"></span>
+  <div class="linha" id="sessao" hidden><span class="muted">Sessão de 12 horas.</span><button type="button" class="sec mini" id="sair">Sair</button></div>
   <div class="abas" id="abas" hidden>
     <button type="button" data-aba="painel" aria-pressed="true">Painel</button>
     <button type="button" data-aba="denuncias" aria-pressed="false">Denúncias</button>
@@ -68,10 +70,10 @@ ol.perguntas .certa { color: var(--ok); font-weight: 700; }
   const SEXO = { F: "Mulher", M: "Homem", O: "Outro" }, INTERESSE = { F: "Mulheres", M: "Homens", T: "Ambos", N: "Ninguém" };
   let token = "", aba = "painel", busca = "", pagina = 0;
   try { token = sessionStorage.getItem("mente.admin") || ""; } catch {}
-  $("#token").value = token;
   async function api(metodo, consulta, corpo) {
     const r = await fetch("/api/moderacao" + (consulta ? "?" + new URLSearchParams(consulta) : ""), { method: metodo, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : undefined });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 401) sair();
     if (!r.ok) throw new Error(j.erro || "Erro " + r.status);
     return j;
   }
@@ -205,9 +207,21 @@ ol.perguntas .certa { color: var(--ok); font-weight: 700; }
   async function abrir() {
     $("#erro").textContent = "";
     document.querySelectorAll("#abas button").forEach(b => b.setAttribute("aria-pressed", b.dataset.aba === aba));
-    try { await ({ painel, denuncias, usuarios, categorias })[aba](); $("#abas").hidden = false; } catch (e) { falhou(e); }
+    try { await ({ painel, denuncias, usuarios, categorias })[aba](); $("#abas").hidden = $("#sessao").hidden = false; $("#acesso").hidden = true; } catch (e) { falhou(e); }
   }
-  $("#entrar").addEventListener("click", () => { token = $("#token").value.trim(); try { sessionStorage.setItem("mente.admin", token); } catch {} abrir(); });
+  function sair() {
+    token = ""; try { sessionStorage.removeItem("mente.admin"); } catch {}
+    $("#acesso").hidden = false; $("#abas").hidden = $("#sessao").hidden = true; $("#conteudo").innerHTML = "";
+  }
+  $("#login").addEventListener("submit", async e => {
+    e.preventDefault(); $("#erro").textContent = "";
+    try {
+      const j = await api("POST", null, { acao: "entrar", usuario: $("#usuario").value, senha: $("#senha").value });
+      token = j.token; try { sessionStorage.setItem("mente.admin", token); } catch {}
+      $("#senha").value = ""; abrir();
+    } catch (x) { $("#erro").textContent = x.message; }
+  });
+  $("#sair").addEventListener("click", sair);
   $("#abas").addEventListener("click", e => { const b = e.target.closest("[data-aba]"); if (b) { aba = b.dataset.aba; abrir(); } });
   $("#conteudo").addEventListener("click", async e => {
     const u = e.target.closest("[data-usuario]"); if (u) { e.preventDefault(); try { await usuario(u.dataset.usuario); } catch (x) { falhou(x); } return; }
