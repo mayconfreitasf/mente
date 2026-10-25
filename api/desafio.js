@@ -1,5 +1,6 @@
 // Desafios por link curto: quem termina um quiz cria um código (jingar.com.br/Ab3x) com as mesmas perguntas.
-// Qualquer pessoa com o link joga, com ou sem conta, e entra no ranking daquele desafio. Pode jogar de novo: vale a melhor tentativa.
+// Qualquer pessoa com o link joga, com ou sem conta, e entra no ranking daquele desafio. Pode jogar de novo: cada tentativa
+// entra no ranking como uma linha nova, com o número da tentativa no nome ("Ana", "Ana 2", "Ana 3"), até 10 por pessoa.
 // Desafio mandado num match: cada tentativa de um dos dois aparece na conversa com o placar.
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
@@ -9,7 +10,9 @@ import { nomeLimpo } from "./_filtro.js";
 
 const LETRAS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODIGO_OK = /^[A-Za-z0-9]{4,6}$/, JOGADOR_OK = /^[A-Za-z0-9_-]{16,40}$/;
-const MAX_PERGUNTAS = 40, MAX_POR_HORA = 30, TOP = 20;
+const MAX_PERGUNTAS = 40, MAX_POR_HORA = 30, TOP = 20, MAX_TENTATIVAS = 10;
+// Linhas de uma pessoa no ranking: a primeira tentativa usa o identificador dela; as seguintes, "identificador#2", "#3"...
+const daPessoa = (r, jogador) => !!jogador && (r.jogador === jogador || r.jogador.startsWith(jogador + "#"));
 const curto = (x, n) => typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, n) : "";
 const inteiro = (x, min, max) => Math.min(max, Math.max(min, Math.round(Number(x) || 0)));
 // Códigos sem letras parecidas (0/O, 1/l/I): 4 caracteres e, se o código sorteado já existir, um a mais.
@@ -34,9 +37,9 @@ function validar(d) {
 // Ranking: mais acertos primeiro; no empate, quem respondeu antes.
 const ranking = codigo => sql`SELECT jogador, nome, acertos, total FROM desafio_respostas WHERE codigo = ${codigo} ORDER BY acertos DESC, criado_em ASC, id ASC`;
 const publico = (linhas, jogador) => ({
-  ranking: linhas.slice(0, TOP).map((r, i) => ({ pos: i + 1, nome: r.nome, acertos: r.acertos, total: r.total, voce: r.jogador === jogador })),
+  ranking: linhas.slice(0, TOP).map((r, i) => ({ pos: i + 1, nome: r.nome, acertos: r.acertos, total: r.total, voce: daPessoa(r, jogador) })),
   jogadores: linhas.length,
-  posicao: jogador ? (linhas.findIndex(r => r.jogador === jogador) + 1) || null : null
+  posicao: jogador ? (linhas.findIndex(r => daPessoa(r, jogador)) + 1) || null : null
 });
 
 // Resultado na conversa do match: "Respondi o desafio: fiz 4 de 5. Placar: Ana 4 × 3 Bruno." com o link, que abre o ranking.
@@ -44,8 +47,12 @@ async function contarNaConversa(desafio, u, nome, acertos, total, refez, req) {
   const [m] = await sql`SELECT id, a_id, b_id FROM matches WHERE id = ${desafio.match_id} AND (a_id = ${u.id} OR b_id = ${u.id})`;
   if (!m) return;
   const outro = m.a_id === u.id ? m.b_id : m.a_id;
-  const [eu] = await sql`SELECT acertos FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND usuario_id = ${u.id}`;
-  const [ele] = await sql`SELECT nome, acertos FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND usuario_id = ${outro}`;
+  // Placar com a melhor tentativa de cada um; o nome vem da primeira linha (sem o número da tentativa).
+  const melhor = async id => {
+    const linhas = await sql`SELECT nome, acertos FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND usuario_id = ${id} ORDER BY id`;
+    return linhas.length ? { nome: linhas[0].nome, acertos: Math.max(...linhas.map(x => x.acertos)) } : null;
+  };
+  const eu = await melhor(u.id), ele = await melhor(outro);
   const placar = ele ? ` Placar: ${nome} ${eu ? eu.acertos : acertos} × ${ele.acertos} ${ele.nome}.` : "";
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "jingar.com.br").replace(/[^A-Za-z0-9.:-]/g, "");
   const origem = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) ? "http://" + host : "https://jingar.com.br";
@@ -97,7 +104,7 @@ export default async function handler(req, res) {
 
     if (b.acao === "abrir") {
       const linhas = await ranking(desafio.codigo);
-      const meu = jogador ? linhas.find(r => r.jogador === jogador) : null;
+      const meu = linhas.find(r => daPessoa(r, jogador));
       return res.status(200).json({ desafio: desafio.dados, jaRespondeu: !!meu, souCriador: !!u && String(desafio.criador_id) === String(u.id), ...publico(linhas, jogador) });
     }
 
@@ -105,11 +112,12 @@ export default async function handler(req, res) {
       if (!jogador) throw falha(400, "Aparelho não identificado.");
       const total = inteiro(b.total, 0, desafio.dados.q.length), acertos = inteiro(b.acertos, 0, total);
       const nome = nomeLimpo(nomeConta || b.nome) || "Anônimo";
-      // Cada pessoa pode jogar de novo: no ranking fica a melhor tentativa.
-      const [antes] = await sql`SELECT acertos FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND jogador = ${jogador}`;
-      if (!antes) await sql`INSERT INTO desafio_respostas (codigo, jogador, usuario_id, nome, acertos, total) VALUES (${desafio.codigo}, ${jogador}, ${u ? u.id : null}, ${nome}, ${acertos}, ${total}) ON CONFLICT (codigo, jogador) DO NOTHING`;
-      else if (acertos > antes.acertos) await sql`UPDATE desafio_respostas SET acertos = ${acertos}, total = ${total}, nome = ${nome}, criado_em = now() WHERE codigo = ${desafio.codigo} AND jogador = ${jogador}`;
-      if (u && desafio.match_id && total) await contarNaConversa(desafio, u, nome, acertos, total, !!antes, req);
+      // Cada tentativa entra como uma linha nova; da segunda em diante, o nome leva o número da tentativa.
+      const minhas = (await sql`SELECT jogador FROM desafio_respostas WHERE codigo = ${desafio.codigo} AND (jogador = ${jogador} OR jogador LIKE ${jogador + "#%"})`).length;
+      if (minhas >= MAX_TENTATIVAS) throw falha(429, `Você já jogou este desafio ${MAX_TENTATIVAS} vezes.`);
+      const chave = minhas ? `${jogador}#${minhas + 1}` : jogador, nomeLinha = minhas ? `${nome} ${minhas + 1}` : nome;
+      await sql`INSERT INTO desafio_respostas (codigo, jogador, usuario_id, nome, acertos, total) VALUES (${desafio.codigo}, ${chave}, ${u ? u.id : null}, ${nomeLinha}, ${acertos}, ${total}) ON CONFLICT (codigo, jogador) DO NOTHING`;
+      if (u && desafio.match_id && total) await contarNaConversa(desafio, u, nome, acertos, total, minhas > 0, req);
       return res.status(200).json(publico(await ranking(desafio.codigo), jogador));
     }
 

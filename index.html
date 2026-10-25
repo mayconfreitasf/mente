@@ -49,6 +49,12 @@
 }
 
 /* Temas escolhidos no Perfil (sem escolha, vale o automático acima: escuro ou claro conforme o celular). */
+:root[data-tema="choque"] {
+  --bg: #fff0f7; --surface: #ffffff; --surface-2: #ffe1ef; --line: #f7c6dd;
+  --fg: #2b0a1c; --muted: #7a4563; --accent: #d30f73; --accent-soft: #d30f731a; --accent-fg: #ffffff;
+  --gold: #8a5a00; --gold-fg: #ffffff; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #d94fae; --prata-fg: #ffffff; --ok: #1f7a4c; --bad: #c2183a; --shadow: 0 14px 30px #6a0a3a22;
+  color-scheme: light;
+}
 :root[data-tema="vinho"] {
   --bg: #150d11; --surface: #21151a; --surface-2: #2c1c23; --line: #3e2931;
   --fg: #f4ebe7; --muted: #c4adb4; --accent: #d23a5b; --accent-soft: #d23a5b26; --accent-fg: #ffffff;
@@ -712,11 +718,16 @@ function renderPedirLocal() {
 
 // ---------- Navegação ----------
 let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
-function irPara(a) { formPerfilAberto = false; clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
+function irPara(a) {
+  formPerfilAberto = false; clearInterval(timerChat); aba = a; rodada = null; chatAberto = null;
+  // Saindo da tela de um desafio (ranking) pelas abas: o desafio fecha e a aba escolhida abre.
+  if (desafioAberto) { desafioAberto = null; limparLinkDesafio(); }
+  render(); tela.scrollTop = 0;
+}
 $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
 
 // Tema escolhido no Perfil. "auto" (padrão) segue o claro ou escuro do celular.
-const TEMAS = [["auto", "Auto", "linear-gradient(135deg, #150d11 50%, #f6efec 50%)"], ["vinho", "Vinho", "linear-gradient(135deg, #150d11 55%, #d23a5b 55%)"],
+const TEMAS = [["auto", "Auto", "linear-gradient(135deg, #150d11 55%, #d23a5b 55%)"], ["choque", "Rosa choque", "linear-gradient(135deg, #fff0f7 55%, #e0117a 55%)"],
   ["rose", "Rosé", "linear-gradient(135deg, #f6efec 55%, #9e1f3e 55%)"], ["noite", "Noite", "linear-gradient(135deg, #0d1220 55%, #ff7a63 55%)"], ["lavanda", "Lavanda", "linear-gradient(135deg, #f4f1fb 55%, #6b4bd6 55%)"]];
 function aplicarTema() {
   const t = TEMAS.some(([id]) => id === S.tema) ? S.tema : "auto";
@@ -1305,7 +1316,7 @@ function renderDesafioIntro() {
       <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${fmtNivel(d.peso ?? d.m)} ${(d.peso ?? d.m) === 1 ? "nível" : "níveis"}.</p>
     </div>
     ${htmlRanking(d)}
-    ${d.jaRespondeu ? `<p class="aviso" style="margin:0">Você já respondeu este desafio. Pode responder de novo: no ranking fica a sua melhor tentativa.</p>` : ""}
+    ${d.jaRespondeu ? `<p class="aviso" style="margin:0">Você já respondeu este desafio. Pode responder de novo: cada tentativa entra no ranking.</p>` : ""}
     ${pedeNome ? `<div class="campo"><label for="nomeR">Seu nome no ranking</label><input id="nomeR" maxlength="20" autocomplete="given-name" value="${esc(nomeGuardado())}"></div><div class="erro" id="nomeErro"></div>` : ""}
     <button class="btn bloco ${d.peso != null ? "" : classeModo(d.m)}" type="button" id="aceitarD">${d.jaRespondeu ? "Responder de novo" : "Aceitar desafio"}</button>
     <button class="link" type="button" id="recusarD">${d.jaRespondeu ? "Voltar" : "Agora não"}</button>
@@ -2792,7 +2803,7 @@ function renderPerfil() {
   const melhorNome = melhor ? nomeAssunto(melhor[0]) : "—";
   tela.innerHTML = `
   <div class="pilha entra">
-    <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${conta && conta.usuario ? "@" + esc(conta.usuario) : "Nível " + fmtNivel(S.nivel)}</div></div></div>
+    <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}${(conta && conta.idade) || pf.idade ? ", " + ((conta && conta.idade) || pf.idade) : ""}</h2><div class="muted">${conta && conta.usuario ? "@" + esc(conta.usuario) : "Nível " + fmtNivel(S.nivel)}</div></div></div>
     ${pf.bio ? `<p style="margin:0">${esc(pf.bio)}</p>` : ""}
     <div class="stats">
       <div class="stat"><b style="color:var(--gold)">${fmtNivel(S.nivel)}</b><span>nível</span></div>
@@ -2807,7 +2818,7 @@ function renderPerfil() {
     </div>
     ${modoReal() ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Prova para conversar</strong><div class="muted" style="font-size:13px">${provaPadrao().qtd} perguntas de ${esc(nomeAssunto(provaPadrao().assunto))} · mínimo ${provaPadrao().minimo}</div></div><button class="btn sec" type="button" id="pProva" style="padding:8px 14px">Ajustar</button></div>
       <div class="chave"><div style="min-width:0"><strong style="font-size:14px">Pedir em todo match novo</strong><div class="muted" style="font-size:12px">A pessoa só conversa com você depois de passar.</div></div><button class="toggle" type="button" role="switch" id="tProvaAuto" aria-checked="${provaPadrao().auto}" aria-label="Pedir prova em todo match novo"></button></div></div>` : ""}
-    <div class="caixa"><strong>Aparência</strong><div class="temas" id="pTema">${TEMAS.map(([id, nome, cor]) => `<button type="button" data-tema="${id}" aria-pressed="${(S.tema || "auto") === id}"><span class="amostra" style="background:${cor}" aria-hidden="true"></span>${nome}</button>`).join("")}</div></div>
+    <div class="caixa"><strong>Tema</strong><div class="temas" id="pTema">${TEMAS.map(([id, nome, cor]) => `<button type="button" data-tema="${id}" aria-pressed="${(S.tema || "auto") === id}"><span class="amostra" style="background:${cor}" aria-hidden="true"></span>${nome}</button>`).join("")}</div></div>
     <div class="caixa"><div class="chave"><div><strong>Filtros</strong><div class="muted" style="font-size:13px">${resumoFiltros()}</div></div><button class="btn sec" type="button" id="pFiltros" style="padding:8px 14px">Ajustar</button></div></div>
     ${semServidor ? `<div class="caixa">
       <div class="chave"><div><strong>Meu Passe Direto</strong><div class="muted" style="font-size:13px">Quem ainda não chegou no seu nível pode furar a fila e aparecer pra você.</div></div>
