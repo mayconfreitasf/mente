@@ -722,7 +722,17 @@ function aplicarTema() {
   const t = TEMAS.some(([id]) => id === S.tema) ? S.tema : "auto";
   if (t === "auto") delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
 }
+// Se uma tela falhar (por exemplo, com dados antigos no aparelho), mostra um aviso em vez de deixar o toque sem resposta.
 function render() {
+  try { renderTela(); }
+  catch (e) {
+    console.error(e);
+    $("#abas").hidden = false;
+    tela.innerHTML = `<div class="vazio entra"><h2>Não foi possível abrir esta tela</h2><p class="muted" style="margin:0">Tente de novo. Se continuar, fale com a gente pelo contato no Perfil.</p><button class="btn" type="button" id="erroVoltar">Voltar ao quiz</button></div>`;
+    $("#erroVoltar").addEventListener("click", () => { aba = "quiz"; rodada = null; chatAberto = null; render(); });
+  }
+}
+function renderTela() {
   aplicarTema();
   // Com o formulário do perfil na tela (por exemplo, enquanto a galeria está aberta), as atualizações automáticas
   // (matches, fila, resumo) não redesenham a tela: só a navegação (irPara) ou salvar o perfil fecham o formulário.
@@ -910,12 +920,15 @@ const ALEATORIO = "aleatorio";
 let selecao = null, verTodos = false; // Set com ids de assuntos, ou com ALEATORIO
 function nomeSelecao(ids) {
   if (ids.includes(ALEATORIO)) return "Aleatório";
-  if (ids.length === 1) return CATS.find(c => c.id === ids[0]).nome;
+  if (ids.length === 1) return nomeAssunto(ids[0]);
   return ids.length + " assuntos";
 }
 function renderQuizInicio() {
   // Sem escolha salva, começa com "Aleatório" marcado: dá para jogar com um toque.
-  if (!selecao) selecao = new Set(S.selecao && S.selecao.length ? S.selecao : [ALEATORIO]);
+  if (!selecao) {
+    const salvos = (S.selecao || []).filter(id => id === ALEATORIO || CATS.some(c => c.id === id));
+    selecao = new Set(salvos.length ? salvos : [ALEATORIO]);
+  }
   const mult = multAtual();
   const g = proximoGrupo();
   if (modoReal() && !resumoReal) atualizarResumo();
@@ -2152,7 +2165,11 @@ function htmlProvaParaMim(p) {
     ${pr.restantes >= pr.qtd ? `<button class="btn bloco" type="button" id="fazerProva">${pr.tentativas ? "Tentar de novo (perguntas novas)" : "Fazer a prova"}</button>` : `<span class="aviso" style="margin:0">Acabaram as perguntas novas desse assunto. ${esc(p.nome)} precisa trocar o assunto da prova.</span>`}</div>`;
 }
 // Prova padrão (Perfil): assunto, tamanho e mínimo que já vêm preenchidos; "auto" pede em todo match novo.
-const provaPadrao = () => Object.assign({ assunto: CATS[0] ? CATS[0].id : "", qtd: 5, minimo: 3, auto: false }, S.provaPadrao || {});
+const provaPadrao = () => {
+  const p = Object.assign({ assunto: CATS[0] ? CATS[0].id : "", qtd: 5, minimo: 3, auto: false }, S.provaPadrao || {});
+  if (!CATS.some(c => c.id === p.assunto) && CATS[0]) p.assunto = CATS[0].id;
+  return p;
+};
 const nomeAssunto = id => (CATS.find(c => c.id === id) || {}).nome || id;
 // Formulário da prova (assunto, 5 ou 10 perguntas, mínimo). Devolve a folha e uma função que lê os valores.
 function folhaProva(topo, base, botao, extra = "") {
@@ -2771,8 +2788,8 @@ function renderPerfil() {
   const pf = S.perfil;
   const acertos = Object.values(S.porCat).reduce((s, c) => s + c.a, 0);
   const pct = S.respondidas ? Math.round(acertos / S.respondidas * 100) : 0;
-  const melhor = Object.entries(S.porCat).filter(([, c]) => c.r >= 5).sort((a, b) => b[1].a / b[1].r - a[1].a / a[1].r)[0];
-  const melhorNome = melhor ? CATS.find(c => c.id === melhor[0]).nome : "—";
+  const melhor = Object.entries(S.porCat).filter(([id, c]) => c && c.r >= 5 && CATS.some(x => x.id === id)).sort((a, b) => b[1].a / b[1].r - a[1].a / a[1].r)[0];
+  const melhorNome = melhor ? nomeAssunto(melhor[0]) : "—";
   tela.innerHTML = `
   <div class="pilha entra">
     <div class="linha" style="gap:14px;flex-wrap:nowrap">${avatarHTML("eu", 76)}<div style="min-width:0"><h2>${esc(pf.nome)}, ${pf.idade}</h2><div class="muted">${conta && conta.usuario ? "@" + esc(conta.usuario) : "Nível " + fmtNivel(S.nivel)}</div></div></div>
