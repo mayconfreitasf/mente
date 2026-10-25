@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
 import { hashSenha, novoToken, senhaValida } from "./_auth.js";
-import { sincronizarPerfil, guardarMidia, urlMidia } from "./_perfil.js";
+import { sincronizarPerfil, guardarMidia, urlMidia, apagarMidias } from "./_perfil.js";
 import { FOTOS_DEMO } from "./_demo-fotos.js";
 
 // Perfis de demonstração, vistos só pela conta do revisor. Ficam perto de Cupertino (onde costuma estar a revisão da Apple).
@@ -24,13 +24,15 @@ async function contaTeste(usuario, email, nasc, senha) {
 }
 // Troca as fotos de uma conta de demonstração pelas do arquivo (sem passar pela conferência: são fotos nossas).
 async function fotosDemo(u, chave) {
-  await sql`DELETE FROM midias WHERE dono_id = ${u.id} AND tipo = 'foto'`;
+  await apagarMidias(await sql`SELECT id, url FROM midias WHERE dono_id = ${u.id} AND tipo = 'foto'`);
   const urls = [];
   for (const f of FOTOS_DEMO[chave]) urls.push(urlMidia(await guardarMidia(u.id, f, "foto")));
   return urls;
 }
 async function criarContasTeste(senhaRevisor) {
   const rev = await contaTeste(REVISOR.usuario, REVISOR.email, REVISOR.nasc, senhaRevisor);
+  await sql`UPDATE usuarios SET nivel = ${REVISOR.nivel} WHERE id = ${rev.id}`;
+  await sql`DELETE FROM respostas WHERE usuario_id = ${rev.id}`;
   // Zera a demonstração: sem curtidas, matches nem conversas do revisor.
   await sql`DELETE FROM avaliacoes WHERE de_id = ${rev.id} OR para_id = ${rev.id}`;
   await sql`DELETE FROM matches WHERE a_id = ${rev.id} OR b_id = ${rev.id}`;
@@ -43,6 +45,7 @@ async function criarContasTeste(senhaRevisor) {
     // As contas de demonstração não são usadas para entrar: a senha é aleatória e não fica guardada.
     const u = await contaTeste(d.usuario, `teste.${d.usuario.slice(5)}@jingar.com.br`, d.nasc, novoToken() + "a1!");
     const idade = new Date().getFullYear() - Number(d.nasc.slice(0, 4));
+    await sql`UPDATE usuarios SET nivel = ${d.nivel} WHERE id = ${u.id}`;
     const fotos = await fotosDemo(u, d.fotos);
     await sincronizarPerfil(u, { perfil: { nome: d.nome, idade, sexo: d.sexo, interesse: "T", cidade: "", bio: d.bio, fotos, foto: fotos[0] }, nivel: d.nivel, filtros: { verMin: 0, visMin: 0, raio: null } }, { lat: d.lat, lng: d.lng });
     if (d.curtiu) await sql`INSERT INTO avaliacoes (de_id, para_id, tipo) VALUES (${u.id}, ${rev.id}, 'curtir') ON CONFLICT (de_id, para_id) DO UPDATE SET tipo = 'curtir'`;

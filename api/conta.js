@@ -6,7 +6,9 @@
 import crypto from "node:crypto";
 import { sql, prepararBanco } from "./_banco.js";
 import { lerToken, gravarCookie, usuarioDaSessao, falha, cors } from "./_sessao.js";
-import { sincronizarPerfil, guardarFotoConferida, urlMidia, MAX_FOTOS } from "./_perfil.js";
+import { sincronizarPerfil, guardarFotoConferida, urlMidia, apagarMidias, MAX_FOTOS } from "./_perfil.js";
+import { perguntaDoBanco } from "./_bancos.js";
+import { assinarPergunta, pesoValido, iguais } from "./_pontos.js";
 import { hashSenha, confereSenha, novoToken, hashToken, usuarioValido, emailValido, senhaValida, verificaTokenProvedor, normalizaTelefone, novoCodigo } from "./_auth.js";
 
 const DIAS_SESSAO = 30, MAX_ESTADO = 1500000, MAX_FALHAS = 5;
@@ -28,8 +30,18 @@ const mascaraEmail = e => e.replace(/^(.)[^@]*(@.*)$/, "$1***$2");
 const mascaraTelefone = t => `(${t.slice(3, 5)}) *****-${t.slice(-4)}`;
 const publico = u => ({
   usuario: u.usuario, email: u.email, telefone: u.telefone ? mascaraTelefone(u.telefone) : null, idade: idadeDe(u.nascimento),
-  temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub, teste: !!u.teste
+  temSenha: !!u.senha_hash, google: !!u.google_sub, apple: !!u.apple_sub, teste: !!u.teste, avisos: u.avisos !== false
 });
+// Nível da conta: só o servidor soma pontos (respostas conferidas aqui). Contas antigas começam com o nível do perfil.
+async function nivelDe(u) {
+  if (u.nivel != null) return Number(u.nivel);
+  const [p] = await sql`SELECT nivel FROM perfis WHERE usuario_id = ${u.id}`;
+  const n = p ? Number(p.nivel) || 0 : 0;
+  await sql`UPDATE usuarios SET nivel = ${n} WHERE id = ${u.id}`;
+  u.nivel = n;
+  return n;
+}
+const chaveTexto = t => "h:" + crypto.createHash("sha256").update(String(t).trim().slice(0, 200).toLowerCase()).digest("hex").slice(0, 24);
 // "contato" é um e-mail ou um celular; o tipo decide o canal do código.
 function lerContato(x) {
   const v = typeof x === "string" ? x.trim() : "";
@@ -227,6 +239,7 @@ const MOTIVOS = ["Perfil falso", "Fotos ou conteúdo impróprio", "Assédio ou o
 // O progresso guarda o endereço da foto; ao entrar, o endereço é refeito para valer com a assinatura atual.
 async function estadoAtual(u) {
   const e = u.estado;
+  if (e) e.nivel = await nivelDe(u);
   // Os endereços das fotos vêm sempre do servidor (assinados), na ordem do perfil.
   if (e && e.perfil) {
     const [p] = await sql`SELECT foto_id, fotos FROM perfis WHERE usuario_id = ${u.id}`;
@@ -282,6 +295,8 @@ export default async function handler(req, res) {
     if (b.acao === "salvarEstado") {
       if (!estadoAceito(b.estado)) throw falha(413, "Progresso grande demais para salvar na conta.");
       // O perfil público acompanha o progresso; a foto enviada vira mídia e o progresso guarda só o endereço dela.
+      // O nível que vale é o do servidor, não o que o app mandou.
+      b.estado.nivel = await nivelDe(u);
       const r = await sincronizarPerfil(u, b.estado, b.local);
       if (r.fotos && b.estado.perfil) { b.estado.perfil.fotos = r.fotos; b.estado.perfil.foto = r.fotos[0] || null; }
       await sql`UPDATE usuarios SET estado = ${JSON.stringify(b.estado)}::jsonb WHERE id = ${u.id}`;
@@ -294,6 +309,76 @@ export default async function handler(req, res) {
       const id = await guardarFotoConferida(u.id, b.foto);
       if (!id) throw falha(400, "Foto inválida ou grande demais. Use JPG ou PNG.");
       return res.status(200).json({ foto: urlMidia(id), max: MAX_FOTOS });
+    }
+    // Resposta de uma pergunta. O servidor confere e soma nível só na primeira vez que a pergunta é respondida.
+    if (b.acao === "responder") {
+      const [{ n }] = await sql`SELECT count(*)::int AS n FROM respostas WHERE usuario_id = ${u.id} AND criado_em > now() - interval '1 minute'`;
+      if (n >= 40) throw falha(429, "Muitas respostas seguidas. Espere um pouco.");
+      const resposta = typeof b.resposta === "string" ? b.resposta.trim().slice(0, 200) : "";
+      let chave, certo = false, pts = 0;
+      if (b.tipo === "banco") {
+        const modo = [1, 2, 3].includes(b.modo) ? b.modo : 1, cat = String(b.cat || "").slice(0, 40), i = Number.isInteger(b.i) ? b.i : -1;
+        const p = perguntaDoBanco(modo, cat, i);
+        if (!p) throw falha(400, "Pergunta inválida.");
+        chave = `b:${modo}:${cat}:${i}`; certo = p[1] === resposta; pts = modo;
+      } else if (b.tipo === "ia") {
+        const pergunta = typeof b.pergunta === "string" ? b.pergunta.trim().slice(0, 200) : "";
+        if (!pergunta) throw falha(400, "Pergunta inválida.");
+        pts = pesoValido(b.pts); chave = chaveTexto(pergunta);
+        certo = iguais(assinarPergunta(u.id, pts, pergunta, resposta), b.sig);
+      } else if (b.tipo === "desafio") {
+        const [d] = await sql`SELECT dados FROM desafios WHERE codigo = ${String(b.codigo || "").slice(0, 6)}`;
+        const q = d && d.dados.f && Number.isInteger(b.i) ? d.dados.q[b.i] : null;
+        if (!q) throw falha(400, "Pergunta inválida.");
+        chave = chaveTexto(q[0]); certo = String(q[1]).trim() === resposta; pts = pesoValido(d.dados.p != null ? d.dados.p : d.dados.m);
+      } else throw falha(400, "Resposta inválida.");
+      const nova = (await sql`INSERT INTO respostas (usuario_id, chave) VALUES (${u.id}, ${chave}) ON CONFLICT DO NOTHING RETURNING chave`).length > 0;
+      let nivel = await nivelDe(u), ganhou = 0;
+      if (nova && certo) {
+        ganhou = pts; nivel = Math.round((nivel + pts) * 10) / 10;
+        await sql`UPDATE usuarios SET nivel = ${nivel} WHERE id = ${u.id}`;
+        await sql`UPDATE perfis SET nivel = ${nivel} WHERE usuario_id = ${u.id}`;
+      }
+      return res.status(200).json({ certo, pts: ganhou, nivel, repetida: !nova });
+    }
+    // "Recomeçar do zero" com conta: zera o nível e as perguntas já respondidas.
+    if (b.acao === "zerarNivel") {
+      await sql`UPDATE usuarios SET nivel = 0 WHERE id = ${u.id}`;
+      await sql`UPDATE perfis SET nivel = 0 WHERE usuario_id = ${u.id}`;
+      await sql`DELETE FROM respostas WHERE usuario_id = ${u.id}`;
+      return res.status(200).json({ nivel: 0 });
+    }
+    if (b.acao === "trocarSenha") {
+      if (u.senha_hash && !confereSenha(typeof b.atual === "string" ? b.atual.slice(0, 128) : "", u.senha_hash)) throw falha(401, "Senha atual incorreta.");
+      if (!senhaValida(b.nova)) throw falha(400, "A nova senha precisa ter pelo menos 6 caracteres, com letra, número e símbolo.");
+      await sql`UPDATE usuarios SET senha_hash = ${hashSenha(b.nova)} WHERE id = ${u.id}`;
+      // As outras sessões (outros aparelhos) são encerradas.
+      const t = lerToken(req);
+      await sql`DELETE FROM sessoes WHERE usuario_id = ${u.id} AND token_hash <> ${t ? hashToken(t) : ""}`;
+      return res.status(200).json({ ok: true });
+    }
+    // Trocar e-mail ou celular: o código vai para o endereço novo, que só vale depois de confirmado.
+    if (b.acao === "trocarContato") {
+      if (u.senha_hash && !confereSenha(typeof b.senha === "string" ? b.senha.slice(0, 128) : "", u.senha_hash)) throw falha(401, "Senha incorreta.");
+      const destino = lerContato(b.contato);
+      if (!destino) throw falha(400, "Digite um e-mail ou celular válido.");
+      const [outro] = destino.tipo === "email" ? await sql`SELECT id FROM usuarios WHERE email = ${destino.valor} AND id <> ${u.id}` : await sql`SELECT id FROM usuarios WHERE telefone = ${destino.valor} AND id <> ${u.id}`;
+      if (outro) throw falha(409, destino.tipo === "email" ? "Esse e-mail já está em uso." : "Esse celular já está em uso.");
+      const mascara = await enviarCodigo(u, destino, "contato");
+      await sql`UPDATE codigos SET destino = ${JSON.stringify(destino)} WHERE usuario_id = ${u.id} AND finalidade = 'contato'`;
+      return res.status(200).json({ destino: mascara });
+    }
+    if (b.acao === "confirmarContato") {
+      const [c] = await sql`SELECT destino FROM codigos WHERE usuario_id = ${u.id} AND finalidade = 'contato' AND expira_em > now() ORDER BY id DESC LIMIT 1`;
+      const destino = c && c.destino ? JSON.parse(c.destino) : null;
+      if (!destino) throw falha(400, "Código expirado. Peça um novo.");
+      await conferirCodigo(u, "contato", b.codigo);
+      const [n] = destino.tipo === "email" ? await sql`UPDATE usuarios SET email = ${destino.valor} WHERE id = ${u.id} RETURNING *` : await sql`UPDATE usuarios SET telefone = ${destino.valor} WHERE id = ${u.id} RETURNING *`;
+      return res.status(200).json({ conta: publico(n) });
+    }
+    if (b.acao === "avisos") {
+      const [n] = await sql`UPDATE usuarios SET avisos = ${b.ligado !== false} WHERE id = ${u.id} RETURNING *`;
+      return res.status(200).json({ conta: publico(n) });
     }
     if (b.acao === "denunciar") {
       const alvo = typeof b.alvo === "string" ? b.alvo.slice(0, 64) : "";
@@ -317,6 +402,7 @@ export default async function handler(req, res) {
       if (!u.senha_hash && b.confirmacao !== "EXCLUIR") throw falha(400, "Digite EXCLUIR para confirmar.");
       // Os desafios que a pessoa criou continuam valendo para quem tem o link, mas sem o nome dela.
       await sql`UPDATE desafios SET dados = dados || '{"n":"Alguém"}'::jsonb WHERE criador_id = ${u.id}`;
+      await apagarMidias(await sql`SELECT id, url FROM midias WHERE dono_id = ${u.id}`);
       await sql`DELETE FROM usuarios WHERE id = ${u.id}`;
       gravarCookie(res, "", 0);
       return res.status(200).json({ ok: true });

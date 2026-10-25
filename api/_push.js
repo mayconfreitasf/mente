@@ -64,6 +64,8 @@ function enviarIos(token, titulo, texto, dados) {
 // Envia para todos os aparelhos da pessoa. Tokens recusados pelo Google ou pela Apple são apagados.
 export async function avisar(usuarioId, titulo, texto, dados = {}) {
   try {
+    const [u] = await sql`SELECT avisos FROM usuarios WHERE id = ${usuarioId}`;
+    if (u && u.avisos === false) return;
     const aparelhos = await sql`SELECT token, plataforma FROM dispositivos WHERE usuario_id = ${usuarioId}`;
     await comLimite(Promise.all(aparelhos.map(async a => {
       const r = await (a.plataforma === "ios" ? enviarIos : enviarAndroid)(a.token, titulo, texto, dados).catch(() => "erro");

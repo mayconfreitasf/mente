@@ -2,9 +2,11 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Jingar">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
+/* Fontes embutidas no app (Google Fonts, licença SIL Open Font License): abrem sem internet e mais rápido. */
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("fontes/figtree.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500 700; font-display: swap; src: url("fontes/jetbrains-mono.woff2") format("woff2"); }
+@font-face { font-family: "Sora"; font-style: normal; font-weight: 500 700; font-display: swap; src: url("fontes/sora.woff2") format("woff2"); }
 /* Layout: app de uma tela, coluna única de até 480px, barra de abas embaixo. Dark-first, vinho e champanhe. */
 :root {
   --bg: #150d11;
@@ -239,7 +241,15 @@ a.btn { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .trilho i.carregando { animation: none; width: 100%; opacity: .5; } }
 .tag-dobro { color: var(--bg); background: var(--gold); border-radius: 6px; padding: 1px 6px; margin-left: 4px; letter-spacing: 0; }
 .modos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.modos button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; text-align: left; }
+.modos button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px; text-align: left; min-width: 0; }
+.modos b { font-size: 14px; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--fg); }
+.msgs .dia { align-self: center; font-size: 12px; color: var(--muted); padding: 4px 10px; border-radius: 999px; background: var(--surface-2); margin: 6px 0; }
+.msg .hora { display: block; font-size: 10px; opacity: .7; text-align: right; margin-top: 2px; }
+.msgs .visto { align-self: flex-end; font-size: 11px; color: var(--muted); margin-top: -2px; }
+.msg .desafio-link { display: block; margin-top: 8px; width: 100%; }
+.chat-topo .quem { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .modos small { font-weight: 500; font-size: 12px; color: var(--muted); }
 .modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--prata-cor); background: color-mix(in srgb, var(--prata-cor) 24%, transparent); }
 .tag-dobro.t2 { background: var(--prata); color: var(--prata-fg); }
@@ -389,7 +399,7 @@ const PADRAO = () => ({
   v: 1, perfil: null, nivel: 0, respondidas: 0, porCat: {}, vistas: {},
   curtidos: [], passados: [], matches: [], novos: [], chats: {}, passes: [],
   meuPasse: { ativo: true, valor: 150 }, selecao: [], modo: "normal", atualizado: 0,
-  filtros: { verMin: 0, visMin: 0, raio: null }, local: null, minhas: [], criacoes: [], denuncias: [], bloqueados: []
+  filtros: { verMin: 0, visMin: 0, raio: null, idadeMin: 18, idadeMax: 99 }, local: null, minhas: [], criacoes: [], denuncias: [], bloqueados: []
 });
 let S = carregarLocal() || PADRAO();
 let db = null, uid = null, salvarTimer = null;
@@ -534,38 +544,49 @@ function noFiltro(p) {
   const d = distanciaKm(p);
   return d != null && d <= f.raio;
 }
-const elegivel = p => noFiltro(p) && interesseOk(p);
+const faixaIdade = () => { const f = S.filtros || {}; const a = Math.min(99, Math.max(18, f.idadeMin || 18)); return [a, Math.min(99, Math.max(a, f.idadeMax || 99))]; };
+const elegivel = p => { const [a, b] = faixaIdade(); return noFiltro(p) && interesseOk(p) && p.idade >= a && p.idade <= b; };
 const semMatch = () => !!S.perfil && S.perfil.interesse === "N";
 // Quem está abaixo do nível mínimo de visibilidade não vê você, então não dá match. Do seu nível para cima, todos veem.
 function meVe(p) { return p.nivel >= Math.min(S.filtros.visMin, S.nivel); }
 function resumoFiltros() {
   const f = S.filtros;
-  return `Níveis ${Math.min(f.verMin, Math.floor(S.nivel))} a ${fmtNivel(S.nivel)} · ${f.raio ? "até " + f.raio + " km" : "qualquer distância"}`;
+  const [a, b] = faixaIdade();
+  return `${a} a ${b} anos · níveis ${Math.min(f.verMin, Math.floor(S.nivel))} a ${fmtNivel(S.nivel)} · ${f.raio ? "até " + f.raio + " km" : "qualquer distância"}`;
 }
 function abrirFiltros() {
-  const f = S.filtros, loc = meuLocal();
+  const f = S.filtros, loc = meuLocal(), topo = Math.floor(S.nivel);
+  const [idMin, idMax] = faixaIdade();
   const iR = RAIOS.includes(f.raio) ? RAIOS.indexOf(f.raio) : RAIOS.length - 1;
   const txtR = r => r ? "até " + r + " km" : "qualquer distância";
-  const campoNivel = (id, valor, antes, depois) => `<div class="linha" style="flex-wrap:nowrap"><span class="muted">${antes}</span><input id="${id}" type="number" inputmode="numeric" min="0" max="${Math.floor(S.nivel)}" value="${Math.min(valor, Math.floor(S.nivel))}" style="max-width:90px"><span class="muted">${depois}</span></div>`;
+  const opcoesIdade = sel => Array.from({ length: 82 }, (_, k) => 18 + k).map(i => `<option value="${i}" ${i === sel ? "selected" : ""}>${i}${i === 99 ? "+" : ""}</option>`).join("");
   const v = folha(`<span class="rotulo">Filtros</span><h2>Quem você vê e quem vê você</h2>
-    <div class="campo"><label for="fVer">Perfis que você vê</label>${campoNivel("fVer", f.verMin, "Do nível", `até o seu, ${fmtNivel(S.nivel)}`)}
+    <div class="campo"><label>Idade</label>
+      <div class="linha" style="flex-wrap:nowrap"><span class="muted">De</span><select id="fIdMin" aria-label="Idade mínima">${opcoesIdade(idMin)}</select><span class="muted">até</span><select id="fIdMax" aria-label="Idade máxima">${opcoesIdade(idMax)}</select><span class="muted">anos</span></div></div>
+    <div class="campo"><label for="fVer">Perfis que você vê: <b id="verTxt"></b></label>
+      <input id="fVer" type="range" min="0" max="${topo}" step="1" value="${Math.min(f.verMin, topo)}" ${topo ? "" : "disabled"}>
       <span class="muted" style="font-size:13px">Perfis acima do seu nível continuam aparecendo borrados.</span></div>
-    <div class="campo"><label for="fVis">Quem pode ver seu perfil</label>${campoNivel("fVis", f.visMin, "Pessoas a partir do nível", "")}
-      <span class="muted" style="font-size:13px">Use para esconder seu perfil de quem está muitos níveis abaixo de você.</span></div>
+    <div class="campo"><label for="fVis">Quem pode ver seu perfil: <b id="visTxt"></b></label>
+      <input id="fVis" type="range" min="0" max="${topo}" step="1" value="${Math.min(f.visMin, topo)}" ${topo ? "" : "disabled"}>
+      <span class="muted" style="font-size:13px">Esconde seu perfil de quem está muitos níveis abaixo de você.</span></div>
     <div class="campo"><label for="fRaio">Distância: <b id="raioTxt">${txtR(RAIOS[iR])}</b></label>
       <input id="fRaio" type="range" min="0" max="${RAIOS.length - 1}" step="1" value="${iR}" ${loc ? "" : "disabled"}>
       <span class="muted" style="font-size:13px">${loc ? "A partir da localização do seu aparelho." : "Ative a localização no Descobrir para filtrar por distância."}</span></div>
     <div class="erro" id="filtroErro"></div>
     <button class="btn bloco" type="button" id="salvarF">Salvar filtros</button>
     <button class="link" type="button" id="cancelarF">Cancelar</button>`);
-  const raio = v.querySelector("#fRaio");
-  raio.addEventListener("input", () => { v.querySelector("#raioTxt").textContent = txtR(RAIOS[raio.value]); });
+  const raio = v.querySelector("#fRaio"), ver = v.querySelector("#fVer"), vis = v.querySelector("#fVis");
+  const pintar = () => {
+    v.querySelector("#verTxt").textContent = Number(ver.value) ? `do nível ${ver.value} até o seu (${fmtNivel(S.nivel)})` : "todos até o seu nível";
+    v.querySelector("#visTxt").textContent = Number(vis.value) ? `a partir do nível ${vis.value}` : "todo mundo";
+    v.querySelector("#raioTxt").textContent = txtR(RAIOS[raio.value]);
+  };
+  [raio, ver, vis].forEach(x => x.addEventListener("input", pintar)); pintar();
   v.querySelector("#cancelarF").addEventListener("click", () => v.remove());
   v.querySelector("#salvarF").addEventListener("click", () => {
-    const num = id => { const x = v.querySelector(id).value.trim(); return x === "" ? 0 : Math.round(Number(x)); };
-    const verMin = num("#fVer"), visMin = num("#fVis");
-    if (![verMin, visMin].every(n => n >= 0 && n <= S.nivel)) { v.querySelector("#filtroErro").textContent = `Os níveis precisam ficar entre 0 e o seu nível, ${fmtNivel(S.nivel)}.`; return; }
-    S.filtros = { verMin, visMin, raio: raio.disabled ? null : RAIOS[raio.value] };
+    const idadeMin = Number(v.querySelector("#fIdMin").value), idadeMax = Number(v.querySelector("#fIdMax").value);
+    if (idadeMin > idadeMax) { v.querySelector("#filtroErro").textContent = "A idade mínima precisa ser menor que a máxima."; return; }
+    S.filtros = { verMin: Number(ver.value) || 0, visMin: Number(vis.value) || 0, raio: raio.disabled ? null : RAIOS[raio.value], idadeMin, idadeMax };
     salvar(); v.remove(); toast("Filtros salvos");
     // Pessoas reais: os filtros valem no servidor, então salva agora e busca a fila de novo.
     if (modoReal()) { clearTimeout(timerConta); filaReal = null; resumoReal = null; salvarConta().then(render); } else render();
@@ -674,7 +695,8 @@ function render() {
     if (rodada && rodada.desafio) return renderPergunta();
     return renderCadastro();
   }
-  $("#abas").hidden = false; $("#chipNivel").hidden = false;
+  // Durante uma rodada e numa conversa as abas somem: um toque sem querer não tira a pessoa do quiz.
+  $("#abas").hidden = !!((aba === "quiz" && rodada && !rodada.fim) || (aba === "matches" && chatAberto != null)); $("#chipNivel").hidden = false;
   $("#chipNum").textContent = fmtNivel(S.nivel);
   document.querySelectorAll(".aba").forEach(b => b.setAttribute("aria-current", b.dataset.aba === aba ? "page" : "false"));
   document.querySelectorAll('.aba[data-aba="descobrir"], .aba[data-aba="matches"]').forEach(b => b.classList.toggle("desligada", semMatch()));
@@ -838,7 +860,8 @@ function nomeSelecao(ids) {
   return ids.length + " assuntos";
 }
 function renderQuizInicio() {
-  if (!selecao) selecao = new Set(S.selecao || []);
+  // Sem escolha salva, começa com "Aleatório" marcado: dá para jogar com um toque.
+  if (!selecao) selecao = new Set(S.selecao && S.selecao.length ? S.selecao : [ALEATORIO]);
   const mult = multAtual();
   const g = proximoGrupo();
   if (modoReal() && !resumoReal) atualizarResumo();
@@ -851,6 +874,13 @@ function renderQuizInicio() {
   const maisJogados = CATS.slice().sort((a, b) => ((S.porCat[b.id] || {}).r || 0) - ((S.porCat[a.id] || {}).r || 0)).slice(0, 6);
   const visiveis = verTodos ? CATS : CATS.filter(c => maisJogados.includes(c) || (!alea && selecao.has(c.id)));
   const alvo = alea ? "assuntos aleatórios" : qtd === 1 ? "1 assunto" : qtd + " assuntos";
+  // Mensagem do cartão de nível: quando falta foto ou localização, diz isso (e não "sem pessoas compatíveis").
+  const semFotoAgora = modoReal() && !isentoFoto() && !fotosDe(S.perfil).length;
+  const aviso = semMatch() ? "Match desligado: por enquanto você está jogando só pelo quiz."
+    : semFotoAgora || (resumoReal && resumoReal.semFoto) ? "Adicione uma foto ao seu perfil para ver pessoas."
+    : modoReal() && (!S.local || (resumoReal && resumoReal.semLocal)) ? "Ative a localização no Descobrir para ver pessoas perto de você."
+    : modoReal() && !liberados ? "Ainda não há pessoas compatíveis com seus filtros. Novas pessoas entram todo dia."
+    : "Você desbloqueou todo mundo. Impressionante.";
   tela.innerHTML = `
   <div class="pilha entra">
     <section class="placar">
@@ -858,20 +888,8 @@ function renderQuizInicio() {
       <span class="rotulo">Seu nível</span>
       <p>${liberados} ${liberados === 1 ? "pessoa liberada" : "pessoas liberadas"} para você</p>
       ${g ? `<div class="prox"><div class="trilho"><i style="width:${pct}%"></i></div>
-        <span class="muted" style="font-size:13px">${textoFalta(g)} no nível ${g.nivel}.</span></div>` : `<div class="prox muted" style="font-size:13px">${semMatch() ? "Match desligado: por enquanto você está jogando só pelo quiz." : modoReal() && !liberados ? "Ainda não há pessoas compatíveis com seus filtros. Novas pessoas entram todo dia." : "Você desbloqueou todo mundo. Impressionante."}</div>`}
+        <span class="muted" style="font-size:13px">${textoFalta(g)} no nível ${g.nivel}.</span></div>` : `<div class="prox muted" style="font-size:13px">${aviso}</div>`}
     </section>
-    <div class="pilha" style="gap:10px">
-      <h2>Modo</h2>
-      <div class="seg modos">
-        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><b>${m.nome}</b><small>${m.desc}</small></button>`).join("")}
-      </div>
-    </div>
-    <div class="caixa extras">
-      <div class="chave"><div><strong>Quiz do seu arquivo</strong><div class="muted" style="font-size:12px">PDF, texto ou fotos (até 5 MB cada) viram perguntas.</div></div><label class="btn sec mini" for="fArq">Anexar</label></div>
-      <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
-    </div>
-    <div class="caixa extras" id="blocoCat">${htmlBlocoCat()}</div>
-    <div id="minhasCat">${htmlMinhas()}</div>
     <div class="pilha" style="gap:10px">
       <div class="linha" style="justify-content:space-between"><h2>Escolha os assuntos</h2><span class="rotulo">um ou vários</span></div>
       <div class="cats">
@@ -879,11 +897,23 @@ function renderQuizInicio() {
         ${visiveis.map(c => { const pc = S.porCat[c.id] || { r: 0, a: 0 }; return `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="${!alea && selecao.has(c.id)}"><strong>${esc(c.nome)}</strong><span>${pc.r ? `${pc.a}/${pc.r} acertos` : "nova"}</span></button>`; }).join("")}
       </div>
       ${CATS.length > 6 ? `<button class="link" type="button" id="verTodos" style="align-self:center">${verTodos ? "Mostrar menos" : `Ver todos os ${CATS.length}`}</button>` : ""}
-      <div class="iniciar">
-        <button class="btn bloco ${classeModo(mult)}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
-        <p class="aviso" style="margin:8px 0 0">As perguntas seguem sem limite até você encerrar.</p>
+    </div>
+    <div class="pilha" style="gap:10px">
+      <h2>Modo</h2>
+      <div class="seg modos">
+        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><b>${m.nome}</b><small>${m.desc}</small></button>`).join("")}
       </div>
     </div>
+    <div class="iniciar">
+      <button class="btn bloco ${classeModo(mult)}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
+    </div>
+    <div class="caixa extras">
+      <div><strong>Criar quiz</strong><div class="muted" style="font-size:13px">A IA cria as perguntas a partir de um arquivo seu ou de um tema.</div></div>
+      <div class="chave"><div><b style="font-size:14px">Com um arquivo</b><div class="muted" style="font-size:12px">PDF, texto ou fotos (até 5 MB cada)</div></div><label class="btn sec mini" for="fArq">Anexar</label></div>
+      <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
+      <div class="pilha" style="gap:10px" id="blocoCat">${htmlBlocoCat()}</div>
+    </div>
+    <div id="minhasCat">${htmlMinhas()}</div>
   </div>`;
   const redesenhar = () => { const topo = tela.scrollTop; renderQuizInicio(); tela.scrollTop = topo; tela.firstElementChild.classList.remove("entra"); };
   tela.querySelectorAll(".modos button").forEach(b => b.addEventListener("click", () => { S.modo = b.dataset.modo; salvar(); redesenhar(); }));
@@ -920,9 +950,9 @@ function iniciarRodada(ids, mult) {
 }
 // Sorteia a próxima pergunta: alterna os assuntos e não repete até esgotar o banco escolhido.
 function sortearPergunta(r) {
-  if (r.desafio) {
+  if (r.fila) {
     const pd = r.fila[r.pos++];
-    return pd ? { cat: pd.cat, idx: pd.idx, chave: null, ref: pd.ref, q: pd.q, certa: pd.certa, ops: embaralhar([pd.certa, ...pd.erradas]) } : null;
+    return pd ? { cat: pd.cat, idx: pd.idx, di: pd.di, modo: pd.modo, chave: null, ref: pd.ref, q: pd.q, certa: pd.certa, ops: embaralhar([pd.certa, ...pd.erradas]) } : null;
   }
   if (r.arquivo) {
     const c = r.cats[0];
@@ -964,7 +994,7 @@ function renderPergunta() {
   durTempo = segundosPara(it.q) * 1000;
   tela.innerHTML = `
   <div class="rodada entra">
-    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.peso != null ? ` <span class="tag-dobro">×${fmtNivel(r.peso)}</span>` : r.mult > 1 ? ` <span class="tag-dobro${r.mult === 3 ? " t3" : " t2"}">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1}${r.desafio ? " de " + r.fila.length : ""} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
+    <div class="rodada-topo"><span class="tag-cat">${esc(it.cat.nome)}${r.peso != null ? ` <span class="tag-dobro">×${fmtNivel(r.peso)}</span>` : r.mult > 1 ? ` <span class="tag-dobro${r.mult === 3 ? " t3" : " t2"}">×${r.mult}</span>` : ""}</span><span class="num">#${r.n + 1}${r.fila ? " de " + r.fila.length : ""} · ${r.acertos} certas · <span id="seg">${segundosPara(it.q)}</span>s</span></div>
     <div class="tempo" id="tempo"><i id="barra"></i></div>
     <div class="enunciado">${esc(it.q)}</div>
     <div class="opcoes">${it.ops.map((o, k) => `<button class="opcao" type="button" data-k="${k}"><kbd>${"ABC"[k]}</kbd><span>${esc(o)}</span></button>`).join("")}</div>
@@ -994,24 +1024,60 @@ function responder(k) {
     b.disabled = true;
     if (it.ops[j] === it.certa) b.classList.add("certa"); else if (j === k) b.classList.add("errada");
   });
-  const fb = $("#fb");
+  const fb = $("#fb"), servidor = nivelNoServidor();
   if (certo) {
-    const pts = r.peso != null ? r.peso : r.mult;
-    r.acertos++; r.pontos = arred(r.pontos + pts); S.nivel = arred(S.nivel + pts);
-    fb.className = "feedback ok"; fb.textContent = "Certo! Nível " + fmtNivel(S.nivel); animarNivel(pts);
+    r.acertos++; fb.className = "feedback ok";
+    // Com conta, o servidor confere a resposta e diz quantos pontos valeu (pergunta repetida não soma).
+    if (servidor) fb.textContent = "Certo!";
+    else {
+      const pts = r.peso != null ? r.peso : r.mult;
+      r.pontos = arred(r.pontos + pts); S.nivel = arred(S.nivel + pts);
+      fb.textContent = "Certo! Nível " + fmtNivel(S.nivel); animarNivel(pts);
+    }
   } else { fb.className = "feedback no"; fb.textContent = k < 0 ? "Tempo esgotado" : "Errou"; }
+  if (servidor) registrarResposta(r, it, k >= 0 ? it.ops[k] : "", fb);
   r.n++; S.respondidas++;
+  if (r.limite && r.n >= r.limite) r.terminar = true;
   (r.hist || (r.hist = [])).push(it.ref);
-  if (!r.arquivo && !r.desafio) {
+  if (r.prova) r.respostas.push(k >= 0 ? it.ops[k] : "");
+  if (!r.arquivo && !r.desafio && !r.prova) {
     const pc = S.porCat[it.cat.id] || (S.porCat[it.cat.id] = { r: 0, a: 0 }); pc.r++; if (certo) pc.a++;
     (S.vistas[it.chave] || (S.vistas[it.chave] = [])).push(it.idx);
   }
   salvar();
-  setTimeout(() => { if (rodada !== r || r.fim) return; r.atual = null; r.travado = false; render(); }, certo ? 900 : 1500);
+  setTimeout(() => { if (rodada !== r || r.fim) return; r.atual = null; r.travado = false; if (r.terminar) r.fim = true; render(); }, certo ? 900 : 1500);
+}
+// ---------- Nível no servidor ----------
+const nivelNoServidor = () => !!conta && !semServidor;
+// Manda a resposta para o servidor, que confere e soma o nível. O app mostra o resultado assim que ele volta.
+async function registrarResposta(r, it, resposta, fb) {
+  const corpo = { acao: "responder", resposta };
+  let semPontos = "";
+  if (!r.arquivo && it.idx != null && it.cat && it.cat.id !== "arquivo") Object.assign(corpo, { tipo: "banco", cat: it.cat.id, i: it.idx, modo: it.modo || r.mult });
+  else if (r.desafio && it.di != null && r.desafio.codigo) Object.assign(corpo, { tipo: "desafio", codigo: r.desafio.codigo, i: it.di });
+  else if (r.arquivo && it.cat.sig && it.cat.sig[it.q]) Object.assign(corpo, { tipo: "ia", pergunta: it.q, pts: r.peso != null ? r.peso : r.mult, sig: it.cat.sig[it.q] });
+  else semPontos = r.desafio ? "este desafio não soma nível" : "categoria antiga: renove para valer nível";
+  if (semPontos) { if (fb.isConnected && fb.classList.contains("ok")) fb.textContent = `Certo! (${semPontos})`; return; }
+  try {
+    const j = await chamarConta(corpo);
+    r.pontos = arred(r.pontos + j.pts); S.nivel = j.nivel; salvar();
+    if (j.pts) animarNivel(j.pts); else $("#chipNum").textContent = fmtNivel(S.nivel);
+    if (fb.isConnected && j.certo) fb.textContent = j.pts ? `Certo! +${fmtNivel(j.pts)} · nível ${fmtNivel(j.nivel)}` : "Certo! Pergunta já respondida antes: não soma.";
+    if (rodada === r && r.fim && aba === "quiz") render();
+  } catch (e) { if (fb.isConnected) fb.textContent += ` (não somou: ${e.erro})`; }
 }
 function renderResultado() {
   const r = rodada;
   if (r.desafio) return renderResultadoDesafio();
+  if (r.prova) return renderResultadoProva();
+  if (r.paraChat) {
+    enviarDesafioNoChat(r);
+    tela.innerHTML = `<div class="pilha entra" style="padding-top:8px"><div class="resultado"><span class="rotulo">${esc(r.nome)}</span><div class="grande">${r.acertos}/${r.n}</div>
+      <p style="margin:0">${r.desafioEnviado ? `Desafio enviado para ${esc(r.paraNome)} no chat.` : r.erroEnvio ? `Não foi possível enviar: ${esc(r.erroEnvio)}` : r.n ? "Enviando o desafio…" : "Nenhuma pergunta respondida: o desafio não foi enviado."}</p></div>
+      <button class="btn bloco" type="button" id="voltarChat">Voltar para a conversa</button></div>`;
+    $("#voltarChat").addEventListener("click", () => { const id = r.paraChat; rodada = null; aba = "matches"; abrirChat(id); });
+    return;
+  }
   const liberou = semServidor ? PERFIS.filter(p => elegivel(p) && p.nivel <= S.nivel && p.nivel > S.nivel - r.pontos) : [];
   const g = proximoGrupo();
   tela.innerHTML = `
@@ -1052,9 +1118,9 @@ const textoCurto = (x, n) => typeof x === "string" ? x.trim().slice(0, n) : "";
 function resolverDesafio(d) {
   if (d.f) {
     const cat = { id: "arquivo", nome: d.f };
-    return d.q.map(p => Array.isArray(p) && p.length === 4 ? p.map(x => textoCurto(x, 200)) : null)
-      .filter(p => p && p.every(Boolean) && new Set(p.slice(1)).size === 3)
-      .map(p => ({ cat, idx: null, ref: p, q: p[0], certa: p[1], erradas: p.slice(2) }));
+    return d.q.map((p, di) => Array.isArray(p) && p.length === 4 ? { di, p: p.map(x => textoCurto(x, 200)) } : null)
+      .filter(x => x && x.p.every(Boolean) && new Set(x.p.slice(1)).size === 3)
+      .map(({ di, p }) => ({ cat, idx: null, di, ref: p, q: p[0], certa: p[1], erradas: p.slice(2) }));
   }
   const banco = d.m === 3 ? MDIF : d.m === 2 ? DIF : null;
   return d.q.map(x => {
@@ -1333,7 +1399,7 @@ async function gerarPerguntas(fonte, mult, evitar, signal) {
     Array.isArray(p) && p.length === 4 && p.every(x => typeof x === "string" && x.trim()) &&
     new Set(p.slice(1).map(x => x.trim().toLowerCase())).size === 3 && !vistos.has(p[0].trim().toLowerCase())
   ).map(p => p.map(x => x.trim()));
-  return { titulo: (res && typeof res.titulo === "string" && res.titulo.trim()) ? res.titulo.trim().slice(0, 40) : "Seu arquivo", perguntas: lista };
+  return { titulo: (res && typeof res.titulo === "string" && res.titulo.trim()) ? res.titulo.trim().slice(0, 40) : "Seu arquivo", perguntas: lista, assinaturas: (res && res.assinaturas) || {} };
 }
 function mensagemErroClaude(e) {
   const c = e && e.code;
@@ -1386,7 +1452,7 @@ async function quizDoArquivo(lista) {
   if (cancelado) return;
   if (lote.perguntas.length < 3) return erro("O arquivo não rendeu perguntas suficientes. Tente um material com mais conteúdo.");
   v.remove();
-  iniciarArquivo(fonte, mult, { id: "arquivo", nome: lote.titulo, arquivo: true, q: lote.perguntas });
+  iniciarArquivo(fonte, mult, { id: "arquivo", nome: lote.titulo, arquivo: true, q: lote.perguntas, sig: lote.assinaturas });
 }
 // ---------- Categoria criada por tema ----------
 // O Claude avalia o tema, define o peso (0,1 a 3) e cria as perguntas. Sem 50 perguntas válidas, a categoria não é criada.
@@ -1427,7 +1493,7 @@ function promptSubtema(tema, subtema, dificuldade, evitar) {
   ].filter(Boolean).join("\n");
 }
 const pesoValido = x => Math.min(3, Math.max(0.1, arred(Number(x) || 1)));
-// Criações extras (liberadas pelo link #liberar-teste) valem além do limite de 6 horas.
+// Criações extras (S.extraCriacoes) valem além do limite de 6 horas.
 function podeCriar() { return criacoesRecentes().length < LIMITE_CATEGORIAS || (S.extraCriacoes || 0) > 0; }
 function registrarCriacao() {
   const extra = criacoesRecentes().length >= LIMITE_CATEGORIAS;
@@ -1470,9 +1536,9 @@ function pedirCodigo(depois) {
   v.querySelector("#cNao").addEventListener("click", () => v.remove());
   v.querySelector("#cOk").addEventListener("click", () => { const c = v.querySelector("#cAcesso").value.trim(); if (!c) return; salvarCodigo(c); v.remove(); depois(); });
 }
-async function gerarPerguntasTema(titulo, subtemas, dificuldade, evitar, progresso) {
+async function gerarPerguntasTema(titulo, subtemas, dificuldade, evitar, progresso, peso, pesoToken) {
   let feitas = 0;
-  const partes = await Promise.allSettled(subtemas.map(st => pedirCategoria({ tema: titulo, subtema: st, dificuldade, evitar })
+  const partes = await Promise.allSettled(subtemas.map(st => pedirCategoria({ tema: titulo, subtema: st, dificuldade, evitar, peso, pesoToken })
     .finally(() => progresso(++feitas, subtemas.length))));
   const vistos = new Set(evitar.map(q => q.trim().toLowerCase()));
   const perguntas = partes.flatMap(x => x.status === "fulfilled" && x.value && Array.isArray(x.value.perguntas) ? x.value.perguntas : []).filter(q =>
@@ -1480,7 +1546,8 @@ async function gerarPerguntasTema(titulo, subtemas, dificuldade, evitar, progres
     new Set(q.slice(1).map(x => x.trim().toLowerCase())).size === 3 && !vistos.has(q[0].trim().toLowerCase()) && vistos.add(q[0].trim().toLowerCase())
   ).map(q => q.map(x => x.trim().slice(0, 200)));
   const erro = partes.find(x => x.status === "rejected");
-  return { perguntas, erro: erro ? erro.reason : null };
+  const assinaturas = Object.assign({}, ...partes.map(x => (x.status === "fulfilled" && x.value && x.value.assinaturas) || {}));
+  return { perguntas, erro: erro ? erro.reason : null, assinaturas };
 }
 const limpaLista = (l, n, max) => (Array.isArray(l) ? l : []).filter(x => typeof x === "string" && x.trim()).slice(0, n).map(x => x.trim().slice(0, max));
 function htmlBlocoCat() {
@@ -1492,7 +1559,7 @@ function htmlBlocoCat() {
   else if (t && t.etapa === "recusada") status = `<div class="status-cat"><span><b>Tema recusado.</b> ${esc(t.texto)}</span>${t.sugestoes.length ? `<div class="linha" style="gap:6px">${t.sugestoes.map((x, k) => `<button class="btn sec mini" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}<button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
   else if (t && t.etapa === "erro") status = `<div class="status-cat"><span class="erro" style="min-height:0">${esc(t.texto)}</span><button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
   else if (lotado) status = `<span class="muted" style="font-size:12px">${esc(textoLimite())}</span>`;
-  return `<div><strong>Criar categoria</strong><div class="muted" style="font-size:13px">Digite um tema e o Jingar cria um quiz.</div></div>
+  return `<div><b style="font-size:14px">Com um tema</b><div class="muted" style="font-size:12px">Digite um tema e o Jingar cria as perguntas.</div></div>
     <div class="seg pequeno" id="difCat">${DIFICULDADES.map(d => `<button type="button" data-dif="${d.id}" aria-pressed="${d.id === difCat}">${d.nome}</button>`).join("")}</div>
     <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="Ex.: Fórmula 1, Hollywood" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
     ${status}`;
@@ -1563,13 +1630,14 @@ async function criarCategoria(tema) {
   const subtemas = limpaLista(res.subtemas, 3, 120);
   const lista = subtemas.length ? subtemas : [titulo];
   mostrar({ tema, etapa: "criando", titulo, feitas: 0, total: lista.length });
-  const { perguntas, erro } = await gerarPerguntasTema(titulo, lista, dificuldade, [], f => { if (tarefaCat && tarefaCat.etapa === "criando") { tarefaCat.feitas = f; pintarBlocoCat(); } });
+  const peso = pesoValido(res.peso);
+  const { perguntas, erro, assinaturas } = await gerarPerguntasTema(titulo, lista, dificuldade, [], f => { if (tarefaCat && tarefaCat.etapa === "criando") { tarefaCat.feitas = f; pintarBlocoCat(); } }, peso, res.pesoToken);
   if (perguntas.length < MIN_PERGUNTAS_TEMA) {
     if (erro && !perguntas.length) mostrar({ tema, etapa: "erro", texto: mensagemErroClaude(erro) });
     else mostrar({ tema, etapa: "recusada", texto: `Esse tema não rendeu ${MIN_PERGUNTAS_TEMA} boas perguntas. Tente um tema mais amplo.`, sugestoes: [] });
     return avisar("A categoria não foi criada");
   }
-  const cat = { id: "m" + Date.now(), nome: titulo, peso: pesoValido(res.peso), dificuldade, subtemas: lista, q: perguntas, criada: Date.now() };
+  const cat = { id: "m" + Date.now(), nome: titulo, peso, pesoToken: res.pesoToken, sig: assinaturas, dificuldade, subtemas: lista, q: perguntas, criada: Date.now() };
   S.minhas = [cat, ...(S.minhas || [])]; salvar();
   mostrar({ tema, etapa: "pronta", titulo, n: perguntas.length, peso: cat.peso, catId: cat.id });
   pintarMinhas();
@@ -1586,17 +1654,22 @@ async function atualizarCategoria(id) {
   atualizando[id] = { feitas: 0, total: 3 }; pintarMinhas();
   const terminar = txt => { delete atualizando[id]; pintarMinhas(); toast(txt); };
   let lista = cat.subtemas;
-  if (!lista || !lista.length) {
-    try { const r = await pedirCategoria({ tema: cat.nome, dificuldade }); lista = r && r.aprovado ? limpaLista(r.subtemas, 3, 120) : []; }
+  // Categoria antiga (sem o token do peso) passa pela avaliação de novo para as perguntas valerem nível.
+  if (!lista || !lista.length || !cat.pesoToken) {
+    try {
+      const r = await pedirCategoria({ tema: cat.nome, dificuldade });
+      if (r && r.aprovado && r.pesoToken) { cat.peso = pesoValido(r.peso); cat.pesoToken = r.pesoToken; }
+      lista = lista && lista.length ? lista : r && r.aprovado ? limpaLista(r.subtemas, 3, 120) : [];
+    }
     catch (e) { if (e && e.code === "codigo") { desfazerCriacao(); delete atualizando[id]; pintarMinhas(); return pedirCodigo(() => atualizarCategoria(id)); } return terminar(mensagemErroClaude(e)); }
     if (!lista.length) lista = [cat.nome];
   }
   atualizando[id].total = lista.length; pintarMinhas();
-  const { perguntas, erro } = await gerarPerguntasTema(cat.nome, lista, dificuldade, cat.q.map(q => q[0]), f => { if (atualizando[id]) { atualizando[id].feitas = f; pintarMinhas(); } });
+  const { perguntas, erro, assinaturas } = await gerarPerguntasTema(cat.nome, lista, dificuldade, cat.q.map(q => q[0]), f => { if (atualizando[id]) { atualizando[id].feitas = f; pintarMinhas(); } }, cat.peso, cat.pesoToken);
   if (erro && erro.code === "codigo" && !perguntas.length) { desfazerCriacao(); delete atualizando[id]; pintarMinhas(); return pedirCodigo(() => atualizarCategoria(id)); }
   const atual = (S.minhas || []).find(c => c.id === id);
   if (atual && perguntas.length >= MIN_PERGUNTAS_TEMA) {
-    atual.q = perguntas; atual.subtemas = lista; atual.atualizada = Date.now(); salvar();
+    atual.q = perguntas; atual.sig = assinaturas; atual.peso = cat.peso; atual.pesoToken = cat.pesoToken; atual.subtemas = lista; atual.atualizada = Date.now(); salvar();
     return terminar(`${atual.nome}: ${perguntas.length} perguntas novas`);
   }
   terminar(erro && !perguntas.length ? mensagemErroClaude(erro) : "Não saíram perguntas novas suficientes. As antigas foram mantidas.");
@@ -1617,7 +1690,7 @@ async function gerarMais(r) {
   const cat = r.cats[0];
   try {
     const lote = await gerarPerguntas(r.fonte, r.mult, cat.q.map(p => p[0]).slice(-80));
-    if (lote.perguntas.length) cat.q.push(...lote.perguntas); else r.esgotou = true;
+    if (lote.perguntas.length) { cat.q.push(...lote.perguntas); cat.sig = Object.assign(cat.sig || {}, lote.assinaturas); } else r.esgotou = true;
   } catch { r.esgotou = true; }
   r.gerando = false;
   if (rodada === r && !r.atual && !r.fim && aba === "quiz") render();
@@ -1690,7 +1763,7 @@ function pararAcompanhamento() {
 }
 function renderPrecisaConta() {
   tela.innerHTML = `<div class="vazio entra"><h2>Crie uma conta para conhecer pessoas</h2>
-    <p class="muted" style="margin:0">No modo teste você joga os quizzes à vontade. Para ver perfis, curtir e conversar, entre ou crie sua conta. Seu progresso vai junto.</p>
+    <p class="muted" style="margin:0">No modo teste você joga os quizzes à vontade. Para ver perfis, curtir e conversar, entre ou crie sua conta. O nível começa a valer a partir da conta.</p>
     <button class="btn" type="button" id="criarContaP">Criar conta</button><button class="link" type="button" id="entrarP">Já tenho conta</button></div>`;
   const ir = tela2 => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = tela2; render(); };
   $("#criarContaP").addEventListener("click", () => ir("criar"));
@@ -1747,6 +1820,7 @@ function renderDescobrir() {
       <div class="info">
         <div class="nome">${esc(livre ? p.nome : "••••••")} <span>${p.idade || ""}</span></div>
         <div class="muted">${esc([p.prof, p.cidade, distanciaKm(p) == null ? "" : distanciaKm(p) < 1 ? "a menos de 1 km" : `a ${distanciaKm(p)} km`].filter(Boolean).join(" · "))}</div>
+        ${livre && p.melhores && p.melhores.length ? `<div class="chips" aria-label="Manda bem em">${p.melhores.map(m => `<span class="chip">${esc(m)}</span>`).join("")}</div>` : ""}
         ${livre && p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
         ${p.real && p.curtiuVoce ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Essa pessoa curtiu você.</p>` : ""}
         ${livre && !p.real && !meVe(p) ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Seu perfil não aparece para o nível ${p.nivel}. Ajuste em Filtros para ter chance de match.</p>` : ""}
@@ -1801,10 +1875,12 @@ function mostrarMatch(p, idChat) {
   m.innerHTML = `<div class="duo">${avatarHTML("eu", 104)}${avatarHTML(p, 104)}</div><h1>Deu match!</h1>
     <p style="margin:0;max-width:30ch">Você e ${esc(p.nome)} curtiram um ao outro.</p>
     <button class="btn bloco" style="max-width:320px" type="button" id="mChat">Mandar mensagem</button>
+    ${modoReal() ? `<button class="btn sec bloco" style="max-width:320px" type="button" id="mProva">Pedir uma prova antes de conversar</button>` : ""}
     <button class="link" type="button" id="mVoltar">Continuar descobrindo</button>`;
   document.body.appendChild(m);
   m.querySelector("#mChat").addEventListener("click", () => { m.remove(); aba = "matches"; abrirChat(idChat); });
   m.querySelector("#mVoltar").addEventListener("click", () => { m.remove(); render(); });
+  const mp = m.querySelector("#mProva"); if (mp) mp.addEventListener("click", () => { m.remove(); aba = "matches"; abrirChat(idChat); pedirProva(idChat, p); });
 }
 function curtir(p) {
   if (p.real) {
@@ -1832,7 +1908,7 @@ function renderMatches() {
     return;
   }
   const lista = modoReal()
-    ? matchesReal.map(m => ({ id: m.id, p: perfilReal(m.perfil), novo: m.novo || m.naoLidas > 0, ult: m.ultima && { de: m.ultima.meu ? "eu" : "ela", t: m.ultima.texto, audio: m.ultima.audio, apagada: m.ultima.apagada } }))
+    ? matchesReal.map(m => ({ id: m.id, p: perfilReal(m.perfil), novo: m.novo || m.naoLidas > 0, ult: m.ultima && { de: m.ultima.meu ? "eu" : "ela", t: m.ultima.texto, audio: m.ultima.audio, apagada: m.ultima.apagada, quando: m.ultima.quando } }))
     : S.matches.map(id => { const ch = S.chats[id] || []; return { id, p: PERFIL[id], novo: S.novos.includes(id), ult: ch[ch.length - 1] }; });
   if (!lista.length) {
     tela.innerHTML = `<div class="vazio entra"><h2>Nenhum match ainda</h2><p class="muted" style="margin:0">Curta pessoas em Descobrir. Quando for recíproco, a conversa aparece aqui.</p><button class="btn" type="button" id="irD">Descobrir pessoas</button></div>`;
@@ -1840,7 +1916,7 @@ function renderMatches() {
     return;
   }
   tela.innerHTML = `<div class="pilha entra" style="gap:6px"><h2>Matches</h2><div class="lista">${lista.map(({ id, p, novo, ult }) =>
-    `<button class="item" type="button" data-id="${id}">${avatarHTML(p, 52)}<div class="txt"><strong>${esc(p.nome)}${novo ? ` <span style="display:inline;color:var(--accent);font-size:12px">· novo</span>` : ""}</strong><span>${ult ? esc((ult.de === "eu" ? "Você: " : "") + previa(ult)) : esc([p.prof, "nível " + fmtNivel(p.nivel)].filter(Boolean).join(" · "))}</span></div></button>`
+    `<button class="item" type="button" data-id="${id}">${avatarHTML(p, 52)}<div class="txt"><strong>${esc(p.nome)}${novo ? ` <span style="display:inline;color:var(--accent);font-size:12px">· novo</span>` : ""}</strong><span>${ult ? esc((ult.de === "eu" ? "Você: " : "") + previa(ult)) : esc([p.prof, "nível " + fmtNivel(p.nivel)].filter(Boolean).join(" · "))}</span></div>${ult && ult.quando ? `<span class="muted" style="font-size:12px;flex:none">${rotuloDia(ult.quando) === "Hoje" ? horaCurta(ult.quando) : rotuloDia(ult.quando)}</span>` : ""}</button>`
   ).join("")}</div></div>`;
   tela.querySelectorAll(".item").forEach(b => b.addEventListener("click", () => abrirChat(modoReal() ? Number(b.dataset.id) : b.dataset.id)));
 }
@@ -1858,11 +1934,15 @@ function htmlMsg(m, i) {
   const lado = m.de === "eu" ? "eu" : "ela", ref = m.ref ?? i;
   if (m.apagada) return `<div class="msg ${lado} apagada">${lado === "eu" ? "Você apagou esta mensagem" : "Mensagem apagada"}</div>`;
   const audio = typeof m.audio === "string" && (m.audio.startsWith("data:audio/") || m.audio.startsWith("/api/midia?id="));
-  const corpo = audio ? `<audio controls preload="metadata" src="${esc(comApi(m.audio))}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t);
-  return lado === "eu" ? `<div class="msg eu${audio ? " audio" : ""}" data-i="${ref}" tabindex="0" title="Toque para apagar">${corpo}</div>` : `<div class="msg ela${audio ? " audio" : ""}">${corpo}</div>`;
+  // Link de desafio do Jingar na mensagem vira um botão para responder ali mesmo.
+  const desafio = !audio && String(m.t || "").match(/https?:\/\/[^\s]+\/([A-Za-z0-9]{4,6})(?=\s|$)/);
+  const hora = m.quando ? `<span class="hora">${horaCurta(m.quando)}</span>` : "";
+  const corpo = (audio ? `<audio controls preload="metadata" src="${esc(comApi(m.audio))}"></audio><span class="dur">${m.dur || 0}s</span>` : esc(m.t))
+    + (desafio ? `<button class="btn sec mini desafio-link" type="button" data-desafio="${desafio[1]}">Responder desafio</button>` : "") + hora;
+  return lado === "eu" ? `<div class="msg eu${audio ? " audio" : ""}" data-i="${ref}" tabindex="0" title="Toque e segure para apagar">${corpo}</div>` : `<div class="msg ela${audio ? " audio" : ""}">${corpo}</div>`;
 }
 function mensagensDoChat() {
-  if (modoReal()) return (msgsReal[chatAberto] || []).map(x => ({ de: x.meu ? "eu" : "ela", t: x.texto, audio: x.audio, dur: x.dur, apagada: x.apagada, ref: x.id }));
+  if (modoReal()) return (msgsReal[chatAberto] || []).map(x => ({ de: x.meu ? "eu" : "ela", t: x.texto, audio: x.audio, dur: x.dur, apagada: x.apagada, ref: x.id, quando: x.quando }));
   return S.chats[chatAberto] || (S.chats[chatAberto] = []);
 }
 function enviarMsg(alvo, msg) {
@@ -1872,7 +1952,11 @@ function enviarMsg(alvo, msg) {
       (msgsReal[alvo] = msgsReal[alvo] || []).push(j.mensagem);
       const m = (matchesReal || []).find(x => x.id === alvo); if (m) { m.ultima = j.mensagem; m.novo = false; }
       if (chatAberto === alvo) pintarMensagens();
-    }).catch(e => toast(e.erro));
+    }).catch(e => {
+      toast(e.erro);
+      // A mensagem que não foi enviada (por exemplo, limite de 20 seguidas) volta para o campo.
+      const inp = $("#txtMsg"); if (msg.t && inp && chatAberto === alvo && !inp.value) inp.value = msg.t;
+    });
     return;
   }
   // Demonstração: guarda a mensagem e simula a resposta da outra pessoa.
@@ -1987,6 +2071,136 @@ function denunciar(p, mostraNome) {
     encerrarContato(p.id); salvar(); v.remove(); toast("Denúncia enviada"); render();
   });
 }
+// ---------- Prova antes de conversar ----------
+// Quem pede escolhe assunto, 5 ou 10 perguntas e o mínimo de acertos. A outra pessoa só escreve depois de passar;
+// pode tentar quantas vezes quiser, sempre com perguntas novas. O servidor sorteia e corrige.
+const matchAtual = () => (matchesReal || []).find(x => x.id === chatAberto) || null;
+const provaPendenteParaMim = () => { const m = matchAtual(); return !!(m && m.provaParaMim && m.provaParaMim.status === "pendente"); };
+function htmlProvaPedida() {
+  const m = matchAtual(), pr = m && m.provaPedida; if (!pr) return "";
+  const txt = pr.status === "aprovada" ? `Passou na sua prova: <b>${pr.ultima} de ${pr.qtd}</b> em ${esc(pr.nomeAssunto)}.`
+    : `Você pediu uma prova: ${pr.qtd} perguntas de ${esc(pr.nomeAssunto)}, mínimo ${pr.minimo}.${pr.tentativas ? ` Tentativas: ${pr.tentativas} · melhor ${pr.melhor} de ${pr.qtd}.` : " Ainda não tentou."}`;
+  return `<div class="caixa" style="padding:10px 12px;font-size:13px;margin-bottom:8px">${txt}</div>`;
+}
+function htmlProvaParaMim(p) {
+  const pr = matchAtual().provaParaMim;
+  return `<div class="caixa" style="gap:8px"><strong>${esc(p.nome)} pede uma prova antes de conversar</strong>
+    <span class="muted" style="font-size:13px">${pr.qtd} perguntas de ${esc(pr.nomeAssunto)}. Precisa acertar ${pr.minimo}.${pr.tentativas ? ` Sua última nota: ${pr.ultima} de ${pr.qtd}.` : ""}</span>
+    ${pr.restantes >= pr.qtd ? `<button class="btn bloco" type="button" id="fazerProva">${pr.tentativas ? "Tentar de novo (perguntas novas)" : "Fazer a prova"}</button>` : `<span class="aviso" style="margin:0">Acabaram as perguntas novas desse assunto. ${esc(p.nome)} precisa trocar o assunto da prova.</span>`}</div>`;
+}
+function pedirProva(matchId, p) {
+  const m = (matchesReal || []).find(x => x.id === matchId), atual = m && m.provaPedida;
+  let qtd = atual ? atual.qtd : 5, assunto = atual ? atual.assunto : CATS[0].id;
+  const v = folha(`<span class="rotulo">Prova para ${esc(p.nome)}</span><h2>Antes de conversar, uma prova</h2>
+    <p class="muted" style="margin:0">${esc(p.nome)} só consegue escrever depois de passar. Pode tentar quantas vezes quiser, sempre com perguntas novas.</p>
+    <div class="campo"><label>Assunto</label><select id="pvAssunto">${CATS.map(c => `<option value="${c.id}" ${c.id === assunto ? "selected" : ""}>${esc(c.nome)}</option>`).join("")}</select></div>
+    <div class="campo"><label>Número de perguntas</label><div class="seg" id="pvQtd" style="grid-template-columns:1fr 1fr"><button type="button" data-q="5" aria-pressed="${qtd === 5}">5</button><button type="button" data-q="10" aria-pressed="${qtd === 10}">10</button></div></div>
+    <div class="campo"><label for="pvMin">Para passar, acertar pelo menos: <b id="pvMinTxt"></b></label><input id="pvMin" type="range" min="1" max="${qtd}" step="1" value="${atual ? atual.minimo : Math.ceil(qtd * 0.6)}"></div>
+    <div class="erro" id="pvErro"></div>
+    <button class="btn bloco" type="button" id="pvOk">${atual ? "Trocar a prova" : "Pedir a prova"}</button><button class="link" type="button" id="pvNao">Cancelar</button>`);
+  const min = v.querySelector("#pvMin"), pintar = () => { v.querySelector("#pvMinTxt").textContent = `${min.value} de ${qtd}`; };
+  min.addEventListener("input", pintar); pintar();
+  v.querySelectorAll("#pvQtd button").forEach(b => b.addEventListener("click", () => {
+    qtd = Number(b.dataset.q); v.querySelectorAll("#pvQtd button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    min.max = qtd; min.value = Math.ceil(qtd * 0.6); pintar();
+  }));
+  v.querySelector("#pvNao").addEventListener("click", () => v.remove());
+  v.querySelector("#pvOk").addEventListener("click", async () => {
+    try {
+      const j = await chamarSocial({ acao: "pedirProva", match: matchId, assunto: v.querySelector("#pvAssunto").value, qtd, minimo: Number(min.value) });
+      if (m) m.provaPedida = j.prova;
+      v.remove(); toast("Prova pedida"); if (chatAberto === matchId) render();
+    } catch (e) { v.querySelector("#pvErro").textContent = e.erro; }
+  });
+}
+async function fazerProva(matchId, p) {
+  let j;
+  try { j = await chamarSocial({ acao: "iniciarProva", match: matchId }); } catch (e) { toast(e.erro); return; }
+  const cat = CATS.find(c => c.id === j.assunto);
+  const banco = { 1: c => c.q, 2: c => DIF[c.id] || [], 3: c => MDIF[c.id] || [] };
+  const fila = j.perguntas.map(k => { const [modo, i] = k.split(":").map(Number), q = banco[modo](cat)[i]; return q && { cat, idx: i, modo, ref: [cat.id, i], q: q[0], certa: q[1], erradas: q.slice(2) }; }).filter(Boolean);
+  clearInterval(timerChat); chatAberto = null; aba = "quiz";
+  rodada = { nome: `Prova de ${p.nome} · ${cat.nome}`, ids: [], mult: 1, cats: [], fila, pos: 0, hist: [], respostas: [], prova: { match: matchId, nome: p.nome, minimo: j.minimo },
+    n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
+  tela.scrollTop = 0; render();
+}
+async function entregarProva(r) {
+  if (r.entregue) return; r.entregue = true;
+  const respostas = r.fila.map((_, i) => r.respostas[i] || "");
+  try {
+    const j = await chamarSocial({ acao: "entregarProva", match: r.prova.match, respostas });
+    r.resultado = j;
+    const m = (matchesReal || []).find(x => x.id === r.prova.match); if (m) m.provaParaMim = j.prova;
+  } catch (e) { r.entregue = false; r.erroProva = e.erro; }
+  if (rodada === r) render();
+}
+function renderResultadoProva() {
+  const r = rodada, res = r.resultado;
+  entregarProva(r);
+  tela.innerHTML = `<div class="pilha entra" style="padding-top:8px"><div class="resultado"><span class="rotulo">${esc(r.nome)}</span>
+    ${res ? `<h1>${res.passou ? "Você passou!" : "Não foi dessa vez"}</h1><div class="grande">${res.acertos}/${r.fila.length}</div>
+      <p style="margin:0">${res.passou ? `A conversa com ${esc(r.prova.nome)} está liberada.` : `Precisava acertar ${r.prova.minimo}. Dá para tentar de novo com perguntas novas.`}</p>`
+      : r.erroProva ? `<p style="margin:0">Não foi possível entregar a prova: ${esc(r.erroProva)}</p>` : `<p style="margin:0">Corrigindo a prova…</p>`}</div>
+    ${res && !res.passou && res.prova.restantes >= res.prova.qtd ? `<button class="btn bloco" type="button" id="denovoProva">Tentar de novo</button>` : ""}
+    ${r.erroProva ? `<button class="btn bloco" type="button" id="reenviarProva">Tentar entregar de novo</button>` : ""}
+    <button class="btn sec bloco" type="button" id="voltarChatP">Voltar para a conversa</button></div>`;
+  const id = r.prova.match, nome = r.prova.nome;
+  const dp = $("#denovoProva"); if (dp) dp.addEventListener("click", () => fazerProva(id, { nome }));
+  const rp = $("#reenviarProva"); if (rp) rp.addEventListener("click", () => { r.erroProva = null; entregarProva(r); render(); });
+  $("#voltarChatP").addEventListener("click", () => { rodada = null; aba = "matches"; abrirChat(id); });
+}
+// Perfil completo numa folha: fotos (toque para passar), idade, nível, assuntos em que manda bem e texto.
+function verPerfil(p, titulo) {
+  const fotos = fotosDe(p); let i = 0;
+  const v = folha(`${titulo ? `<span class="rotulo">${esc(titulo)}</span>` : ""}
+    <article class="cartao"><div class="foto" id="fotoFolha" style="background:${fundo(p)};${fotos.length ? `background-image:url(${comApi(fotos[0])});background-size:cover;background-position:center` : ""}">${fotos.length ? "" : esc(iniciais(p.nome || "?"))}${fotos.length > 1 ? `<div class="pontos">${fotos.map((_, k) => `<i class="${k ? "" : "on"}"></i>`).join("")}</div>` : ""}<span class="nivel-tag">nível ${fmtNivel(p.nivel)}</span></div>
+      <div class="info"><div class="nome">${esc(p.nome)} <span>${p.idade || ""}</span></div>
+        ${p.melhores && p.melhores.length ? `<div class="muted" style="font-size:13px">Manda bem em</div><div class="chips">${p.melhores.map(m => `<span class="chip">${esc(m)}</span>`).join("")}</div>` : ""}
+        ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}</div></article>
+    <button class="btn sec bloco" type="button" id="fecharPerfil">Fechar</button>`);
+  v.querySelector("#fecharPerfil").addEventListener("click", () => v.remove());
+  const el = v.querySelector("#fotoFolha");
+  if (fotos.length > 1) el.addEventListener("click", e => {
+    const r = el.getBoundingClientRect(); i = (i + (e.clientX - r.left > r.width / 2 ? 1 : fotos.length - 1)) % fotos.length;
+    el.style.backgroundImage = `url(${comApi(fotos[i])})`; el.querySelectorAll(".pontos i").forEach((x, k) => x.classList.toggle("on", k === i));
+  });
+}
+// Assuntos em que a pessoa manda bem (no aparelho): os 3 com mais acertos, com pelo menos 5 respostas.
+const meusMelhores = () => Object.entries(S.porCat).filter(([, c]) => c.r >= 5).sort((a, b) => b[1].a / b[1].r - a[1].a / a[1].r || b[1].a - a[1].a)
+  .slice(0, 3).map(([id]) => (CATS.find(c => c.id === id) || {}).nome).filter(Boolean);
+// Desafio pelo chat: a pessoa escolhe o assunto, responde 5 perguntas e o link vai como mensagem para a conversa.
+function desafioParaChat(matchId, p) {
+  const v = folha(`<span class="rotulo">Desafio para ${esc(p.nome)}</span><h2>Escolha o assunto</h2>
+    <p class="muted" style="margin:0">Você responde 5 perguntas e ${esc(p.nome)} recebe as mesmas no chat.</p>
+    <div class="cats">${[{ id: ALEATORIO, nome: "Aleatório" }, ...CATS].map(c => `<button class="cat${c.id === ALEATORIO ? " aleatorio" : ""}" type="button" data-assunto="${c.id}"><strong>${esc(c.nome)}</strong></button>`).join("")}</div>
+    <button class="link" type="button" id="cancelarDes">Cancelar</button>`);
+  v.querySelector("#cancelarDes").addEventListener("click", () => v.remove());
+  v.querySelectorAll("[data-assunto]").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.assunto, cats = id === ALEATORIO ? CATS : CATS.filter(c => c.id === id);
+    v.remove(); clearInterval(timerChat); aba = "quiz"; chatAberto = null;
+    rodada = { nome: "Desafio para " + p.nome, ids: [id], mult: 1, cats, n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false,
+      limite: 5, paraChat: matchId, paraNome: p.nome, assunto: id === ALEATORIO ? "assuntos variados" : cats[0].nome };
+    tela.scrollTop = 0; render();
+  }));
+}
+async function enviarDesafioNoChat(r) {
+  if (r.enviado || !r.n) return; r.enviado = true;
+  try {
+    if (!r.codigo) r.codigo = (await chamarDesafio({ acao: "criar", desafio: { v: 1, n: S.perfil ? S.perfil.nome : "Alguém", m: r.mult, a: r.acertos, t: r.n, q: r.hist } })).codigo;
+    await chamarSocial({ acao: "enviar", match: r.paraChat, texto: `Te desafiei no Jingar em ${r.assunto}: fiz ${r.acertos} de ${r.n}. ${linkCurto(r.codigo)}` });
+    r.desafioEnviado = true;
+  } catch (e) { r.enviado = false; r.erroEnvio = e.erro; }
+  if (rodada === r) render();
+}
+async function abrirDesafio(codigo) {
+  try {
+    const j = await chamarDesafio({ acao: "abrir", codigo });
+    const d = montarDesafio(j.desafio);
+    if (!d) { toast("Esse desafio não pode ser aberto."); return; }
+    desafioAberto = Object.assign(d, { codigo, ranking: j.ranking, jogadores: j.jogadores, posicao: j.posicao, jaRespondeu: j.jaRespondeu });
+    clearInterval(timerChat); chatAberto = null; aba = "quiz"; rodada = null; render();
+  } catch (e) { toast(e.erro); }
+}
 function bloquear(p, mostraNome) {
   const v = folha(`<h2>Bloquear ${mostraNome ? esc(p.nome) : "este perfil"}?</h2><p class="muted" style="margin:0">Vocês deixam de se ver no Jingar. Se houver match, ele é desfeito e a conversa é apagada.</p>
     <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Bloquear</button><button class="link" type="button" id="nao">Cancelar</button>`);
@@ -1999,26 +2213,52 @@ function bloquear(p, mostraNome) {
 }
 function menuChat(p) {
   const v = folha(`<h2>${esc(p.nome)}</h2>
+    ${modoReal() ? `<button class="btn bloco" type="button" id="mDesafio">Mandar um desafio</button>` : ""}
+    ${modoReal() && !(matchAtual() && matchAtual().provaPedida && matchAtual().provaPedida.status === "aprovada") ? `<button class="btn sec bloco" type="button" id="mProva">${matchAtual() && matchAtual().provaPedida ? "Trocar a prova pedida" : "Pedir uma prova"}</button>` : ""}
     <button class="btn sec bloco" type="button" id="mDesfazer">Desfazer match</button>
     <button class="btn sec bloco" type="button" id="mBloquear">Bloquear</button>
     <button class="btn sec bloco" type="button" id="mDenunciar" style="color:var(--bad)">Denunciar</button>
     <button class="link" type="button" id="mFechar">Cancelar</button>`);
   v.querySelector("#mFechar").addEventListener("click", () => v.remove());
+  const md = v.querySelector("#mDesafio"); if (md) md.addEventListener("click", () => { v.remove(); desafioParaChat(chatAberto, p); });
+  const mpr = v.querySelector("#mProva"); if (mpr) mpr.addEventListener("click", () => { v.remove(); pedirProva(chatAberto, p); });
   v.querySelector("#mDesfazer").addEventListener("click", () => { v.remove(); desfazerMatch(p); });
   v.querySelector("#mBloquear").addEventListener("click", () => { v.remove(); bloquear(p, true); });
   v.querySelector("#mDenunciar").addEventListener("click", () => { v.remove(); denunciar(p, true); });
 }
+const horaCurta = q => new Date(q).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+function rotuloDia(q) {
+  const d = new Date(q), hoje = new Date(), ontem = new Date(); ontem.setDate(hoje.getDate() - 1);
+  if (d.toDateString() === hoje.toDateString()) return "Hoje";
+  if (d.toDateString() === ontem.toDateString()) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: d.getFullYear() === hoje.getFullYear() ? undefined : "numeric" });
+}
+let lidaAte = {};
 // Redesenha só as mensagens, sem apagar o que a pessoa está digitando.
 function pintarMensagens() {
   const ms = $("#msgs"); if (!ms) return;
   const p = perfilDoChat(), ch = mensagensDoChat();
   const noFim = ms.scrollHeight - ms.scrollTop - ms.clientHeight < 60;
-  ms.innerHTML = (ch.length ? ch.map(htmlMsg).join("") : `<p class="muted" style="text-align:center;margin:auto 0">Diga oi para ${esc(p.nome)}. Uma pergunta do quiz é um bom começo.</p>`)
+  // Separador de dia ("Hoje", "Ontem", data) e "Visto" embaixo da última mensagem sua que a outra pessoa já leu.
+  let dia = "", html = "";
+  const ultimaMinha = [...ch].reverse().find(m => m.de === "eu" && !m.apagada);
+  ch.forEach((m, i) => {
+    if (m.quando) { const d = rotuloDia(m.quando); if (d !== dia) { dia = d; html += `<div class="dia">${d}</div>`; } }
+    html += htmlMsg(m, i);
+    if (m === ultimaMinha && modoReal() && m.ref <= (lidaAte[chatAberto] || 0)) html += `<div class="visto">Visto</div>`;
+  });
+  ms.innerHTML = (ch.length ? html : `<p class="muted" style="text-align:center;margin:auto 0">${provaPendenteParaMim() ? "Depois que você passar na prova, a conversa começa aqui." : `Diga oi para ${esc(p.nome)}. Uma pergunta do quiz é um bom começo, ou mande um desafio no menu ⋯.`}</p>`)
     + (digitando === chatAberto ? `<div class="digitando">${esc(p.nome)} está digitando…</div>` : "");
+  // Apagar a própria mensagem: tocar e segurar (ou Enter no teclado). Um toque rápido não faz nada.
   ms.querySelectorAll(".msg.eu[data-i]").forEach(el => {
-    el.addEventListener("click", e => { if (!e.target.closest("audio")) apagarMsg(Number(el.dataset.i)); });
+    let t = 0;
+    const parar = () => clearTimeout(t);
+    el.addEventListener("pointerdown", e => { if (e.target.closest("audio, button")) return; t = setTimeout(() => apagarMsg(Number(el.dataset.i)), 550); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, parar));
+    el.addEventListener("contextmenu", e => e.preventDefault());
     el.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === el) apagarMsg(Number(el.dataset.i)); });
   });
+  ms.querySelectorAll("[data-desafio]").forEach(b => b.addEventListener("click", () => abrirDesafio(b.dataset.desafio)));
   if (noFim) ms.scrollTop = ms.scrollHeight;
 }
 function perfilDoChat() {
@@ -2035,8 +2275,9 @@ async function atualizarChat(id) {
     if (chatAberto !== id) return;
     const primeira = !msgsReal[id];
     msgsReal[id] = atual.concat(j.mensagens);
+    const vistoMudou = (lidaAte[id] || 0) !== (j.lidaAte || 0); lidaAte[id] = j.lidaAte || 0;
     const m = (matchesReal || []).find(x => x.id === id); if (m) { m.naoLidas = 0; m.novo = !msgsReal[id].length; }
-    if (j.mensagens.length || primeira) { pintarMensagens(); if (primeira) { const ms = $("#msgs"); if (ms) ms.scrollTop = ms.scrollHeight; } }
+    if (j.mensagens.length || primeira || vistoMudou) { pintarMensagens(); if (primeira) { const ms = $("#msgs"); if (ms) ms.scrollTop = ms.scrollHeight; } }
   } catch (e) { if (e.status === 404) { clearInterval(timerChat); chatAberto = null; matchesReal = null; render(); } }
 }
 function renderChat() {
@@ -2044,14 +2285,18 @@ function renderChat() {
   if (!p) { chatAberto = null; return renderMatches(); }
   tela.innerHTML = `
   <div class="chat">
-    <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button>${avatarHTML(p, 40)}<div style="flex:1;min-width:0"><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc([p.prof, "nível " + fmtNivel(p.nivel)].filter(Boolean).join(" · "))}</div></div><button class="btn sec mini" type="button" id="opcoesChat" aria-label="Opções da conversa">⋯</button></div>
+    <div class="chat-topo"><button class="link" type="button" id="voltar" aria-label="Voltar" style="text-decoration:none;font-size:22px;padding:4px 8px">‹</button><button class="quem" type="button" id="verPerfilChat" aria-label="Ver o perfil de ${esc(p.nome)}">${avatarHTML(p, 40)}<div style="min-width:0"><strong>${esc(p.nome)}</strong><div class="muted" style="font-size:12px">${esc([p.prof, "nível " + fmtNivel(p.nivel)].filter(Boolean).join(" · "))} · ver perfil</div></div></button><button class="btn sec mini" type="button" id="opcoesChat" aria-label="Opções da conversa">⋯</button></div>
+    ${htmlProvaPedida()}
     <div class="msgs" id="msgs"></div>
-    <form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn sec mic" type="button" id="mic" aria-label="Gravar áudio de até ${MAX_AUDIO} segundos">${ICONE_MIC}</button><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>
+    ${provaPendenteParaMim() ? htmlProvaParaMim(p) : `<form class="envio" id="fMsg"><input id="txtMsg" placeholder="Mensagem" autocomplete="off" maxlength="300"><button class="btn sec mic" type="button" id="mic" aria-label="Gravar áudio de até ${MAX_AUDIO} segundos">${ICONE_MIC}</button><button class="btn" type="submit" style="padding:12px 16px">Enviar</button></form>`}
   </div>`;
   pintarMensagens();
   const ms = $("#msgs"); ms.scrollTop = ms.scrollHeight;
   $("#voltar").addEventListener("click", () => { pararGravacao(true); clearInterval(timerChat); chatAberto = null; render(); });
   $("#opcoesChat").addEventListener("click", () => menuChat(p));
+  $("#verPerfilChat").addEventListener("click", () => verPerfil(p));
+  const fp = $("#fazerProva"); if (fp) fp.addEventListener("click", () => fazerProva(chatAberto, p));
+  if (!$("#fMsg")) { pintarMensagens(); if (modoReal()) { clearInterval(timerChat); const id = chatAberto; atualizarChat(id); timerChat = setInterval(() => atualizarChat(id), 4000); } return; }
   $("#mic").addEventListener("click", gravarAudio);
   $("#fMsg").addEventListener("submit", e => {
     e.preventDefault();
@@ -2393,6 +2638,45 @@ function ligarNativo() {
 }
 
 // ---------- Perfil ----------
+function trocarSenha() {
+  const v = folha(`<h2>Trocar senha</h2>
+    <div class="campo"><label for="tsAtual">Senha atual</label><input id="tsAtual" type="password" autocomplete="current-password" maxlength="128"></div>
+    <div class="campo"><label for="tsNova">Nova senha</label><input id="tsNova" type="password" autocomplete="new-password" maxlength="128"></div>
+    <span class="muted" style="font-size:12px;margin-top:-10px">${DICA_SENHA}</span>
+    <div class="erro" id="tsErro"></div>
+    <button class="btn bloco" type="button" id="tsOk">Salvar nova senha</button><button class="link" type="button" id="tsNao">Cancelar</button>`);
+  v.querySelector("#tsNao").addEventListener("click", () => v.remove());
+  v.querySelector("#tsOk").addEventListener("click", async () => {
+    const nova = v.querySelector("#tsNova").value, erro = v.querySelector("#tsErro");
+    if (!senhaForte(nova)) { erro.textContent = "A nova senha precisa ter " + DICA_SENHA.charAt(0).toLowerCase() + DICA_SENHA.slice(1); return; }
+    try { await chamarConta({ acao: "trocarSenha", atual: v.querySelector("#tsAtual").value, nova }); v.remove(); toast("Senha alterada"); }
+    catch (e) { erro.textContent = e.erro; }
+  });
+}
+// Trocar e-mail ou celular: código para o endereço novo; ele só passa a valer depois de confirmado.
+function trocarContato() {
+  const v = folha(`<h2>Trocar e-mail ou celular</h2>
+    <div class="campo"><label for="tcNovo">Novo e-mail ou celular</label><input id="tcNovo" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120"></div>
+    ${conta.temSenha ? `<div class="campo"><label for="tcSenha">Sua senha</label><input id="tcSenha" type="password" autocomplete="current-password" maxlength="128"></div>` : ""}
+    <div class="erro" id="tcErro"></div>
+    <button class="btn bloco" type="button" id="tcOk">Enviar código</button><button class="link" type="button" id="tcNao">Cancelar</button>`);
+  v.querySelector("#tcNao").addEventListener("click", () => v.remove());
+  v.querySelector("#tcOk").addEventListener("click", async () => {
+    const erro = v.querySelector("#tcErro"), s2 = v.querySelector("#tcSenha");
+    try {
+      const j = await chamarConta({ acao: "trocarContato", contato: v.querySelector("#tcNovo").value.trim(), senha: s2 ? s2.value : "" });
+      const f = v.querySelector(".folha");
+      f.innerHTML = `<h2>Digite o código</h2><p class="muted" style="margin:0">Enviamos um código para <b>${esc(j.destino)}</b>. Ele vale por 10 minutos.</p>
+        <div class="campo"><label for="tcCod">Código de 6 dígitos</label><input id="tcCod" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div>
+        <div class="erro" id="tcErro2"></div><button class="btn bloco" type="button" id="tcConf">Confirmar</button><button class="link" type="button" id="tcNao2">Cancelar</button>`;
+      f.querySelector("#tcNao2").addEventListener("click", () => v.remove());
+      f.querySelector("#tcConf").addEventListener("click", async () => {
+        try { conta = (await chamarConta({ acao: "confirmarContato", codigo: f.querySelector("#tcCod").value.trim() })).conta; v.remove(); toast("Contato alterado"); render(); }
+        catch (e) { f.querySelector("#tcErro2").textContent = e.erro; }
+      });
+    } catch (e) { erro.textContent = e.erro; }
+  });
+}
 function renderPerfil() {
   const pf = S.perfil;
   const acertos = Object.values(S.porCat).reduce((s, c) => s + c.a, 0);
@@ -2420,9 +2704,11 @@ function renderPerfil() {
       <div class="campo" ${S.meuPasse.ativo ? "" : "hidden"} id="cPasse"><label for="vPasse">Valor (R$)</label><input id="vPasse" type="number" inputmode="numeric" min="10" step="10" value="${S.meuPasse.valor}"></div>
     </div>` : ""}
     <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${modoReal() ? "Pessoas com quem você deu match" : `${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados`}</div></div><b style="font-family:var(--f-mono)">${modoReal() ? (matchesReal || []).length : S.matches.length}</b></div></div>
-    ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
-    ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>@${esc(conta.usuario)}</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div></div>` : ""}
-    <button class="btn sec bloco" type="button" id="editar">Editar perfil</button>
+    ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho e o nível não passa para a conta.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
+    <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="editar">Editar perfil</button><button class="btn sec" type="button" id="previa">Como os outros me veem</button></div>
+    ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Conta</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div>
+      <div class="linha" style="gap:6px">${conta.temSenha ? `<button class="btn sec mini" type="button" id="trocarSenha">Trocar senha</button>` : ""}<button class="btn sec mini" type="button" id="trocarContato">Trocar e-mail ou celular</button></div>
+      ${nativo ? `<div class="chave"><div><strong style="font-size:14px">Avisos de match e mensagem</strong></div><button class="toggle" type="button" role="switch" id="tAvisos" aria-checked="${conta.avisos !== false}" aria-label="Avisos de match e mensagem"></button></div>` : ""}</div>` : ""}
     <div class="caixa"><strong>Ajuda e privacidade</strong><div class="linha" style="gap:6px"><a class="btn sec mini" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a>${cfgConta.contato ? `<a class="btn sec mini" href="mailto:${esc(cfgConta.contato)}">Contato</a>` : ""}</div></div>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>
     ${conta ? `<button class="link" type="button" id="excluirConta" style="color:var(--bad)">Excluir conta</button>` : ""}
@@ -2435,6 +2721,12 @@ function renderPerfil() {
   const tp = $("#tPasse"); if (tp) tp.addEventListener("click", () => { S.meuPasse.ativo = !S.meuPasse.ativo; salvar(); render(); });
   const vp = $("#vPasse"); if (vp) vp.addEventListener("change", () => { const n = Math.max(10, Math.round(Number(vp.value) || 0)); S.meuPasse.valor = n; vp.value = n; salvar(); toast("Valor salvo"); });
   $("#editar").addEventListener("click", () => renderCadastro(true));
+  $("#previa").addEventListener("click", () => verPerfil(Object.assign({}, pf, { nivel: S.nivel, melhores: meusMelhores(), hue: 340 }), "Como os outros veem você"));
+  const ts = $("#trocarSenha"); if (ts) ts.addEventListener("click", trocarSenha);
+  const tc = $("#trocarContato"); if (tc) tc.addEventListener("click", trocarContato);
+  const ta = $("#tAvisos"); if (ta) ta.addEventListener("click", async () => {
+    try { conta = (await chamarConta({ acao: "avisos", ligado: conta.avisos === false })).conta; render(); } catch (e) { toast(e.erro); }
+  });
   const sc = $("#sairConta"); if (sc) sc.addEventListener("click", sairDaConta);
   const ex = $("#excluirConta"); if (ex) ex.addEventListener("click", excluirConta);
   const ct = $("#criarContaTeste"); if (ct) ct.addEventListener("click", () => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = "criar"; render(); });
@@ -2442,13 +2734,19 @@ function renderPerfil() {
     const v = folha(`<h2>Recomeçar do zero?</h2><p class="muted" style="margin:0">Seu nível, matches e conversas serão apagados. Isso não pode ser desfeito.</p>
       <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar e recomeçar</button><button class="link" type="button" id="nao">Cancelar</button>`);
     v.querySelector("#nao").addEventListener("click", () => v.remove());
-    v.querySelector("#sim").addEventListener("click", () => { v.remove(); S = PADRAO(); rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null, fotos: [] }; pulados.clear(); selecao = null; salvar(); aba = "quiz"; render(); });
+    v.querySelector("#sim").addEventListener("click", async () => {
+      v.remove();
+      // Com conta, o nível fica no servidor: zera lá (e as perguntas respondidas) e mantém o perfil e as fotos.
+      if (conta) {
+        try { await chamarConta({ acao: "zerarNivel" }); } catch (e) { toast(e.erro); return; }
+        S = Object.assign(PADRAO(), { perfil: S.perfil, filtros: S.filtros, local: S.local, avisoIA: S.avisoIA, avisoPush: S.avisoPush, avisoMic: S.avisoMic });
+      } else { S = PADRAO(); rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null, fotos: [] }; }
+      pulados.clear(); selecao = null; salvar(); aba = "quiz"; render();
+    });
   });
 }
 
 // ---------- Início ----------
-// Link de teste: zera o limite de criação de categorias e libera 10 criações extras neste navegador.
-if (location.hash === "#liberar-teste") { S.criacoes = []; S.extraCriacoes = 10; salvar(); limparLinkDesafio(); setTimeout(() => toast("Limite zerado: +10 categorias"), 300); }
 desafioAberto = lerDesafio();
 if (codigoDoLink) abrirDesafioDoLink();
 ligarNativo();

@@ -2,9 +2,23 @@
   "buildCommand": "node build.js",
   "outputDirectory": "dist",
   "functions": {
-    "api/perguntas.js": { "maxDuration": 60 }
+    "api/perguntas.js": {
+      "maxDuration": 60
+    },
+    "api/conta.js": {
+      "includeFiles": "{perguntas,dificeis,muitodificeis}.js"
+    },
+    "api/moderacao.js": {
+      "includeFiles": "{perguntas,dificeis,muitodificeis}.js"
+    },
+    "api/social.js": {
+      "includeFiles": "{perguntas,dificeis,muitodificeis}.js"
+    }
   },
   "rewrites": [
-    { "source": "/:codigo([A-Za-z0-9]{4,6})", "destination": "/index.html" }
+    {
+      "source": "/:codigo([A-Za-z0-9]{4,6})",
+      "destination": "/index.html"
+    }
   ]
 }

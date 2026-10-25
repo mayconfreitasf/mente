@@ -2,6 +2,8 @@
 import crypto from "node:crypto";
 import { sql } from "./_banco.js";
 import { conferirFoto } from "./_foto.js";
+import { put, del } from "@vercel/blob";
+import { nomeDoAssunto } from "./_bancos.js";
 
 const MAX_FOTO = 400000, MAX_AUDIO = 300000;
 export const MAX_FOTOS = 5;
@@ -20,8 +22,24 @@ export async function guardarMidia(donoId, dataUrl, tipo) {
   const mime = m[1].split(";")[0].toLowerCase();
   if (tipo === "foto" && (!/^image\/(jpeg|png|webp)$/.test(mime) || dataUrl.length > MAX_FOTO)) return null;
   if (tipo === "audio" && (!mime.startsWith("audio/") || dataUrl.length > MAX_AUDIO)) return null;
+  // Com o Vercel Blob configurado (BLOB_READ_WRITE_TOKEN), o arquivo vai para lá, privado; o banco guarda só o endereço.
+  // Se o Blob falhar, o arquivo vai para o banco, como antes: o envio nunca quebra por causa do armazenamento.
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const ext = mime.split("/")[1].replace(/[^a-z0-9]/g, "") || "bin";
+      const b = await put(`${tipo}s/${donoId}/${crypto.randomUUID()}.${ext}`, Buffer.from(m[2], "base64"), { access: "private", contentType: mime });
+      const [r] = await sql`INSERT INTO midias (dono_id, tipo, mime, dados, url) VALUES (${donoId}, ${tipo}, ${mime}, '', ${b.url}) RETURNING id`;
+      return r.id;
+    } catch (e) { console.error("blob put", e); }
+  }
   const [r] = await sql`INSERT INTO midias (dono_id, tipo, mime, dados) VALUES (${donoId}, ${tipo}, ${mime}, ${m[2]}) RETURNING id`;
   return r.id;
+}
+// Apaga mídias (as linhas e os arquivos no Blob). Recebe as linhas com id e url.
+export async function apagarMidias(linhas) {
+  const urls = linhas.map(x => x.url).filter(Boolean);
+  if (urls.length && process.env.BLOB_READ_WRITE_TOKEN) await del(urls).catch(e => console.error("blob del", e));
+  for (const x of linhas) await sql`DELETE FROM midias WHERE id = ${x.id}`;
 }
 
 // Foto nova (data URL): confere com o Claude se mostra uma pessoa e guarda. Lança erro com a mensagem para o usuário.
@@ -39,7 +57,8 @@ export async function sincronizarPerfil(u, estado, local) {
   const p = estado && estado.perfil;
   if (!p || typeof p !== "object") return {};
   const entrada = (Array.isArray(p.fotos) ? p.fotos : p.foto ? [p.foto] : []).slice(0, MAX_FOTOS);
-  const minhas = new Set((await sql`SELECT id FROM midias WHERE dono_id = ${u.id} AND tipo = 'foto'`).map(r => String(r.id)));
+  const linhasFotos = await sql`SELECT id, url, criado_em FROM midias WHERE dono_id = ${u.id} AND tipo = 'foto'`;
+  const minhas = new Set(linhasFotos.map(r => String(r.id)));
   const ids = []; let recusadas = 0;
   for (const f of entrada) {
     let id = idDaUrl(f);
@@ -51,7 +70,8 @@ export async function sincronizarPerfil(u, estado, local) {
   }
   // Fotos que saíram do perfil são apagadas (as enviadas há menos de 1 hora podem estar esperando o perfil ser salvo).
   const sobras = [...minhas].filter(id => !ids.includes(id));
-  for (const id of sobras) await sql`DELETE FROM midias WHERE id = ${id} AND dono_id = ${u.id} AND criado_em < now() - interval '1 hour'`;
+  const umaHora = Date.now() - 3600000;
+  await apagarMidias(linhasFotos.filter(x => sobras.includes(String(x.id)) && new Date(x.criado_em).getTime() < umaHora));
   const fotoId = ids[0] || null;
   const f = estado.filtros || {};
   // A posição fica arredondada em cerca de 1 km: serve para a distância, não para achar ninguém.
@@ -62,11 +82,18 @@ export async function sincronizarPerfil(u, estado, local) {
   const sexo = ["F", "M", "O"].includes(p.sexo) ? p.sexo : "O";
   const nivel = numero(estado.nivel, 0, 1e6, 0);
   const raio = f.raio == null ? null : Math.round(numero(f.raio, 1, 20000, 0)) || null;
-  await sql`INSERT INTO perfis (usuario_id, nome, idade, sexo, interesse, cidade, bio, foto_id, fotos, lat, lng, nivel, ver_min, vis_min, raio, atualizado_em)
+  const idadeMin = Math.round(numero(f.idadeMin, 18, 99, 18)), idadeMax = Math.max(idadeMin, Math.round(numero(f.idadeMax, 18, 99, 99)));
+  // Até 3 assuntos com mais acertos (com pelo menos 5 respostas), mostrados no cartão do Descobrir.
+  const melhores = Object.entries(estado.porCat && typeof estado.porCat === "object" ? estado.porCat : {})
+    .filter(([id, c]) => c && Number(c.r) >= 5 && nomeDoAssunto(id))
+    .sort((a, b) => Number(b[1].a) / Number(b[1].r) - Number(a[1].a) / Number(a[1].r) || Number(b[1].a) - Number(a[1].a))
+    .slice(0, 3).map(([id]) => nomeDoAssunto(id));
+  await sql`INSERT INTO perfis (usuario_id, nome, idade, sexo, interesse, cidade, bio, foto_id, fotos, lat, lng, nivel, ver_min, vis_min, raio, idade_min, idade_max, melhores, atualizado_em)
     VALUES (${u.id}, ${curto(p.nome, 30)}, ${Math.round(numero(p.idade, 18, 120, 18))}, ${sexo}, ${interesse}, ${curto(p.cidade, 40)}, ${curto(p.bio, 140)}, ${fotoId}, ${JSON.stringify(ids)},
-      ${lat}, ${lng}, ${nivel}, ${numero(f.verMin, 0, 1e6, 0)}, ${numero(f.visMin, 0, 1e6, 0)}, ${raio}, now())
+      ${lat}, ${lng}, ${nivel}, ${numero(f.verMin, 0, 1e6, 0)}, ${numero(f.visMin, 0, 1e6, 0)}, ${raio}, ${idadeMin}, ${idadeMax}, ${JSON.stringify(melhores)}, now())
     ON CONFLICT (usuario_id) DO UPDATE SET nome = EXCLUDED.nome, idade = EXCLUDED.idade, sexo = EXCLUDED.sexo, interesse = EXCLUDED.interesse,
       cidade = EXCLUDED.cidade, bio = EXCLUDED.bio, foto_id = EXCLUDED.foto_id, fotos = EXCLUDED.fotos, lat = EXCLUDED.lat, lng = EXCLUDED.lng, nivel = EXCLUDED.nivel,
-      ver_min = EXCLUDED.ver_min, vis_min = EXCLUDED.vis_min, raio = EXCLUDED.raio, atualizado_em = now()`;
+      ver_min = EXCLUDED.ver_min, vis_min = EXCLUDED.vis_min, raio = EXCLUDED.raio, idade_min = EXCLUDED.idade_min, idade_max = EXCLUDED.idade_max,
+      melhores = EXCLUDED.melhores, atualizado_em = now()`;
   return { fotos: ids.map(urlMidia), recusadas };
 }

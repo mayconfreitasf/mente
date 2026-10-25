@@ -20,12 +20,16 @@ export function prepararBanco() {
     await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS banido boolean NOT NULL DEFAULT false`;
     // Contas de teste (revisão das lojas): só enxergam e só são vistas por outras contas de teste.
     await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS teste boolean NOT NULL DEFAULT false`;
+    // Nível calculado no servidor (as respostas são conferidas aqui) e avisos de match e mensagem ligados ou não.
+    await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nivel numeric`;
+    await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS avisos boolean NOT NULL DEFAULT true`;
     await sql`CREATE TABLE IF NOT EXISTS sessoes (
       token_hash text PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, expira_em timestamptz NOT NULL)`;
     await sql`CREATE TABLE IF NOT EXISTS codigos (
       id bigserial PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
       finalidade text NOT NULL, codigo_hash text NOT NULL, expira_em timestamptz NOT NULL,
       tentativas int NOT NULL DEFAULT 0, criado_em timestamptz NOT NULL DEFAULT now())`;
+    await sql`ALTER TABLE codigos ADD COLUMN IF NOT EXISTS destino text`;
     await sql`CREATE TABLE IF NOT EXISTS denuncias (
       id bigserial PRIMARY KEY, denunciante_id uuid REFERENCES usuarios(id) ON DELETE SET NULL,
       alvo text NOT NULL, motivo text NOT NULL, texto text, status text NOT NULL DEFAULT 'aberta',
@@ -39,11 +43,20 @@ export function prepararBanco() {
       atualizado_em timestamptz NOT NULL DEFAULT now())`;
     // Até 5 fotos por perfil (ids de midias, na ordem); foto_id continua sendo a principal.
     await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS fotos jsonb`;
+    await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS idade_min int`;
+    await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS idade_max int`;
+    await sql`ALTER TABLE perfis ADD COLUMN IF NOT EXISTS melhores jsonb`;
+    // Cada pergunta respondida (primeira tentativa); repetida não soma nível.
+    await sql`CREATE TABLE IF NOT EXISTS respostas (
+      usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, chave text NOT NULL,
+      criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (usuario_id, chave))`;
     await sql`CREATE TABLE IF NOT EXISTS ia_uso (
       id bigserial PRIMARY KEY, usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, criado_em timestamptz NOT NULL DEFAULT now())`;
     await sql`CREATE TABLE IF NOT EXISTS midias (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), dono_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
       tipo text NOT NULL, mime text NOT NULL, dados text NOT NULL, criado_em timestamptz NOT NULL DEFAULT now())`;
+    // Mídias novas ficam no Vercel Blob (url); as antigas continuam em "dados" (base64).
+    await sql`ALTER TABLE midias ADD COLUMN IF NOT EXISTS url text`;
     await sql`CREATE TABLE IF NOT EXISTS avaliacoes (
       de_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, para_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
       tipo text NOT NULL, criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (de_id, para_id))`;
@@ -60,6 +73,14 @@ export function prepararBanco() {
     await sql`CREATE TABLE IF NOT EXISTS bloqueios (
       usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, alvo text NOT NULL,
       criado_em timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (usuario_id, alvo))`;
+    // Prova pedida num match: quem pede (de_id) escolhe assunto, tamanho e mínimo de acertos; a outra pessoa (para_id)
+    // só conversa depois de passar. Tentativas livres, sem repetir perguntas (usadas).
+    await sql`CREATE TABLE IF NOT EXISTS provas (
+      id bigserial PRIMARY KEY, match_id bigint NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+      de_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE, para_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      assunto text NOT NULL, qtd int NOT NULL, minimo int NOT NULL, status text NOT NULL DEFAULT 'pendente',
+      usadas jsonb NOT NULL DEFAULT '[]', atual jsonb, tentativas int NOT NULL DEFAULT 0, ultima int, melhor int,
+      criado_em timestamptz NOT NULL DEFAULT now(), aprovada_em timestamptz, UNIQUE (match_id, de_id))`;
     // Desafios por link curto (jingar.com.br/Ab3x) e o ranking de quem respondeu cada um.
     await sql`CREATE TABLE IF NOT EXISTS desafios (
       codigo text PRIMARY KEY, criador_id uuid REFERENCES usuarios(id) ON DELETE SET NULL,

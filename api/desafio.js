@@ -8,6 +8,19 @@ const LETRAS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODIGO_OK = /^[A-Za-z0-9]{4,6}$/, JOGADOR_OK = /^[A-Za-z0-9_-]{16,40}$/;
 const MAX_PERGUNTAS = 40, MAX_POR_HORA = 30, TOP = 20;
 const curto = (x, n) => typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, n) : "";
+// Nomes do ranking ficam visíveis para quem tem o link: palavrões, ofensas e links viram "Jogador".
+const PROIBIDAS = ["porra", "caralho", "buceta", "bucet", "piroca", "pica", "rola", "cu", "cuzao", "foder", "foda", "fdp", "puta", "puto", "viado", "veado", "bicha", "sapatao", "traveco",
+  "macaco", "preto sujo", "retardado", "mongol", "vagabunda", "vadia", "piranha", "corno", "otario", "babaca", "arrombado", "merda", "bosta", "estupro", "nazi", "hitler",
+  "fuck", "shit", "bitch", "nigger", "nigga", "faggot", "cunt", "dick", "pussy", "whore", "slut", "rape"];
+const semAcento = t => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+function nomeLimpo(nome) {
+  const n = curto(nome, 20);
+  if (!n) return "";
+  const t = semAcento(n).replace(/[^a-z0-9 ]/g, " ").replace(/0/g, "o").replace(/1/g, "i").replace(/3/g, "e").replace(/4/g, "a").replace(/5/g, "s");
+  const palavras = t.split(/\s+/), junto = t.replace(/\s+/g, "");
+  const ruim = /https?:|www\.|\.com/.test(n.toLowerCase()) || PROIBIDAS.some(p => p.includes(" ") ? t.includes(p) : palavras.includes(p) || (p.length >= 5 && junto.includes(p)));
+  return ruim ? "Jogador" : n;
+}
 const inteiro = (x, min, max) => Math.min(max, Math.max(min, Math.round(Number(x) || 0)));
 // Códigos sem letras parecidas (0/O, 1/l/I): 4 caracteres e, se o código sorteado já existir, um a mais.
 const sortear = n => Array.from(crypto.randomBytes(n), b => LETRAS[b % LETRAS.length]).join("");
@@ -56,7 +69,7 @@ export default async function handler(req, res) {
       const d = validar(b.desafio);
       if (!d) throw falha(400, "Desafio inválido.");
       if (!jogador) throw falha(400, "Aparelho não identificado.");
-      if (nomeConta) d.n = curto(nomeConta, 30);
+      d.n = nomeLimpo(nomeConta || d.n) || "Alguém";
       const ip = ipHash(req);
       const [{ n }] = await sql`SELECT count(*)::int AS n FROM desafios WHERE ip_hash = ${ip} AND criado_em > now() - interval '1 hour'`;
       if (n >= MAX_POR_HORA) throw falha(429, "Muitos desafios criados. Tente de novo mais tarde.");
@@ -85,7 +98,7 @@ export default async function handler(req, res) {
     if (b.acao === "responder") {
       if (!jogador) throw falha(400, "Aparelho não identificado.");
       const total = inteiro(b.total, 0, desafio.dados.q.length), acertos = inteiro(b.acertos, 0, total);
-      const nome = curto(nomeConta || b.nome, 20) || "Anônimo";
+      const nome = nomeLimpo(nomeConta || b.nome) || "Anônimo";
       // Vale a primeira tentativa de cada pessoa.
       await sql`INSERT INTO desafio_respostas (codigo, jogador, usuario_id, nome, acertos, total) VALUES (${desafio.codigo}, ${jogador}, ${u ? u.id : null}, ${nome}, ${acertos}, ${total}) ON CONFLICT (codigo, jogador) DO NOTHING`;
       return res.status(200).json(publico(await ranking(desafio.codigo), jogador));

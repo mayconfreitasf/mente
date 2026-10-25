@@ -3,6 +3,16 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { cors, usuarioDaSessao } from "./_sessao.js";
 import { sql, prepararBanco } from "./_banco.js";
+import { assinarPergunta, tokenPeso, pesoValido, iguais } from "./_pontos.js";
+// Assinatura de cada pergunta válida (por enunciado): é o que permite ao servidor somar nível quando a pessoa acerta.
+function assinaturas(uid, pts, perguntas) {
+  const out = {};
+  if (!uid || !pts) return out;
+  for (const q of Array.isArray(perguntas) ? perguntas : []) {
+    if (Array.isArray(q) && q.length === 4 && q.every(x => typeof x === "string" && x.trim())) out[q[0].trim().slice(0, 200)] = assinarPergunta(uid, pts, q[0], q[1]);
+  }
+  return out;
+}
 
 const client = new Anthropic();
 const MODELO = process.env.MODELO || "claude-opus-5-5";
@@ -87,10 +97,11 @@ export default async function handler(req, res) {
 
   const codigo = process.env.CODIGO_ACESSO;
   if (codigo && b.codigo !== codigo) return res.status(401).json({ erro: "Código de acesso inválido." });
+  let u = null;
   if (sql) {
     try {
       await prepararBanco();
-      const u = await usuarioDaSessao(req);
+      u = await usuarioDaSessao(req);
       if (!u || u.banido) return res.status(403).json({ erro: "Entre na sua conta para criar perguntas com IA." });
       const [{ h }] = await sql`SELECT count(*)::int AS h FROM ia_uso WHERE usuario_id = ${u.id} AND criado_em > now() - interval '1 hour'`;
       const [{ d }] = await sql`SELECT count(*)::int AS d FROM ia_uso WHERE usuario_id = ${u.id} AND criado_em > now() - interval '1 day'`;
@@ -101,7 +112,10 @@ export default async function handler(req, res) {
   if (typeof b.tema === "string") {
     const dificuldade = Object.hasOwn(DIFICULDADE_TEMA, b.dificuldade) ? b.dificuldade : "facil";
     const evitarTema = Array.isArray(b.evitar) ? b.evitar.filter(x => typeof x === "string").slice(-120).map(x => x.slice(0, 200)) : [];
-    return criarCategoria(b.tema.trim().slice(0, 60), typeof b.subtema === "string" ? b.subtema.trim().slice(0, 120) : "", dificuldade, evitarTema, res);
+    // Perguntas de um subtema valem o peso que o servidor deu ao avaliar o tema (o token prova esse peso).
+    const titulo = b.tema.trim().slice(0, 60);
+    const pts = u && b.pesoToken && iguais(tokenPeso(u.id, titulo, b.peso), b.pesoToken) ? pesoValido(b.peso) : 0;
+    return criarCategoria(titulo, typeof b.subtema === "string" ? b.subtema.trim().slice(0, 120) : "", dificuldade, evitarTema, res, u, pts);
   }
 
   const texto = typeof b.texto === "string" ? b.texto.slice(0, LIMITE_TEXTO) : "";
@@ -130,14 +144,14 @@ export default async function handler(req, res) {
     const txt = resp.content.filter(c => c.type === "text").map(c => c.text).join("");
     const json = extrairJson(txt);
     if (!json || !Array.isArray(json.perguntas)) return res.status(502).json({ erro: "Não consegui montar perguntas com esse arquivo. Tente de novo." });
-    return res.status(200).json({ titulo: typeof json.titulo === "string" ? json.titulo : "Seu arquivo", perguntas: json.perguntas });
+    return res.status(200).json({ titulo: typeof json.titulo === "string" ? json.titulo : "Seu arquivo", perguntas: json.perguntas, assinaturas: assinaturas(u && u.id, mult, json.perguntas) });
   } catch (e) {
     return erroDaApi(e, res);
   }
 }
 
 // O app valida as perguntas e exige pelo menos 50; aqui só repassamos o que o Claude decidiu.
-async function criarCategoria(tema, subtema, dificuldade, evitar, res) {
+async function criarCategoria(tema, subtema, dificuldade, evitar, res, u, pts) {
   if (tema.length < 2) return res.status(400).json({ erro: "Digite um tema." });
   const params = {
     model: MODELO,
@@ -151,6 +165,8 @@ async function criarCategoria(tema, subtema, dificuldade, evitar, res) {
     if (resp.stop_reason === "refusal") return res.status(200).json(subtema ? { perguntas: [] } : { aprovado: false, motivo: "Esse tema não pode virar categoria.", sugestoes: [] });
     const json = extrairJson(resp.content.filter(c => c.type === "text").map(c => c.text).join(""));
     if (!json) return res.status(502).json({ erro: "Não consegui ler a resposta do Claude. Tente de novo." });
+    if (subtema) json.assinaturas = assinaturas(u && u.id, pts, json.perguntas);
+    else if (json.aprovado && u) { json.peso = pesoValido(json.peso); json.pesoToken = tokenPeso(u.id, typeof json.titulo === "string" && json.titulo.trim() ? json.titulo.trim().slice(0, 40) : tema, json.peso); }
     return res.status(200).json(json);
   } catch (e) {
     return erroDaApi(e, res);
