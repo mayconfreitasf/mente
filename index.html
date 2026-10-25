@@ -14,11 +14,12 @@
   --surface-2: #2c1c23;
   --line: #3e2931;
   --fg: #f4ebe7;
-  --muted: #b39ca4;
-  --accent: #c2304f;
-  --accent-soft: #c2304f26;
-  --accent-fg: #fff6f7;
-  --gold: #d8b06a;
+  --muted: #c4adb4;
+  --accent: #d23a5b;
+  --accent-soft: #d23a5b26;
+  --accent-fg: #ffffff;
+  --gold: #e0b974;
+  --gold-fg: #1d1206;
   --triplo: #f5c518;
   --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%);
   --prata-cor: #e05bb5;
@@ -35,15 +36,41 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
-    --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-    --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #d94fae; --prata-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+    --fg: #2a1219; --muted: #6e505a; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
+    --gold: #8f6520; --gold-fg: #ffffff; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #d94fae; --prata-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
-  --fg: #2a1219; --muted: #7a5c65; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
-  --gold: #8f6520; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #d94fae; --prata-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  --fg: #2a1219; --muted: #6e505a; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
+  --gold: #8f6520; --gold-fg: #ffffff; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #d94fae; --prata-fg: #ffffff; --ok: #1f8a55; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  color-scheme: light;
+}
+
+/* Temas escolhidos no Perfil (sem escolha, vale o automático acima: escuro ou claro conforme o celular). */
+:root[data-tema="vinho"] {
+  --bg: #150d11; --surface: #21151a; --surface-2: #2c1c23; --line: #3e2931;
+  --fg: #f4ebe7; --muted: #c4adb4; --accent: #d23a5b; --accent-soft: #d23a5b26; --accent-fg: #ffffff;
+  --gold: #e0b974; --gold-fg: #1d1206; --triplo: #f5c518; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #e05bb5; --prata-fg: #ffffff; --ok: #4cb782; --bad: #e2596f; --shadow: 0 18px 40px #00000066;
+  color-scheme: dark;
+}
+:root[data-tema="rose"] {
+  --bg: #f6efec; --surface: #fffaf8; --surface-2: #f1e5e1; --line: #e2d0cb;
+  --fg: #2a1219; --muted: #6e505a; --accent: #9e1f3e; --accent-soft: #9e1f3e1a; --accent-fg: #ffffff;
+  --gold: #8f6520; --gold-fg: #ffffff; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #d94fae; --prata-fg: #ffffff; --ok: #1f7a4c; --bad: #c23a52; --shadow: 0 14px 30px #4a1a2a22;
+  color-scheme: light;
+}
+:root[data-tema="noite"] {
+  --bg: #0d1220; --surface: #161d30; --surface-2: #222b44; --line: #2f3a57;
+  --fg: #eef1f8; --muted: #a9b2c8; --accent: #ff7a63; --accent-soft: #ff7a6326; --accent-fg: #1f0e0a;
+  --gold: #f2c46d; --gold-fg: #1d1206; --triplo: #f5c518; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #e05bb5; --prata-fg: #ffffff; --ok: #4cc38a; --bad: #ff7a8a; --shadow: 0 18px 40px #00000066;
+  color-scheme: dark;
+}
+:root[data-tema="lavanda"] {
+  --bg: #f4f1fb; --surface: #ffffff; --surface-2: #ebe6f7; --line: #dcd4ef;
+  --fg: #231a3a; --muted: #5f5778; --accent: #6b4bd6; --accent-soft: #6b4bd61a; --accent-fg: #ffffff;
+  --gold: #8a6100; --gold-fg: #ffffff; --triplo: #e0a800; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #d94fae; --prata-fg: #ffffff; --ok: #1f7a4c; --bad: #c23a52; --shadow: 0 14px 30px #2a1a4a22;
   color-scheme: light;
 }
 
@@ -96,7 +123,7 @@ h2 { font-size: 21px; line-height: 1.2; }
 .btn { border: 0; border-radius: 14px; padding: 14px 18px; font-weight: 700; background: var(--accent); color: var(--accent-fg); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .btn:active { transform: scale(0.98); }
 .btn.sec { background: var(--surface-2); color: var(--fg); }
-.btn.ouro { background: var(--gold); color: #1d1206; }
+.btn.ouro { background: var(--gold); color: var(--gold-fg); }
 .btn.triplo { background: var(--triplo); color: var(--triplo-fg); }
 .btn.prata { background: var(--prata); color: var(--prata-fg); box-shadow: inset 0 0 0 1px var(--prata-cor), inset 0 1px 0 #ffffff66; text-shadow: 0 1px 1px #00000040; }
 .btn.mini { padding: 9px 14px; flex: none; }
@@ -286,6 +313,10 @@ a.btn { text-decoration: none; }
 .ranking .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ranking li.voce, .ranking li.voce .pos { color: var(--gold); }
 .seg.quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.temas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.temas button { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 8px 2px 6px; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--fg); }
+.temas button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.temas .amostra { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #00000022; }
 .seg.quatro button { padding-inline: 2px; font-size: 13px; }
 .aba.desligada { opacity: .4; }
 .folha { max-height: calc(100dvh - 24px); overflow-y: auto; }
@@ -684,7 +715,15 @@ let aba = "quiz", rodada = null, chatAberto = null, desafioAberto = null;
 function irPara(a) { formPerfilAberto = false; clearInterval(timerChat); aba = a; rodada = null; chatAberto = null; render(); tela.scrollTop = 0; }
 $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); if (b) irPara(b.dataset.aba); });
 
+// Tema escolhido no Perfil. "auto" (padrão) segue o claro ou escuro do celular.
+const TEMAS = [["auto", "Auto", "linear-gradient(135deg, #150d11 50%, #f6efec 50%)"], ["vinho", "Vinho", "linear-gradient(135deg, #150d11 55%, #d23a5b 55%)"],
+  ["rose", "Rosé", "linear-gradient(135deg, #f6efec 55%, #9e1f3e 55%)"], ["noite", "Noite", "linear-gradient(135deg, #0d1220 55%, #ff7a63 55%)"], ["lavanda", "Lavanda", "linear-gradient(135deg, #f4f1fb 55%, #6b4bd6 55%)"]];
+function aplicarTema() {
+  const t = TEMAS.some(([id]) => id === S.tema) ? S.tema : "auto";
+  if (t === "auto") delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
+}
 function render() {
+  aplicarTema();
   // Com o formulário do perfil na tela (por exemplo, enquanto a galeria está aberta), as atualizações automáticas
   // (matches, fila, resumo) não redesenham a tela: só a navegação (irPara) ou salvar o perfil fecham o formulário.
   if (formPerfilAberto && tela.querySelector("#fCad")) return;
@@ -2751,6 +2790,7 @@ function renderPerfil() {
     </div>
     ${modoReal() ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Prova para conversar</strong><div class="muted" style="font-size:13px">${provaPadrao().qtd} perguntas de ${esc(nomeAssunto(provaPadrao().assunto))} · mínimo ${provaPadrao().minimo}</div></div><button class="btn sec" type="button" id="pProva" style="padding:8px 14px">Ajustar</button></div>
       <div class="chave"><div style="min-width:0"><strong style="font-size:14px">Pedir em todo match novo</strong><div class="muted" style="font-size:12px">A pessoa só conversa com você depois de passar.</div></div><button class="toggle" type="button" role="switch" id="tProvaAuto" aria-checked="${provaPadrao().auto}" aria-label="Pedir prova em todo match novo"></button></div></div>` : ""}
+    <div class="caixa"><strong>Aparência</strong><div class="temas" id="pTema">${TEMAS.map(([id, nome, cor]) => `<button type="button" data-tema="${id}" aria-pressed="${(S.tema || "auto") === id}"><span class="amostra" style="background:${cor}" aria-hidden="true"></span>${nome}</button>`).join("")}</div></div>
     <div class="caixa"><div class="chave"><div><strong>Filtros</strong><div class="muted" style="font-size:13px">${resumoFiltros()}</div></div><button class="btn sec" type="button" id="pFiltros" style="padding:8px 14px">Ajustar</button></div></div>
     ${semServidor ? `<div class="caixa">
       <div class="chave"><div><strong>Meu Passe Direto</strong><div class="muted" style="font-size:13px">Quem ainda não chegou no seu nível pode furar a fila e aparecer pra você.</div></div>
@@ -2781,6 +2821,7 @@ function renderPerfil() {
     v.querySelector("#sim").addEventListener("click", () => { v.remove(); pf.consentimento = null; salvar(); toast("Match desligado"); render(); });
   });
   $("#pFiltros").addEventListener("click", abrirFiltros);
+  $("#pTema").addEventListener("click", e => { const b = e.target.closest("[data-tema]"); if (!b || b.dataset.tema === (S.tema || "auto")) return; S.tema = b.dataset.tema; salvar(); render(); });
   const pp = $("#pProva"); if (pp) pp.addEventListener("click", ajustarProvaPadrao);
   const tpa = $("#tProvaAuto"); if (tpa) tpa.addEventListener("click", () => {
     S.provaPadrao = Object.assign(provaPadrao(), { auto: !provaPadrao().auto }); salvar();
@@ -2807,7 +2848,7 @@ function renderPerfil() {
       // Com conta, o nível fica no servidor: zera lá (e as perguntas respondidas) e mantém o perfil e as fotos.
       if (conta) {
         try { await chamarConta({ acao: "zerarNivel" }); } catch (e) { toast(e.erro); return; }
-        S = Object.assign(PADRAO(), { perfil: S.perfil, filtros: S.filtros, local: S.local, avisoIA: S.avisoIA, avisoPush: S.avisoPush });
+        S = Object.assign(PADRAO(), { perfil: S.perfil, filtros: S.filtros, local: S.local, avisoIA: S.avisoIA, avisoPush: S.avisoPush, tema: S.tema });
       } else { S = PADRAO(); rascunho = { nome: "", idade: "", sexo: "", interesse: "", cidade: "", bio: "", foto: null, fotos: [] }; }
       pulados.clear(); selecao = null; salvar(); aba = "quiz"; render();
     });
