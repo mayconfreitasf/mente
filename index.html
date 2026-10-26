@@ -319,7 +319,7 @@ a.btn { text-decoration: none; }
 .ranking .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ranking li.voce, .ranking li.voce .pos { color: var(--gold); }
 .seg.quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.temas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.temas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .temas button { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 8px 2px 6px; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--fg); }
 .temas button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .temas .amostra { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #00000022; }
@@ -328,6 +328,39 @@ a.btn { text-decoration: none; }
 .folha { max-height: calc(100dvh - 24px); overflow-y: auto; }
 .folha input[type="range"] { width: 100%; accent-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .entra { animation: none; } .toggle::after { transition: none; } }
+
+/* Tema iPhone: aparência padrão do iOS (fonte do sistema, títulos grandes, listas agrupadas, chaves verdes, abas translúcidas). */
+:root[data-tema="iphone"] {
+  --bg: #000000; --surface: #1c1c1e; --surface-2: #2c2c2e; --line: #38383a;
+  --fg: #ffffff; --muted: #8e8e93; --accent: #e0455f; --accent-soft: #e0455f2e; --accent-fg: #ffffff;
+  --gold: #e0b974; --gold-fg: #1d1206; --triplo: #ffd60a; --triplo-fg: #2a1d00; --prata: linear-gradient(100deg, #ff45c3 0%, #c464a8 50%, #8f8a8c 100%); --prata-cor: #e05bb5; --prata-fg: #ffffff; --ok: #30d158; --bad: #ff453a; --shadow: none;
+  --f-display: -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  --f-body: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --f-mono: -apple-system, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+:root[data-tema="iphone"] body { font-size: 16px; letter-spacing: -0.01em; }
+:root[data-tema="iphone"] h1, :root[data-tema="iphone"] h2 { font-weight: 800; letter-spacing: -0.02em; }
+:root[data-tema="iphone"] .caixa, :root[data-tema="iphone"] .cat, :root[data-tema="iphone"] .stat, :root[data-tema="iphone"] .placar, :root[data-tema="iphone"] .cartao, :root[data-tema="iphone"] .folha, :root[data-tema="iphone"] .seg button, :root[data-tema="iphone"] .temas button { border-color: transparent; }
+:root[data-tema="iphone"] .caixa { border-radius: 12px; }
+:root[data-tema="iphone"] .cat, :root[data-tema="iphone"] .stat { border-radius: 12px; }
+:root[data-tema="iphone"] .placar { border-radius: 14px; background: rgba(60, 60, 67, .55); }
+:root[data-tema="iphone"] .rotulo { letter-spacing: .02em; font-weight: 500; }
+:root[data-tema="iphone"] .btn { border-radius: 14px; font-weight: 600; font-size: 17px; }
+:root[data-tema="iphone"] .btn.sec { background: var(--surface); color: var(--accent); }
+:root[data-tema="iphone"] .seg { background: var(--surface); border-radius: 9px; padding: 2px; gap: 2px; }
+:root[data-tema="iphone"] .seg button { background: transparent; border-radius: 7px; padding: 7px 4px; font-size: 13px; }
+:root[data-tema="iphone"] .seg button[aria-pressed="true"] { background: #636366; color: #fff; }
+:root[data-tema="iphone"] .campo input, :root[data-tema="iphone"] .campo textarea, :root[data-tema="iphone"] .campo select { border-color: transparent; border-radius: 10px; }
+:root[data-tema="iphone"] .toggle { width: 51px; height: 31px; border-radius: 16px; background: #39393d; }
+:root[data-tema="iphone"] .toggle::after { top: 2px; left: 2px; width: 27px; height: 27px; background: #fff; box-shadow: 0 2px 4px #0004; }
+:root[data-tema="iphone"] .toggle[aria-checked="true"] { background: var(--ok); }
+:root[data-tema="iphone"] .msg { border-radius: 18px; font-size: 16px; }
+:root[data-tema="iphone"] .folha { border-radius: 14px 14px 12px 12px; background: #1c1c1e; }
+:root[data-tema="iphone"] .abas { background: rgba(22, 22, 24, .92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: .5px solid var(--line); }
+:root[data-tema="iphone"] .aba { font-size: 10px; font-weight: 500; }
+:root[data-tema="iphone"] .aba[aria-current="page"] { background: none; color: var(--accent); }
+:root[data-tema="iphone"] .cartao { border-radius: 16px; }
 </style>
 
 <div class="app">
@@ -728,7 +761,7 @@ $("#abas").addEventListener("click", e => { const b = e.target.closest(".aba"); 
 
 // Tema escolhido no Perfil. "auto" (padrão) segue o claro ou escuro do celular.
 const TEMAS = [["auto", "Auto", "linear-gradient(135deg, #150d11 55%, #d23a5b 55%)"], ["choque", "Rosa choque", "linear-gradient(135deg, #fff0f7 55%, #e0117a 55%)"],
-  ["rose", "Rosé", "linear-gradient(135deg, #f6efec 55%, #9e1f3e 55%)"], ["noite", "Noite", "linear-gradient(135deg, #0d1220 55%, #ff7a63 55%)"], ["lavanda", "Lavanda", "linear-gradient(135deg, #f4f1fb 55%, #6b4bd6 55%)"]];
+  ["rose", "Rosé", "linear-gradient(135deg, #f6efec 55%, #9e1f3e 55%)"], ["noite", "Noite", "linear-gradient(135deg, #0d1220 55%, #ff7a63 55%)"], ["lavanda", "Lavanda", "linear-gradient(135deg, #f4f1fb 55%, #6b4bd6 55%)"], ["iphone", "iPhone", "linear-gradient(135deg, #000000 55%, #30d158 55%)"]];
 function aplicarTema() {
   const t = TEMAS.some(([id]) => id === S.tema) ? S.tema : "auto";
   if (t === "auto") delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
