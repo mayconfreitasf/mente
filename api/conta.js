@@ -74,6 +74,38 @@ function mensagemDuplicado(e) {
 const ERRO_LOGIN = "Usuário ou senha incorretos.";
 const SUSPENSA = "Esta conta foi suspensa por violar os Termos de Uso.";
 
+// E-mail do código com a cara do Jingar: topo vinho com a logo, título conforme o caso e o código em caixinhas.
+// Feito com tabelas e estilos em linha, que é o que Gmail, Outlook e iPhone mostram direito.
+const SITE = (process.env.SITE_URL || "https://jingar.com.br").replace(/\/$/, "");
+const TEXTOS_CODIGO = {
+  verificar: ["Falta só um passo!", "Use este código para confirmar sua conta e começar a subir de nível no Jingar."],
+  recuperar: ["Vamos criar uma senha nova", "Use este código para redefinir a senha da sua conta do Jingar."],
+  contato: ["Confirme seu novo e-mail", "Use este código para confirmar o novo e-mail da sua conta do Jingar."]
+};
+function htmlCodigo(codigo, finalidade) {
+  const [titulo, texto] = TEXTOS_CODIGO[finalidade] || TEXTOS_CODIGO.verificar;
+  const F = "Arial,Helvetica,sans-serif";
+  const caixas = [...codigo].map(d => `<td style="padding:0 4px"><div style="width:44px;height:56px;line-height:56px;text-align:center;font:800 30px/56px ${F};color:#150d11;background:#fbf3e6;border:2px solid #d8b06a;border-radius:12px">${d}</div></td>`).join("");
+  return `<!doctype html><html lang="pt-BR"><body style="margin:0;padding:0;background:#f6efec">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6efec;padding:28px 12px"><tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #e8d6d0">
+    <tr><td align="center" style="background:#150d11;padding:26px 24px 22px">
+      <img src="${SITE}/logo-email.png" width="64" height="60" alt="" style="display:block;border:0;margin:0 auto">
+      <div style="font:800 32px ${F};color:#f4ebe7;letter-spacing:-1px;margin-top:8px">jingar<span style="color:#d23a5b">.</span></div>
+      <div style="font:700 11px ${F};color:#d8b06a;letter-spacing:2px;margin-top:6px">PRIMEIRO A MENTE. DEPOIS O MATCH.</div>
+    </td></tr>
+    <tr><td align="center" style="padding:26px 28px 0;font:800 24px ${F};color:#2a1219">${titulo}</td></tr>
+    <tr><td align="center" style="padding:8px 32px 22px;font:16px/1.5 ${F};color:#6e505a">${texto}</td></tr>
+    <tr><td align="center" style="padding:0 16px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>${caixas}</tr></table></td></tr>
+    <tr><td align="center" style="padding:18px 28px 4px;font:14px/1.5 ${F};color:#6e505a">O código vale por <b style="color:#2a1219">10 minutos</b>.</td></tr>
+    <tr><td style="padding:18px 28px 26px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9e3e8;border-radius:14px"><tr><td style="padding:12px 16px;font:13px/1.5 ${F};color:#7a1f35">
+      Não pediu este código? Pode ignorar este e-mail. Nunca compartilhe o código com ninguém, nem com quem diz ser do Jingar.
+    </td></tr></table></td></tr>
+  </table>
+  <div style="font:12px ${F};color:#9a7f88;padding:16px 0 0">jingar · primeiro a mente, depois o match · jingar.com.br</div>
+</td></tr></table></body></html>`;
+}
+
 // Códigos de 6 dígitos: valem 10 minutos, 5 tentativas cada, 1 pedido por minuto e 5 por hora.
 async function enviarCodigo(u, destino, finalidade) {
   if (destino.tipo === "email" && !temEmail()) throw falha(501, "O envio de código por e-mail ainda não está configurado.");
@@ -90,7 +122,7 @@ async function enviarCodigo(u, destino, finalidade) {
   if (destino.tipo === "email") {
     r = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: process.env.EMAIL_REMETENTE, to: destino.valor, subject: `${codigo} é seu código do Jingar`, text: msg })
+      body: JSON.stringify({ from: process.env.EMAIL_REMETENTE, to: destino.valor, subject: `${codigo} é seu código do Jingar`, text: msg, html: htmlCodigo(codigo, finalidade) })
     }).catch(() => null);
   } else {
     const corpo = new URLSearchParams({ To: destino.valor, Body: msg });

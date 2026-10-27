@@ -28,7 +28,7 @@ ${pagina}
 </html>
 `;
 fs.writeFileSync(`${SAIDA}/index.html`, documento);
-for (const f of ["perguntas.js", "dificeis.js", "muitodificeis.js", "icone.svg", "moderacao.html"]) fs.copyFileSync(f, `${SAIDA}/${f}`);
+for (const f of ["perguntas.js", "dificeis.js", "muitodificeis.js", "icone.svg", "logo-email.png", "moderacao.html"]) fs.copyFileSync(f, `${SAIDA}/${f}`);
 // Fontes embutidas (woff2), para o app abrir sem depender do Google Fonts.
 fs.cpSync("fontes", `${SAIDA}/fontes`, { recursive: true });
 for (const f of ["privacidade.html", "termos.html", "excluir-conta.html"]) fs.writeFileSync(`${SAIDA}/${f}`, fs.readFileSync(f, "utf8").replace("</head>", `${configuracao}\n</head>`));
