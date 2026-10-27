@@ -6,3 +6,6 @@ dist/
 
 .vercel
 .env*
+
+# Mapa do código gerado pelo graphify (ferramenta local)
+graphify-out/
