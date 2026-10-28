@@ -314,16 +314,18 @@ a.btn { text-decoration: none; }
 .minha .txt span { display: block; color: var(--muted); font-size: 12px; }
 .link[disabled] { opacity: .45; cursor: not-allowed; }
 .caixa.extras { gap: 10px; padding: 14px; }
-/* Criar quiz: abas Arquivo / Tema, só a parte escolhida aparece. */
+/* Criar quiz: abas Arquivo / Tema presas à linha de baixo; só a parte escolhida aparece. */
 .criar-titulo { font-size: 16px; }
-.criar-abas { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
-.criar-abas button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 3px 0 transparent; cursor: pointer; }
+.criar-abas { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.criar-abas button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: -1px; padding: 10px; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; background: none; border: 1px solid transparent; border-radius: 8px 8px 0 0; box-shadow: inset 0 3px 0 transparent; cursor: pointer; }
 .criar-abas button svg { width: 18px; height: 18px; }
-.criar-abas button[aria-selected="true"] { color: var(--fg); border-color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+.criar-abas button:hover { color: var(--fg); }
+.criar-abas button[aria-selected="true"] { color: var(--fg); background: var(--surface); border-color: var(--line); border-bottom-color: var(--surface); box-shadow: inset 0 3px 0 var(--accent); }
 [data-painel-criar][hidden] { display: none; }
 .criar-arquivo { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 14px; text-align: center; border: 1.5px dashed var(--line); border-radius: 8px; }
 .criar-arquivo b { font-size: 14px; line-height: 1.35; }
-.criar-arquivo .muted { font-size: 12px; }
+.criar-arquivo span.muted { font-size: 13px; }
+.criar-arquivo small.muted { font-size: 11px; }
 .criar-arquivo .btn { margin-top: 8px; }
 .niveis { display: flex; gap: 6px; }
 .niveis button { display: flex; align-items: center; gap: 6px; padding: 6px 10px; color: var(--fg); font: inherit; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 2px 0 transparent; cursor: pointer; }
@@ -1069,8 +1071,9 @@ function renderQuizInicio() {
         <button type="button" role="tab" data-aba-criar="tema" aria-selected="${abaCriar === "tema"}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>Tema</button>
       </div>
       <div class="criar-arquivo" data-painel-criar="arquivo" ${abaCriar === "arquivo" ? "" : "hidden"}>
-        <b>Anexe um PDF, texto ou fotos e o Jingar cria as perguntas com base no seu arquivo</b>
-        <span class="muted">até 5 MB cada</span>
+        <b>O Jingar cria as perguntas com base no seu arquivo</b>
+        <span class="muted">Anexe um PDF, texto ou fotos</span>
+        <small class="muted">até 5 MB cada</small>
         <label class="btn sec mini" for="fArq">Escolher arquivo</label>
       </div>
       <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
