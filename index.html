@@ -267,9 +267,23 @@ a.btn { text-decoration: none; }
 @keyframes carrega { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .trilho i.carregando { animation: none; width: 100%; opacity: .5; } }
 .tag-dobro { color: var(--bg); background: var(--gold); border-radius: 6px; padding: 1px 6px; margin-left: 4px; letter-spacing: 0; }
-.modos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.modos button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px; text-align: left; min-width: 0; }
+/* Modos: régua sem caixas; as barras mostram quanto o modo pesa. */
+.modos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); container-type: inline-size; }
+.modos button { --cor: var(--accent); display: flex; align-items: flex-end; gap: 10px; min-width: 0; margin-top: -2px; padding: 12px 8px 12px 0; text-align: left; color: var(--fg); font: inherit; background: none; border: 0; border-top: 3px solid transparent; border-radius: 0; cursor: pointer; }
+.modos button + button { padding-left: 12px; border-left: 1px solid var(--line); }
+.modos button[data-modo="dobro"] { --cor: var(--prata-cor); }
+.modos button[data-modo="triplo"] { --cor: var(--triplo); }
+.modos button[aria-pressed="true"] { border-top-color: var(--cor); }
+.modos .barras { display: flex; align-items: flex-end; gap: 3px; height: 22px; flex: none; }
+.modos .barras i { width: 5px; border-radius: 1px; background: var(--line); }
+.modos .barras i:nth-child(1) { height: 8px; }
+.modos .barras i:nth-child(2) { height: 15px; }
+.modos .barras i:nth-child(3) { height: 22px; }
+.modos .barras i.on { background: var(--muted); }
+.modos button[aria-pressed="true"] .barras i.on { background: var(--cor); }
+.modos .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .modos b { font-size: 14px; overflow-wrap: anywhere; }
+@container (max-width: 440px) { .modos button { flex-direction: column; align-items: flex-start; gap: 8px; } }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--fg); }
 .msgs .dia { align-self: center; font-size: 12px; color: var(--muted); padding: 4px 10px; border-radius: 999px; background: var(--surface-2); margin: 6px 0; }
@@ -277,10 +291,8 @@ a.btn { text-decoration: none; }
 .msgs .visto { align-self: flex-end; font-size: 11px; color: var(--muted); margin-top: -2px; }
 .msg .desafio-link { display: block; margin-top: 8px; width: 100%; }
 .chat-topo .quem { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
-.modos small { font-weight: 500; font-size: 12px; color: var(--muted); }
-.modos button[data-modo="dobro"][aria-pressed="true"] { border-color: var(--prata-cor); background: color-mix(in srgb, var(--prata-cor) 24%, transparent); }
+.modos small { font-weight: 500; font-size: 12px; font-family: "JetBrains Mono", monospace; color: var(--muted); }
 .tag-dobro.t2 { background: var(--prata); color: var(--prata-fg); }
-.modos button[data-modo="triplo"][aria-pressed="true"] { border-color: var(--triplo); background: color-mix(in srgb, var(--triplo) 16%, transparent); }
 .tag-dobro.t3 { background: var(--triplo); color: var(--triplo-fg); }
 .seg.pequeno { display: flex; gap: 6px; }
 .seg.pequeno button { padding: 4px 12px; font-size: 12px; border-radius: 999px; }
@@ -1013,8 +1025,8 @@ function renderQuizInicio() {
     </div>
     <div class="pilha" style="gap:10px">
       <h2>Modo</h2>
-      <div class="seg modos">
-        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><b>${m.nome}</b><small>${m.desc}</small></button>`).join("")}
+      <div class="modos" role="group" aria-label="Modo">
+        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><span class="barras" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= m.mult ? ' class="on"' : ""}></i>`).join("")}</span><span class="txt"><b>${m.nome}</b><small>${m.desc}</small></span></button>`).join("")}
       </div>
     </div>
     <div class="iniciar">
