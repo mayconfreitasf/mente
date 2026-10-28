@@ -1041,13 +1041,13 @@ function renderQuizInicio() {
   ligarBlocoCat(); ligarMinhas();
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
     const l = [...fa.files]; fa.value = ""; if (!l.length) return;
-    if (!semServidor && !conta) { toast("Entre na sua conta para criar perguntas com IA"); return; }
+    if (!semServidor && !conta) { toast("Entre na sua conta para o Jingar criar perguntas do seu arquivo"); return; }
     const grande = l.find(f => f.size > (f.type.startsWith("image/") ? MAX_IMAGEM : MAX_DOC));
     if (grande) { toast(grande.type.startsWith("image/") ? "Cada foto pode ter até 5 MB" : "O arquivo pode ter até 5 MB"); return; }
     if (!(await consentirIA())) return;
     if (!sampleFn && !modoServidor) await prepararClaude();
     if (!sampleFn && !modoServidor) {
-      const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Claude indisponível aqui</h2>
+      const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Criação de perguntas indisponível</h2>
         <p style="margin:0">Para criar perguntas do seu arquivo, o app precisa falar com o Claude, e esta tela não liberou isso. Abra o Jingar pelo claude.ai ou pelo app do Claude, logado na sua conta, e tente de novo.</p>
         <p class="aviso" style="margin:0">${esc(diagClaude)}</p><button class="btn bloco" type="button" id="okC">Entendi</button>`);
       v.querySelector("#okC").addEventListener("click", () => v.remove());
@@ -1532,7 +1532,7 @@ function mensagemErroClaude(e) {
   if (c === "session_expired") return "Sua sessão no Claude expirou. Entre de novo e tente outra vez.";
   if (c === "prompt_too_large") return "O arquivo é grande demais. Tente um trecho menor.";
   if (c === "image_rejected" || c === "images_unavailable") return "Não consegui usar essas fotos. Tente outras ou envie um PDF.";
-  if (c === "refused") return "O Claude não gerou perguntas com esse conteúdo. Tente outro arquivo.";
+  if (c === "refused") return "O Jingar não conseguiu criar perguntas com esse conteúdo. Tente outro arquivo.";
   if (c === "invalid_json" || c === "empty_completion") return "Não consegui montar perguntas com esse arquivo. Tente de novo ou use outro.";
   return (e && e.message && !c) ? e.message : "Falha ao criar as perguntas. Tente de novo.";
 }
@@ -1739,10 +1739,10 @@ async function criarCategoria(tema) {
   if (tarefaCat && (tarefaCat.etapa === "avaliando" || tarefaCat.etapa === "criando")) { toast("Já tem uma categoria sendo criada"); return; }
   if (tema.length < 2) { toast("Digite um tema"); return; }
   if (!podeCriar()) { toast("Limite de categorias atingido"); return; }
-  if (!semServidor && !conta) { toast("Entre na sua conta para criar categorias com IA"); return; }
+  if (!semServidor && !conta) { toast("Entre na sua conta para o Jingar criar categorias para você"); return; }
   if (!(await consentirIA())) return;
   if (!sampleFn && !modoServidor) await prepararClaude();
-  if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
+  if (!sampleFn && !modoServidor) { toast("A criação de perguntas não está disponível agora"); return; }
   const dificuldade = difCat;
   // Toda tentativa que chega ao Claude conta no limite, aprovada ou não: cada uma gasta crédito da API.
   registrarCriacao();
@@ -1789,7 +1789,7 @@ async function atualizarCategoria(id) {
   if (!cat || atualizando[id]) return;
   if (!podeCriar()) { toast(textoLimite()); return; }
   if (!sampleFn && !modoServidor) await prepararClaude();
-  if (!sampleFn && !modoServidor) { toast("Claude indisponível aqui"); return; }
+  if (!sampleFn && !modoServidor) { toast("A criação de perguntas não está disponível agora"); return; }
   const dificuldade = cat.dificuldade || "facil";
   registrarCriacao();
   atualizando[id] = { feitas: 0, total: 3 }; pintarMinhas();
@@ -2730,7 +2730,7 @@ function renderEscolherUsuario() {
   });
 }
 // Antes do primeiro envio, avisa que o tema ou o arquivo vai para a Anthropic (Claude) criar as perguntas.
-const consentirIA = () => explicarPermissao("avisoIA", "Perguntas criadas por IA", "Para criar as perguntas, o tema ou o conteúdo do arquivo é enviado à Anthropic, empresa que faz o Claude, nossa inteligência artificial. Não enviamos seu nome, e-mail nem outros dados da conta. As perguntas podem ter erros.");
+const consentirIA = () => explicarPermissao("avisoIA", "Como o Jingar cria as perguntas", "Para o Jingar criar as perguntas, o tema ou o conteúdo do arquivo é enviado à Anthropic, empresa parceira que gera as perguntas. Não enviamos seu nome, e-mail nem outros dados da conta. As perguntas podem ter erros.");
 // Explica por que o app pede uma permissão antes de o navegador ou o sistema perguntar.
 function explicarPermissao(chave, titulo, texto) {
   if (S[chave]) return Promise.resolve(true);

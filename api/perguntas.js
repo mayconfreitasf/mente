@@ -111,7 +111,7 @@ export default async function handler(req, res) {
     try {
       await prepararBanco();
       u = await usuarioDaSessao(req);
-      if (!u || u.banido) return res.status(403).json({ erro: "Entre na sua conta para criar perguntas com IA." });
+      if (!u || u.banido) return res.status(403).json({ erro: "Entre na sua conta para o Jingar criar perguntas para você." });
     } catch (e) { console.error(e); return res.status(500).json({ erro: "Erro no servidor." }); }
   }
   // Conta uma chamada ao Claude no limite por hora e por dia. Perguntas prontas (cache) não contam.
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
     if (!sql || !u) return true;
     const [{ h }] = await sql`SELECT count(*)::int AS h FROM ia_uso WHERE usuario_id = ${u.id} AND criado_em > now() - interval '1 hour'`;
     const [{ d }] = await sql`SELECT count(*)::int AS d FROM ia_uso WHERE usuario_id = ${u.id} AND criado_em > now() - interval '1 day'`;
-    if (h >= IA_POR_HORA || d >= IA_POR_DIA) { res.status(429).json({ erro: "Você atingiu o limite de criações com IA por agora. Tente de novo mais tarde." }); return false; }
+    if (h >= IA_POR_HORA || d >= IA_POR_DIA) { res.status(429).json({ erro: "Você chegou ao limite de perguntas criadas pelo Jingar por agora. Tente de novo mais tarde." }); return false; }
     await sql`INSERT INTO ia_uso (usuario_id) VALUES (${u.id})`;
     return true;
   }
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
 
   try {
     const resp = await client.beta.messages.create(params);
-    if (resp.stop_reason === "refusal") return res.status(422).json({ erro: "O Claude não gerou perguntas com esse conteúdo. Tente outro arquivo." });
+    if (resp.stop_reason === "refusal") return res.status(422).json({ erro: "O Jingar não conseguiu criar perguntas com esse conteúdo. Tente outro arquivo." });
     const txt = resp.content.filter(c => c.type === "text").map(c => c.text).join("");
     const json = extrairJson(txt);
     if (!json || !Array.isArray(json.perguntas)) return res.status(502).json({ erro: "Não consegui montar perguntas com esse arquivo. Tente de novo." });
@@ -202,7 +202,7 @@ async function avaliarTema(tema, dificuldade, u, usarIA, res) {
   }
   if (!(await usarIA())) return;
   const json = await claudeTema(tema, "", dificuldade, []);
-  if (!json) return res.status(502).json({ erro: "Não consegui ler a resposta do Claude. Tente de novo." });
+  if (!json) return res.status(502).json({ erro: "O Jingar não conseguiu montar as perguntas agora. Tente de novo." });
   const titulo = typeof json.titulo === "string" && json.titulo.trim() ? json.titulo.trim().slice(0, 40) : tema;
   const subtemas = (Array.isArray(json.subtemas) ? json.subtemas : []).filter(x => typeof x === "string" && x.trim()).slice(0, 3).map(x => x.trim().slice(0, 120));
   if (sql) await sql`INSERT INTO categorias (tema_norm, dificuldade, tema, titulo, titulo_norm, aprovado, motivo, sugestoes, peso, subtemas, criador_id)
@@ -219,7 +219,7 @@ async function parteDoTema(titulo, subtema, dificuldade, evitar, u, pts, usarIA,
   if (Array.isArray(guardada) && guardada.length) return res.status(200).json({ perguntas: guardada, assinaturas: assinaturas(u && u.id, pts, guardada) });
   if (!(await usarIA())) return;
   const json = await claudeTema(titulo, subtema, dificuldade, evitar);
-  if (!json) return res.status(502).json({ erro: "Não consegui ler a resposta do Claude. Tente de novo." });
+  if (!json) return res.status(502).json({ erro: "O Jingar não conseguiu montar as perguntas agora. Tente de novo." });
   const perguntas = juntar([Array.isArray(json.perguntas) ? json.perguntas : []]);
   if (salva && perguntas.length) await sql`INSERT INTO categoria_partes (categoria_id, subtema, perguntas) VALUES (${salva.id}, ${subtema}, ${JSON.stringify(perguntas)})
     ON CONFLICT (categoria_id, subtema) DO UPDATE SET perguntas = EXCLUDED.perguntas`;
@@ -230,7 +230,7 @@ function erroDaApi(e, res) {
   if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ erro: "Muitos pedidos agora. Tente de novo em alguns minutos." });
   if (e instanceof Anthropic.AuthenticationError) return res.status(500).json({ erro: "A chave da API do servidor está inválida." });
   if (e instanceof Anthropic.BadRequestError) return res.status(400).json({ erro: "O arquivo não pôde ser processado. Tente um trecho menor ou outro formato." });
-  if (e instanceof Anthropic.APIError) return res.status(502).json({ erro: "O serviço do Claude falhou. Tente de novo." });
+  if (e instanceof Anthropic.APIError) return res.status(502).json({ erro: "O Jingar não conseguiu criar as perguntas agora. Tente de novo." });
   return res.status(500).json({ erro: "Erro no servidor." });
 }
 
