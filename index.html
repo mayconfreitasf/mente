@@ -156,8 +156,8 @@ h2 { font-size: 21px; line-height: 1.2; }
 
 /* Categorias */
 .cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.cat { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.cat strong { font-size: 14px; line-height: 1.2; }
+.cat { position: relative; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; transition: transform .12s, box-shadow .12s; }
+.cat strong { font-size: 14px; line-height: 1.2; padding-right: 18px; }
 .cat span { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
 .cat:active { border-color: var(--accent); }
 
@@ -258,32 +258,39 @@ a.btn { text-decoration: none; }
 .aviso { font-size: 12px; color: var(--muted); text-align: center; }
 
 /* Seleção de assuntos */
-.cat[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.cat[aria-pressed="true"] span { color: var(--fg); }
-.cat.aleatorio { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; border-style: dashed; }
+/* Escolhida: sobe um pouco sobre uma base na cor do destaque. */
+.cat[aria-pressed="true"] { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 3px 0 var(--accent); }
+.cat[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 10px; right: 12px; font-size: 13px; font-weight: 700; color: var(--accent); }
+.cat .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.cat .estrelas { font-family: inherit; font-size: 13px; letter-spacing: 1px; color: var(--line); }
+.cat .estrelas i { font-style: normal; }
+.cat .estrelas .on { color: var(--triplo); }
+.cat.aleatorio { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; border-style: dashed; padding-right: 34px; }
+.cat.aleatorio::after { top: 50%; transform: translateY(-50%); }
+@media (prefers-reduced-motion: reduce) { .cat { transition: none; } }
 .cat.aleatorio[aria-pressed="true"] { border-style: solid; }
 .iniciar { position: sticky; bottom: 0; padding-block: 12px 4px; background: linear-gradient(transparent, var(--bg) 30%); }
 .trilho i.carregando { width: 40%; animation: carrega 1.2s ease-in-out infinite; }
 @keyframes carrega { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .trilho i.carregando { animation: none; width: 100%; opacity: .5; } }
 .tag-dobro { color: var(--bg); background: var(--gold); border-radius: 6px; padding: 1px 6px; margin-left: 4px; letter-spacing: 0; }
-/* Modos: régua sem caixas; as barras mostram quanto o modo pesa. */
-.modos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); container-type: inline-size; }
-.modos button { --cor: var(--accent); display: flex; align-items: flex-end; gap: 10px; min-width: 0; margin-top: -2px; padding: 12px 8px 12px 0; text-align: left; color: var(--fg); font: inherit; background: none; border: 0; border-top: 3px solid transparent; border-radius: 0; cursor: pointer; }
-.modos button + button { padding-left: 12px; border-left: 1px solid var(--line); }
+/* Modos: teclas separadas; as barras mostram quanto o modo pesa. */
+.modos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; container-type: inline-size; }
+.modos button { --cor: var(--accent); display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px; text-align: left; color: var(--fg); font: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 3px 0 transparent; cursor: pointer; }
+.modos button:hover { border-color: color-mix(in srgb, var(--fg) 25%, var(--line)); }
 .modos button[data-modo="dobro"] { --cor: var(--prata-cor); }
 .modos button[data-modo="triplo"] { --cor: var(--triplo); }
-.modos button[aria-pressed="true"] { border-top-color: var(--cor); }
-.modos .barras { display: flex; align-items: flex-end; gap: 3px; height: 22px; flex: none; }
-.modos .barras i { width: 5px; border-radius: 1px; background: var(--line); }
-.modos .barras i:nth-child(1) { height: 8px; }
-.modos .barras i:nth-child(2) { height: 15px; }
-.modos .barras i:nth-child(3) { height: 22px; }
+.modos button[aria-pressed="true"] { border-color: var(--cor); box-shadow: inset 0 3px 0 var(--cor); }
+.modos .titulo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.modos .barras { display: flex; align-items: flex-end; gap: 2px; height: 14px; flex: none; }
+.modos .barras i { width: 4px; border-radius: 1px; background: var(--line); }
+.modos .barras i:nth-child(1) { height: 6px; }
+.modos .barras i:nth-child(2) { height: 10px; }
+.modos .barras i:nth-child(3) { height: 14px; }
 .modos .barras i.on { background: var(--muted); }
 .modos button[aria-pressed="true"] .barras i.on { background: var(--cor); }
-.modos .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.modos b { font-size: 14px; overflow-wrap: anywhere; }
-@container (max-width: 440px) { .modos button { flex-direction: column; align-items: flex-start; gap: 8px; } }
+.modos b { font-size: 14px; line-height: 1.2; overflow-wrap: break-word; }
+@container (max-width: 420px) { .modos button { padding: 10px; } .modos .titulo { flex-direction: column; align-items: flex-start; gap: 6px; } }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--fg); }
 .msgs .dia { align-self: center; font-size: 12px; color: var(--muted); padding: 4px 10px; border-radius: 999px; background: var(--surface-2); margin: 6px 0; }
@@ -291,7 +298,7 @@ a.btn { text-decoration: none; }
 .msgs .visto { align-self: flex-end; font-size: 11px; color: var(--muted); margin-top: -2px; }
 .msg .desafio-link { display: block; margin-top: 8px; width: 100%; }
 .chat-topo .quem { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
-.modos small { font-weight: 500; font-size: 12px; font-family: "JetBrains Mono", monospace; color: var(--muted); }
+.modos small { font-weight: 500; font-size: 12px; font-family: var(--f-mono); color: var(--muted); line-height: 1.35; }
 .tag-dobro.t2 { background: var(--prata); color: var(--prata-fg); }
 .tag-dobro.t3 { background: var(--triplo); color: var(--triplo-fg); }
 .seg.pequeno { display: flex; gap: 6px; }
@@ -415,6 +422,8 @@ const modoDe = m => MODOS.find(x => x.mult === m) || MODOS[0];
 const multAtual = () => (MODOS.find(x => x.id === S.modo) || MODOS[0]).mult;
 const classeModo = m => m === 3 ? "triplo" : m === 2 ? "prata" : "";
 const sufixo = m => m > 1 ? " · " + modoDe(m).nome : "";
+// 5 estrelas acesas conforme a parte das respondidas que foi acertada (assunto novo: todas apagadas).
+const estrelas = pc => { const n = pc.r ? Math.round(pc.a / pc.r * 5) : 0; return `<span class="estrelas" aria-hidden="true">${[1, 2, 3, 4, 5].map(i => `<i${i <= n ? ' class="on"' : ""}>★</i>`).join("")}</span>`; };
 
 // Perfis fictícios: [id, nome, sexo, idade, profissão, cidade, nível, passe (null = não aceita), bio]
 const PERFIS = [
@@ -1019,14 +1028,14 @@ function renderQuizInicio() {
       <div class="linha" style="justify-content:space-between"><h2>Escolha os assuntos</h2><span class="rotulo">um ou vários</span></div>
       <div class="cats">
         <button class="cat aleatorio" type="button" data-cat="${ALEATORIO}" aria-pressed="${alea}"><strong>Aleatório</strong><span>todos os ${CATS.length} assuntos misturados</span></button>
-        ${visiveis.map(c => { const pc = S.porCat[c.id] || { r: 0, a: 0 }; return `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="${!alea && selecao.has(c.id)}"><strong>${esc(c.nome)}</strong><span>${pc.r ? `${pc.a}/${pc.r} acertos` : "nova"}</span></button>`; }).join("")}
+        ${visiveis.map(c => { const pc = S.porCat[c.id] || { r: 0, a: 0 }; return `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="${!alea && selecao.has(c.id)}"><strong>${esc(c.nome)}</strong><span class="nota">${estrelas(pc)}<span>${pc.r ? `${pc.a}/${pc.r} acertos` : "nova"}</span></span></button>`; }).join("")}
       </div>
       ${CATS.length > 6 ? `<button class="link" type="button" id="verTodos" style="align-self:center">${verTodos ? "Mostrar menos" : `Ver todos os ${CATS.length}`}</button>` : ""}
     </div>
     <div class="pilha" style="gap:10px">
       <h2>Modo</h2>
       <div class="modos" role="group" aria-label="Modo">
-        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><span class="barras" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= m.mult ? ' class="on"' : ""}></i>`).join("")}</span><span class="txt"><b>${m.nome}</b><small>${m.desc}</small></span></button>`).join("")}
+        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><span class="titulo"><span class="barras" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= m.mult ? ' class="on"' : ""}></i>`).join("")}</span><b>${m.nome}</b></span><small>${m.desc}</small></button>`).join("")}
       </div>
     </div>
     <div class="iniciar">
