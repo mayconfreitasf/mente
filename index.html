@@ -314,6 +314,27 @@ a.btn { text-decoration: none; }
 .minha .txt span { display: block; color: var(--muted); font-size: 12px; }
 .link[disabled] { opacity: .45; cursor: not-allowed; }
 .caixa.extras { gap: 10px; padding: 14px; }
+/* Criar quiz: abas Arquivo / Tema, só a parte escolhida aparece. */
+.criar-titulo { font-size: 16px; }
+.criar-abas { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
+.criar-abas button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 3px 0 transparent; cursor: pointer; }
+.criar-abas button svg { width: 18px; height: 18px; }
+.criar-abas button[aria-selected="true"] { color: var(--fg); border-color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+[data-painel-criar][hidden] { display: none; }
+.criar-arquivo { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 14px; text-align: center; border: 1.5px dashed var(--line); border-radius: 8px; }
+.criar-arquivo b { font-size: 14px; line-height: 1.35; }
+.criar-arquivo .muted { font-size: 12px; }
+.criar-arquivo .btn { margin-top: 8px; }
+.niveis { display: flex; gap: 6px; }
+.niveis button { display: flex; align-items: center; gap: 6px; padding: 6px 10px; color: var(--fg); font: inherit; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 2px 0 transparent; cursor: pointer; }
+.niveis button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+.niveis .barras { display: flex; align-items: flex-end; gap: 2px; height: 11px; }
+.niveis .barras i { width: 3px; border-radius: 1px; background: var(--line); }
+.niveis .barras i:nth-child(1) { height: 5px; }
+.niveis .barras i:nth-child(2) { height: 8px; }
+.niveis .barras i:nth-child(3) { height: 11px; }
+.niveis .barras i.on { background: var(--muted); }
+.niveis button[aria-pressed="true"] .barras i.on { background: var(--accent); }
 .divisor { border-top: 1px solid var(--line); }
 .tag-cat { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); font-weight: 700; }
 
@@ -1042,15 +1063,28 @@ function renderQuizInicio() {
       <button class="btn bloco ${classeModo(mult)}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
     </div>
     <div class="caixa extras">
-      <strong>Criar quiz</strong>
-      <div class="chave"><div><b style="font-size:14px">Com um arquivo</b><div class="muted" style="font-size:12px">PDF, texto ou fotos (até 5 MB cada)</div></div><label class="btn sec mini" for="fArq">Anexar</label></div>
+      <strong class="criar-titulo">Criar quiz</strong>
+      <div class="criar-abas" role="tablist">
+        <button type="button" role="tab" data-aba-criar="arquivo" aria-selected="${abaCriar === "arquivo"}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg>Arquivo</button>
+        <button type="button" role="tab" data-aba-criar="tema" aria-selected="${abaCriar === "tema"}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>Tema</button>
+      </div>
+      <div class="criar-arquivo" data-painel-criar="arquivo" ${abaCriar === "arquivo" ? "" : "hidden"}>
+        <b>Anexe um PDF, texto ou fotos e o Jingar cria as perguntas com base no seu arquivo</b>
+        <span class="muted">até 5 MB cada</span>
+        <label class="btn sec mini" for="fArq">Escolher arquivo</label>
+      </div>
       <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
-      <div class="pilha" style="gap:10px" id="blocoCat">${htmlBlocoCat()}</div>
+      <div class="pilha" style="gap:10px" id="blocoCat" data-painel-criar="tema" ${abaCriar === "tema" ? "" : "hidden"}>${htmlBlocoCat()}</div>
     </div>
     <div id="minhasCat">${htmlMinhas()}</div>
   </div>`;
   const redesenhar = () => { const topo = tela.scrollTop; renderQuizInicio(); tela.scrollTop = topo; tela.firstElementChild.classList.remove("entra"); };
   tela.querySelectorAll(".modos button").forEach(b => b.addEventListener("click", () => { S.modo = b.dataset.modo; salvar(); redesenhar(); }));
+  tela.querySelectorAll("[data-aba-criar]").forEach(b => b.addEventListener("click", () => {
+    abaCriar = b.dataset.abaCriar;
+    tela.querySelectorAll("[data-aba-criar]").forEach(x => x.setAttribute("aria-selected", x === b));
+    tela.querySelectorAll("[data-painel-criar]").forEach(p => { p.hidden = p.dataset.painelCriar !== abaCriar; });
+  }));
   tela.querySelectorAll(".cat").forEach(b => b.addEventListener("click", () => {
     const id = b.dataset.cat;
     if (id === ALEATORIO) { selecao = selecao.has(ALEATORIO) ? new Set() : new Set([ALEATORIO]); }
@@ -1698,6 +1732,8 @@ const limpaLista = (l, n, max) => (Array.isArray(l) ? l : []).filter(x => typeof
 // Os 12 temas têm perguntas prontas no servidor (api/_temas-prontos.js).
 const SUGESTOES_TEMA = ["Ex.: Friends, Maria da Penha", "Ex.: Harry Potter, Anatomia", "Ex.: Novelas, Direito Penal", "Ex.: Beatles, Contabilidade", "Ex.: Star Wars, Farmacologia", "Ex.: Futebol, Raciocínio lógico"];
 let sugTema = 0;
+// Aba aberta no "Criar quiz": "arquivo" ou "tema".
+let abaCriar = "tema";
 setInterval(() => {
   const i = document.getElementById("fTema");
   if (!i || i.value || document.activeElement === i) return;
@@ -1712,9 +1748,9 @@ function htmlBlocoCat() {
   else if (t && t.etapa === "recusada") status = `<div class="status-cat"><span><b>Tema recusado.</b> ${esc(t.texto)}</span>${t.sugestoes.length ? `<div class="linha" style="gap:6px">${t.sugestoes.map((x, k) => `<button class="btn sec mini" type="button" data-sug="${k}">${esc(x)}</button>`).join("")}</div>` : ""}<button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
   else if (t && t.etapa === "erro") status = `<div class="status-cat"><span class="erro" style="min-height:0">${esc(t.texto)}</span><button class="link" type="button" data-fechar style="align-self:flex-start;padding:4px 0">Fechar</button></div>`;
   else if (lotado) status = `<span class="muted" style="font-size:12px">${esc(textoLimite())}</span>`;
-  return `<div><b style="font-size:14px">Com um tema</b><div class="muted" style="font-size:12px">Digite um tema e o Jingar cria as perguntas.</div></div>
-    <div class="seg pequeno" id="difCat">${DIFICULDADES.map(d => `<button type="button" data-dif="${d.id}" aria-pressed="${d.id === difCat}">${d.nome}</button>`).join("")}</div>
-    <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="${SUGESTOES_TEMA[sugTema]}" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn sec mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
+  return `<div class="muted" style="font-size:13px">Digite um tema e o Jingar cria as perguntas.</div>
+    <div class="niveis" id="difCat">${DIFICULDADES.map((d, i) => `<button type="button" data-dif="${d.id}" aria-pressed="${d.id === difCat}"><span class="barras" aria-hidden="true">${[0, 1, 2].map(n => `<i${n <= i ? ' class="on"' : ""}></i>`).join("")}</span>${d.nome}</button>`).join("")}</div>
+    <div class="linha" style="flex-wrap:nowrap"><div class="campo" style="flex:1;min-width:0"><input id="fTema" maxlength="60" placeholder="${SUGESTOES_TEMA[sugTema]}" aria-label="Tema da categoria" ${ocupado ? "disabled" : ""}></div><button class="btn mini" type="button" id="criarCat" ${ocupado || lotado ? "disabled" : ""}>Criar</button></div>
     ${status}`;
 }
 function ligarBlocoCat() {
