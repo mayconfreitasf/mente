@@ -181,7 +181,7 @@ h2 { font-size: 21px; line-height: 1.2; }
 
 /* Perfis */
 .avatar { border-radius: 50%; display: grid; place-items: center; font-family: var(--f-display); color: #fff; overflow: hidden; flex: none; background-size: cover; background-position: center; }
-.cartao { border-radius: 24px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); position: relative; }
+.cartao { border-radius: 24px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); position: relative; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .cartao .foto { aspect-ratio: 4 / 4.3; max-width: 100%; display: grid; place-items: center; font-family: var(--f-display); font-size: 120px; color: #ffffffe6; background-size: cover; background-position: center; position: relative; }
 .fotos-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .foto-slot { position: relative; aspect-ratio: 1; border-radius: 14px; background: var(--surface-2) center / cover; border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; overflow: hidden; }
@@ -320,10 +320,13 @@ a.btn { text-decoration: none; }
 .criar-abas button[aria-selected="true"] { color: var(--fg); background: var(--surface); border-color: var(--line); border-bottom-color: var(--surface); box-shadow: inset 0 3px 0 var(--accent); }
 [data-painel-criar][hidden] { display: none; }
 .criar-arquivo { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 14px; text-align: center; border: 1.5px dashed var(--line); border-radius: 8px; }
-.criar-arquivo b { font-size: 14px; line-height: 1.35; }
+.criar-arquivo b { font-size: min(14px, 3.05vw); line-height: 1.35; white-space: nowrap; }
 .criar-arquivo span.muted { font-size: 13px; }
-.criar-arquivo small.muted { font-size: 11px; }
-.criar-arquivo .btn { margin-top: 8px; }
+.criar-arquivo small { font-size: 11px; }
+.criar-arquivo .arq-linha { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; }
+.criar-arquivo .nome-arq { flex: 1; min-width: 0; padding: 7px 12px; font-size: 14px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.criar-arquivo .arq-linha .btn { flex: none; }
+.criar-arquivo .status-cat { width: 100%; align-items: center; }
 .niveis { display: flex; gap: 6px; }
 .niveis button { display: flex; align-items: center; gap: 6px; padding: 6px 10px; color: var(--fg); font: inherit; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 2px 0 transparent; cursor: pointer; }
 .niveis button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
@@ -1063,12 +1066,7 @@ function renderQuizInicio() {
         <button type="button" role="tab" data-aba-criar="arquivo" aria-selected="${abaCriar === "arquivo"}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg>Arquivo</button>
         <button type="button" role="tab" data-aba-criar="tema" aria-selected="${abaCriar === "tema"}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>Tema</button>
       </div>
-      <div class="criar-arquivo" data-painel-criar="arquivo" ${abaCriar === "arquivo" ? "" : "hidden"}>
-        <b>O Jingar cria as perguntas com base no seu arquivo</b>
-        <span class="muted">Anexe um PDF, texto ou fotos</span>
-        <small class="muted">até 5 MB cada</small>
-        <label class="btn sec mini" for="fArq">Escolher arquivo</label>
-      </div>
+      <div class="criar-arquivo" id="painelArq" data-painel-criar="arquivo" ${abaCriar === "arquivo" ? "" : "hidden"}>${htmlArquivo()}</div>
       <input id="fArq" type="file" hidden ${aceitaImagens ? "multiple" : ""} accept=".pdf,.txt,.md,.csv,application/pdf,text/*${aceitaImagens || !sampleFn ? ",image/*" : ""}">
       <div class="pilha" style="gap:10px" id="blocoCat" data-painel-criar="tema" ${abaCriar === "tema" ? "" : "hidden"}>${htmlBlocoCat()}</div>
     </div>
@@ -1099,13 +1097,13 @@ function renderQuizInicio() {
     }));
   });
   const vt = $("#verTodos"); if (vt) vt.addEventListener("click", () => { verTodos = !verTodos; redesenhar(); });
-  ligarBlocoCat(); ligarMinhas();
+  ligarBlocoCat(); ligarMinhas(); ligarArquivo();
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
     const l = [...fa.files]; fa.value = ""; if (!l.length) return;
     if (!semServidor && !conta) { toast("Entre na sua conta para o Jingar criar perguntas do seu arquivo"); return; }
+    if (tarefaArq && tarefaArq.etapa !== "erro") { toast("Já tem um arquivo sendo lido"); return; }
     const grande = l.find(f => f.size > (f.type.startsWith("image/") ? MAX_IMAGEM : MAX_DOC));
     if (grande) { toast(grande.type.startsWith("image/") ? "Cada foto pode ter até 5 MB" : "O arquivo pode ter até 5 MB"); return; }
-    if (!(await consentirIA())) return;
     if (!sampleFn && !modoServidor) await prepararClaude();
     if (!sampleFn && !modoServidor) {
       const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Criação de perguntas indisponível</h2>
@@ -1114,7 +1112,7 @@ function renderQuizInicio() {
       v.querySelector("#okC").addEventListener("click", () => v.remove());
       return;
     }
-    quizDoArquivo(l);
+    quizDoArquivo(l, nomeArq);
   });
 }
 function iniciarRodada(ids, mult) {
@@ -1597,44 +1595,64 @@ function mensagemErroClaude(e) {
   if (c === "invalid_json" || c === "empty_completion") return "Não consegui montar perguntas com esse arquivo. Tente de novo ou use outro.";
   return (e && e.message && !c) ? e.message : "Falha ao criar as perguntas. Tente de novo.";
 }
-async function quizDoArquivo(lista) {
-  const mult = multAtual();
-  const ctl = new AbortController();
-  const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2 id="arqTitulo">Lendo o arquivo…</h2>
-    <p class="muted" style="margin:0" id="arqMsg">Isso leva alguns segundos.</p>
-    <div class="trilho"><i class="carregando"></i></div>
-    <button class="link" type="button" id="arqCancelar">Cancelar</button>`);
-  let cancelado = false;
-  v.querySelector("#arqCancelar").addEventListener("click", () => { cancelado = true; ctl.abort(); v.remove(); });
+// Quiz do arquivo: roda em segundo plano, com o andamento só na aba Arquivo, e vira um tema em "Minhas categorias"
+// com o nome que a pessoa deu. Ao terminar, uma janela pergunta se ela quer responder agora.
+let nomeArq = "", tarefaArq = null;
+function htmlArquivo() {
+  const t = tarefaArq;
+  if (t && t.etapa !== "erro") return `<div class="status-cat"><div class="trilho"><i class="carregando"></i></div>
+    <span class="muted">${t.etapa === "lendo" ? `Lendo ${esc(t.arquivo)}…` : `Criando as perguntas de ${esc(t.nome)}… pode levar até um minuto.`}</span>
+    <button class="link" type="button" id="arqCancelar" style="padding:4px 0">Cancelar</button></div>`;
+  return `<b>O Jingar cria as perguntas com base no seu arquivo</b>
+    <span class="muted">Anexe um PDF, texto ou fotos <small>(até 5 MB cada)</small></span>
+    <div class="arq-linha"><input id="fArqNome" class="nome-arq" maxlength="40" placeholder="Nome do tema" aria-label="Nome do tema" value="${esc(nomeArq)}">
+    <button class="btn sec mini" type="button" id="escolherArq">Escolher arquivo</button></div>
+    ${t ? `<span class="erro" style="min-height:0;margin-top:6px">${esc(t.texto)}</span>` : ""}`;
+}
+function ligarArquivo() {
+  const el = document.getElementById("painelArq"); if (!el) return;
+  const nm = el.querySelector("#fArqNome"), bt = el.querySelector("#escolherArq"), cc = el.querySelector("#arqCancelar");
+  if (nm) nm.addEventListener("input", () => { nomeArq = nm.value; });
+  if (bt) bt.addEventListener("click", () => {
+    nomeArq = nm.value.trim();
+    if (nomeArq.length < 2) { toast("Dê um nome ao tema antes de anexar"); nm.focus(); return; }
+    $("#fArq").click();
+  });
+  if (cc) cc.addEventListener("click", () => { tarefaArq.ctl.abort(); tarefaArq = null; pintarArquivo(); });
+}
+function pintarArquivo() { const el = document.getElementById("painelArq"); if (el) { el.innerHTML = htmlArquivo(); ligarArquivo(); } }
+async function quizDoArquivo(lista, nome) {
+  const mult = multAtual(), ctl = new AbortController();
+  const t = tarefaArq = { etapa: "lendo", arquivo: lista.length > 1 ? lista.length + " arquivos" : lista[0].name, nome, ctl };
+  pintarArquivo();
+  const ativo = () => tarefaArq === t;
   const erro = msg => {
-    if (cancelado) return;
-    v.querySelector(".folha").innerHTML = `<span class="rotulo">Quiz do seu arquivo</span><h2>Não deu certo</h2><p style="margin:0">${esc(msg)}</p><button class="btn bloco" type="button" id="arqOk">Entendi</button>`;
-    v.querySelector("#arqOk").addEventListener("click", () => v.remove());
+    if (!ativo()) return;
+    tarefaArq = { etapa: "erro", texto: msg }; pintarArquivo();
+    if (!naTelaQuiz()) toast("As perguntas do arquivo não foram criadas");
   };
   let fonte;
   try { fonte = await lerArquivos(lista); } catch (e) { return erro(e.message); }
-  if (cancelado) return;
-  v.querySelector("#arqTitulo").textContent = "Criando perguntas…";
-  v.querySelector("#arqMsg").textContent = `O Jingar está lendo ${fonte.nome} e montando ${modoDe(mult).texto}. Pode levar até um minuto.${sampleFn ? " Na primeira vez o Claude pede sua permissão." : ""}`;
+  if (!ativo()) return;
+  t.etapa = "criando"; pintarArquivo();
   let lote;
   try { lote = await gerarPerguntas(fonte, mult, [], ctl.signal); } catch (e) {
-    if (e && e.code === "cancelled") return;
-    if (e && e.code === "codigo" && !cancelado) {
-      const fl = v.querySelector(".folha");
-      fl.innerHTML = `<span class="rotulo">Quiz do seu arquivo</span><h2>Código de acesso</h2>
-        <p class="muted" style="margin:0">${lerCodigo() ? "Esse código não confere." : "Este recurso usa a conta do dono do app. Peça o código para ele."}</p>
-        <div class="campo"><label for="cAcesso">Código</label><input id="cAcesso" autocomplete="off"></div>
-        <button class="btn bloco" type="button" id="cOk">Continuar</button><button class="link" type="button" id="cNao">Cancelar</button>`;
-      fl.querySelector("#cNao").addEventListener("click", () => v.remove());
-      fl.querySelector("#cOk").addEventListener("click", () => { const c = fl.querySelector("#cAcesso").value.trim(); if (!c) return; salvarCodigo(c); v.remove(); quizDoArquivo(lista); });
-      return;
-    }
+    if (!ativo() || (e && e.code === "cancelled")) return;
+    if (e && e.code === "codigo") { tarefaArq = null; pintarArquivo(); return pedirCodigo(() => quizDoArquivo(lista, nome)); }
     return erro(mensagemErroClaude(e));
   }
-  if (cancelado) return;
+  if (!ativo()) return;
   if (lote.perguntas.length < 3) return erro("O arquivo não rendeu perguntas suficientes. Tente um material com mais conteúdo.");
-  v.remove();
-  iniciarArquivo(fonte, mult, { id: "arquivo", nome: lote.titulo, arquivo: true, q: lote.perguntas, sig: lote.assinaturas });
+  tarefaArq = null; nomeArq = "";
+  // O peso é o multiplicador do modo, o mesmo que as assinaturas das perguntas usam para somar nível.
+  const cat = { id: "m" + Date.now(), nome, doArquivo: true, peso: mult, sig: lote.assinaturas, q: lote.perguntas, criada: Date.now() };
+  S.minhas = [cat, ...(S.minhas || [])]; salvar();
+  pintarArquivo(); pintarMinhas();
+  const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Perguntas criadas</h2>
+    <p class="muted" style="margin:0">O Jingar criou ${cat.q.length} perguntas de ${esc(nome)}. O tema fica salvo em Minhas categorias.</p>
+    <button class="btn bloco" type="button" id="arqJogar">Responder agora</button><button class="link" type="button" id="arqDepois">Depois</button>`);
+  v.querySelector("#arqDepois").addEventListener("click", () => v.remove());
+  v.querySelector("#arqJogar").addEventListener("click", () => { v.remove(); pararTimer(); irPara("quiz"); iniciarMinha(cat); });
 }
 // ---------- Categoria criada por tema ----------
 // O Claude avalia o tema, define o peso (0,1 a 3) e cria as perguntas. Sem 50 perguntas válidas, a categoria não é criada.
@@ -1779,9 +1797,10 @@ function htmlMinhas() {
   if (!(S.minhas || []).length) return "";
   return `<div class="pilha" style="gap:6px"><h2>Minhas categorias</h2><div class="lista">${S.minhas.map(c => {
     const at = atualizando[c.id];
-    const info = at ? `Renovando… ${at.feitas} de ${at.total} partes` : `${c.q.length} perguntas · peso ${fmtNivel(c.peso)}${c.dificuldade ? " · " + difDe(c.dificuldade).nome : ""}`;
+    const info = at ? `Renovando… ${at.feitas} de ${at.total} partes` : c.doArquivo ? `${c.q.length} perguntas · do seu arquivo` : `${c.q.length} perguntas · peso ${fmtNivel(c.peso)}${c.dificuldade ? " · " + difDe(c.dificuldade).nome : ""}`;
+    // Tema de arquivo não renova: o arquivo não fica guardado no app.
     return `<div class="minha"><div class="txt"><strong>${esc(c.nome)}</strong><span>${info}</span></div>
-      <div class="linha" style="gap:4px;flex-wrap:nowrap;flex:none"><button class="btn sec mini" type="button" data-jogar="${c.id}">Jogar</button><button class="btn sec mini" type="button" data-atualizar="${c.id}" ${at ? "disabled" : ""} aria-label="Renovar as perguntas de ${esc(c.nome)}">Renovar</button><button class="btn sec mini perigo" type="button" data-apagar="${c.id}" ${at ? "disabled" : ""} aria-label="Apagar ${esc(c.nome)}">Apagar</button></div></div>`;
+      <div class="linha" style="gap:4px;flex-wrap:nowrap;flex:none"><button class="btn sec mini" type="button" data-jogar="${c.id}">Jogar</button>${c.doArquivo ? "" : `<button class="btn sec mini" type="button" data-atualizar="${c.id}" ${at ? "disabled" : ""} aria-label="Renovar as perguntas de ${esc(c.nome)}">Renovar</button>`}<button class="btn sec mini perigo" type="button" data-apagar="${c.id}" ${at ? "disabled" : ""} aria-label="Apagar ${esc(c.nome)}">Apagar</button></div></div>`;
   }).join("")}</div></div>`;
 }
 function ligarMinhas() {
@@ -2050,7 +2069,10 @@ function renderDescobrir() {
     <div class="linha" style="justify-content:center;gap:20px;margin-top:10px">${botaoDesfazer()}<button class="link" type="button" id="bloquearP" style="font-size:13px">Bloquear</button><button class="link" type="button" id="denunciar" style="font-size:13px">Denunciar perfil</button></div>
   </div>`;
   $("#filtros").addEventListener("click", abrirFiltros);
+  const cartao = tela.querySelector(".cartao");
+  ligarDeslize(cartao, livre ? $("#passar") : $("#pular"), livre ? $("#curtir") : null);
   if (fotos.length > 1) $("#fotoCartao").addEventListener("click", e => {
+    if (cartao.dataset.arrastou) { delete cartao.dataset.arrastou; return; }
     const r = e.currentTarget.getBoundingClientRect();
     fotoIdx = (fotoIdx + (e.clientX - r.left > r.width / 2 ? 1 : fotos.length - 1)) % fotos.length;
     e.currentTarget.style.backgroundImage = `url(${comApi(fotos[fotoIdx])})`;
@@ -2070,6 +2092,34 @@ function renderDescobrir() {
     $("#pular").addEventListener("click", () => { pulados.add(p.id); render(); });
     const bp = $("#passe"); if (bp) bp.addEventListener("click", () => abrirPasse(p));
   }
+}
+// Deslizar o cartão: para a esquerda aciona "esq" (passar ou ver próximo), para a direita "dir" (curtir).
+// Um arrasto curto volta o cartão para o lugar; o toque sem arrasto continua trocando a foto.
+function ligarDeslize(el, esq, dir) {
+  let x0 = null, dx = 0;
+  el.addEventListener("pointerdown", e => {
+    if (e.target.closest("button")) return;
+    x0 = e.clientX; dx = 0; delete el.dataset.arrastou; el.style.transition = "none";
+    try { el.setPointerCapture(e.pointerId); } catch {}
+  });
+  el.addEventListener("pointermove", e => {
+    if (x0 == null) return;
+    dx = e.clientX - x0;
+    if (Math.abs(dx) < 8) return;
+    const d = (dx > 0 && !dir) || (dx < 0 && !esq) ? dx / 4 : dx;
+    el.style.transform = `translateX(${d}px) rotate(${d / 20}deg)`;
+  });
+  const soltar = () => {
+    if (x0 == null) return;
+    x0 = null; el.style.transition = "transform .2s ease-out";
+    const b = dx < -el.offsetWidth * 0.28 ? esq : dx > el.offsetWidth * 0.28 ? dir : null;
+    if (Math.abs(dx) >= 8) el.dataset.arrastou = "1";
+    if (!b) { el.style.transform = ""; return; }
+    el.style.transform = `translateX(${Math.sign(dx) * window.innerWidth}px) rotate(${dx / 10}deg)`;
+    setTimeout(() => b.click(), 180);
+  };
+  el.addEventListener("pointerup", soltar);
+  el.addEventListener("pointercancel", soltar);
 }
 // Desfazer o último "Passar": a pessoa volta para a frente da fila.
 let ultimoPassado = null;
@@ -2267,9 +2317,10 @@ function htmlProvaPedida() {
   const m = matchAtual(), pr = m && m.provaPedida;
   // Ainda sem prova pedida: atalho visível no topo da conversa (também fica no menu ⋯).
   if (!pr) return m && !(msgsReal[m.id] || []).some(x => x.meu) ? `<div class="caixa" style="padding:10px 12px;margin-bottom:8px;flex-direction:row;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:13px">Quer uma prova antes de conversar?</span><button class="btn sec mini" type="button" id="pedirProvaTopo" style="flex:none">Pedir prova</button></div>` : "";
-  const txt = pr.status === "aprovada" ? `Passou na sua prova: <b>${pr.ultima} de ${pr.qtd}</b> em ${esc(pr.nomeAssunto)}.`
-    : `Você pediu uma prova: ${pr.qtd} perguntas de ${esc(pr.nomeAssunto)}, mínimo ${pr.minimo}.${pr.tentativas ? ` Tentativas: ${pr.tentativas} · melhor ${pr.melhor} de ${pr.qtd}.` : " Ainda não tentou."}`;
-  return `<div class="caixa" style="padding:10px 12px;font-size:13px;margin-bottom:8px">${txt}</div>`;
+  // O texto vai num só elemento: soltos na .caixa (flex em coluna), os pedaços viravam três linhas.
+  if (pr.status === "aprovada") return `<div class="caixa" style="padding:8px 12px;font-size:13px;margin-bottom:8px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Passou na sua prova: <b>${pr.ultima} de ${pr.qtd}</b> em ${esc(pr.nomeAssunto)}.</span></div>`;
+  const txt = `Você pediu uma prova: ${pr.qtd} perguntas de ${esc(pr.nomeAssunto)}, mínimo ${pr.minimo}.${pr.tentativas ? ` Tentativas: ${pr.tentativas} · melhor ${pr.melhor} de ${pr.qtd}.` : " Ainda não tentou."}`;
+  return `<div class="caixa" style="padding:10px 12px;font-size:13px;margin-bottom:8px"><span>${txt}</span></div>`;
 }
 function htmlProvaParaMim(p) {
   const pr = matchAtual().provaParaMim;
