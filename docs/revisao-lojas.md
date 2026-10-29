@@ -26,7 +26,7 @@ Jingar is a quiz-based dating app for adults (18+). Answering quiz questions rai
 Demo account: sign in with the user name and password above (no verification code needed).
 1. Quiz tab: pick any subject and answer a few questions to see the level go up.
 2. Discover tab: allow location when asked. Location is required for Discover and matches; it is rounded to about 1 km and never shown to other users (they only see an approximate distance).
-3. Like "Ana": she has already liked this account, so a match happens immediately. Open Matches to chat (text and voice messages).
+3. Like "Ana": she has already liked this account, so a match happens immediately. Open Matches to chat.
 4. "Bia" is above this account's level, so her profile appears locked.
 5. Report and Block are on each profile and in the chat menu (⋯). Account deletion: Profile > Excluir conta.
 

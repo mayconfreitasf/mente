@@ -53,7 +53,7 @@ Sem essas variáveis o app funciona normalmente, só não envia avisos de match 
 3. Prints: iPhone de 6,7" e 6,5" (o app é só para iPhone, sem iPad).
 4. Teste pelo TestFlight e envie para revisão.
 
-**Google Play Console**
+**Google Play Console** (roteiro completo em [google-play.md](google-play.md))
 1. Crie o app "Jingar", envie o `.aab` em Teste interno e depois em Produção.
 2. Preencha a classificação de conteúdo (app de relacionamento, 18+), a seção Segurança dos dados (mesmos dados do formulário da Apple) e a URL da Política de Privacidade.
 
