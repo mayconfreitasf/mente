@@ -2545,6 +2545,8 @@ async function iniciarConta() {
   await carregarTokenApp();
   try {
     cfgConta = await chamarConta({ acao: "config" });
+    // No app nativo, os logins do Google e da Apple pela web não abrem dentro do WebView: ficam só e-mail e celular.
+    if (nativo) cfgConta.google = cfgConta.apple = null;
     if (!cfgConta.banco) semServidor = true;
     else {
       try { aplicarConta(await chamarConta({ acao: "eu" })); }
