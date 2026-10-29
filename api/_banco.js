@@ -13,8 +13,22 @@ const segredos = {};
 export const segredo = nome => process.env[nome === "midia" ? "MIDIA_SEGREDO" : "PONTOS_SEGREDO"] || segredos[nome] || derivado(nome);
 
 let pronto = null;
+// Na primeira chamada de cada instância, uma consulta só: se o esquema gravado no banco é o deste código, pula a criação
+// das tabelas (são umas 40 idas ao banco, que deixavam lentos o login e as fotos). Mudou o código das tabelas, roda de novo.
 export function prepararBanco() {
   if (!pronto) pronto = (async () => {
+    let linhas = [];
+    try { linhas = await sql`SELECT nome, valor FROM segredos`; } catch {}
+    if (!linhas.some(r => r.nome === "esquema" && r.valor === VERSAO_ESQUEMA)) {
+      await criarTabelas();
+      await sql`INSERT INTO segredos (nome, valor) VALUES ('esquema', ${VERSAO_ESQUEMA}) ON CONFLICT (nome) DO UPDATE SET valor = EXCLUDED.valor`;
+      linhas = await sql`SELECT nome, valor FROM segredos`;
+    }
+    for (const r of linhas) segredos[r.nome] = r.valor;
+  })().catch(e => { pronto = null; throw e; });
+  return pronto;
+}
+async function criarTabelas() {
     await sql`CREATE TABLE IF NOT EXISTS usuarios (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       usuario text UNIQUE, email text UNIQUE, senha_hash text,
@@ -124,7 +138,5 @@ export function prepararBanco() {
       acertos int NOT NULL, total int NOT NULL, criado_em timestamptz NOT NULL DEFAULT now(), UNIQUE (codigo, jogador))`;
     await sql`CREATE TABLE IF NOT EXISTS segredos (nome text PRIMARY KEY, valor text NOT NULL)`;
     for (const nome of ["midia", "pontos"]) await sql`INSERT INTO segredos (nome, valor) VALUES (${nome}, ${derivado(nome)}) ON CONFLICT (nome) DO NOTHING`;
-    for (const r of await sql`SELECT nome, valor FROM segredos`) segredos[r.nome] = r.valor;
-  })().catch(e => { pronto = null; throw e; });
-  return pronto;
 }
+const VERSAO_ESQUEMA = crypto.createHash("sha256").update(criarTabelas.toString()).digest("hex").slice(0, 16);

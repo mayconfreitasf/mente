@@ -274,23 +274,20 @@ a.btn { text-decoration: none; }
 @keyframes carrega { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .trilho i.carregando { animation: none; width: 100%; opacity: .5; } }
 .tag-dobro { color: var(--bg); background: var(--gold); border-radius: 6px; padding: 1px 6px; margin-left: 4px; letter-spacing: 0; }
-/* Modos: teclas separadas; as barras mostram quanto o modo pesa. */
-.modos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; container-type: inline-size; }
-.modos button { --cor: var(--accent); display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px; text-align: left; color: var(--fg); font: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: inset 0 3px 0 transparent; cursor: pointer; }
-.modos button:hover { border-color: color-mix(in srgb, var(--fg) 25%, var(--line)); }
+/* Modos: escolhidos na folha que abre ao tocar em Começar; uma linha por modo, as barras com a cor do nível. */
+.modos { display: flex; flex-direction: column; gap: 8px; }
+.modos button { --cor: var(--accent); display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 14px; text-align: left; color: var(--fg); font: inherit; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
 .modos button[data-modo="dobro"] { --cor: var(--prata-cor); }
 .modos button[data-modo="triplo"] { --cor: var(--triplo); }
-.modos button[aria-pressed="true"] { border-color: var(--cor); box-shadow: inset 0 3px 0 var(--cor); }
-.modos .titulo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.modos button[aria-pressed="true"] { border: 2px solid var(--cor); padding: 13px; }
+.modos .titulo { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .modos .barras { display: flex; align-items: flex-end; gap: 2px; height: 14px; flex: none; }
 .modos .barras i { width: 4px; border-radius: 1px; background: var(--line); }
 .modos .barras i:nth-child(1) { height: 6px; }
 .modos .barras i:nth-child(2) { height: 10px; }
 .modos .barras i:nth-child(3) { height: 14px; }
-.modos .barras i.on { background: var(--muted); }
-.modos button[aria-pressed="true"] .barras i.on { background: var(--cor); }
-.modos b { font-size: 14px; line-height: 1.2; overflow-wrap: break-word; }
-@container (max-width: 420px) { .modos button { padding: 10px; } .modos .titulo { flex-direction: column; align-items: flex-start; gap: 6px; } }
+.modos .barras i.on { background: var(--cor); }
+.modos b { font-size: 15px; line-height: 1.2; white-space: nowrap; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--fg); }
 .msgs .dia { align-self: center; font-size: 12px; color: var(--muted); padding: 4px 10px; border-radius: 999px; background: var(--surface-2); margin: 6px 0; }
@@ -298,7 +295,7 @@ a.btn { text-decoration: none; }
 .msgs .visto { align-self: flex-end; font-size: 11px; color: var(--muted); margin-top: -2px; }
 .msg .desafio-link { display: block; margin-top: 8px; width: 100%; }
 .chat-topo .quem { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
-.modos small { font-weight: 500; font-size: 12px; font-family: var(--f-mono); color: var(--muted); line-height: 1.35; }
+.modos small { font-weight: 500; font-size: 12px; font-family: var(--f-mono); color: var(--muted); line-height: 1.35; text-align: right; }
 .tag-dobro.t2 { background: var(--prata); color: var(--prata-fg); }
 .tag-dobro.t3 { background: var(--triplo); color: var(--triplo-fg); }
 .seg.pequeno { display: flex; gap: 6px; }
@@ -1057,12 +1054,6 @@ function renderQuizInicio() {
       </div>
       ${CATS.length > 6 ? `<button class="link" type="button" id="verTodos" style="align-self:center">${verTodos ? "Mostrar menos" : `Ver todos os ${CATS.length}`}</button>` : ""}
     </div>
-    <div class="pilha" style="gap:10px">
-      <h2>Modo</h2>
-      <div class="modos" role="group" aria-label="Modo">
-        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><span class="titulo"><span class="barras" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= m.mult ? ' class="on"' : ""}></i>`).join("")}</span><b>${m.nome}</b></span><small>${m.desc}</small></button>`).join("")}
-      </div>
-    </div>
     <div class="iniciar">
       <button class="btn bloco ${classeModo(mult)}" type="button" id="comecar" ${qtd ? "" : "disabled"}>${qtd ? `Começar${mult > 1 ? " " + modoDe(mult).nome : ""} · ${alvo}` : "Selecione pelo menos um assunto"}</button>
     </div>
@@ -1084,7 +1075,6 @@ function renderQuizInicio() {
     <div id="minhasCat">${htmlMinhas()}</div>
   </div>`;
   const redesenhar = () => { const topo = tela.scrollTop; renderQuizInicio(); tela.scrollTop = topo; tela.firstElementChild.classList.remove("entra"); };
-  tela.querySelectorAll(".modos button").forEach(b => b.addEventListener("click", () => { S.modo = b.dataset.modo; salvar(); redesenhar(); }));
   tela.querySelectorAll("[data-aba-criar]").forEach(b => b.addEventListener("click", () => {
     abaCriar = b.dataset.abaCriar;
     tela.querySelectorAll("[data-aba-criar]").forEach(x => x.setAttribute("aria-selected", x === b));
@@ -1096,7 +1086,18 @@ function renderQuizInicio() {
     else { selecao.delete(ALEATORIO); selecao.has(id) ? selecao.delete(id) : selecao.add(id); }
     redesenhar();
   }));
-  $("#comecar").addEventListener("click", () => { S.selecao = [...selecao]; salvar(); iniciarRodada(S.selecao, mult); });
+  // Começar abre a escolha do modo (com o último usado marcado); tocar num modo já inicia a rodada.
+  $("#comecar").addEventListener("click", () => {
+    S.selecao = [...selecao]; salvar();
+    const v = folha(`<h2>Como quer jogar?</h2>
+      <div class="modos" role="group" aria-label="Modo">
+        ${MODOS.map(m => `<button type="button" data-modo="${m.id}" aria-pressed="${m.mult === mult}"><span class="titulo"><span class="barras" aria-hidden="true">${[1, 2, 3].map(n => `<i${n <= m.mult ? ' class="on"' : ""}></i>`).join("")}</span><b>${m.nome}</b></span><small>${m.desc}</small></button>`).join("")}
+      </div>`);
+    v.querySelectorAll(".modos button").forEach(b => b.addEventListener("click", () => {
+      S.modo = b.dataset.modo; salvar(); v.remove();
+      iniciarRodada(S.selecao, multAtual());
+    }));
+  });
   const vt = $("#verTodos"); if (vt) vt.addEventListener("click", () => { verTodos = !verTodos; redesenhar(); });
   ligarBlocoCat(); ligarMinhas();
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
@@ -1987,6 +1988,10 @@ function fila() {
   }
   return out;
 }
+const preCarregadas = new Set();
+function preCarregar(urls) {
+  for (const u of urls) { const s = comApi(u); if (!s || preCarregadas.has(s)) continue; preCarregadas.add(s); const i = new Image(); i.decoding = "async"; i.src = s; }
+}
 function renderDescobrir() {
   // Pessoas reais: busca a fila no servidor na primeira vez e de novo quando ela acaba (no máximo a cada 30 segundos).
   if (modoReal() && (filaReal == null || (!fila().length && Date.now() - filaEm > 30000))) {
@@ -2016,6 +2021,8 @@ function renderDescobrir() {
   if (cartaoDe !== p.id) { cartaoDe = p.id; fotoIdx = 0; }
   fotoIdx = Math.min(fotoIdx, Math.max(0, fotos.length - 1));
   const foto = fotos.length ? `background:${fundo(p)};background-image:url(${comApi(fotos[fotoIdx])});background-size:cover;background-position:center` : `background:${fundo(p)}`;
+  // Baixa já as outras fotos desta pessoa e as das 2 próximas: ao passar ou trocar de foto, elas aparecem na hora.
+  preCarregar(fila().slice(0, 3).flatMap(x => (x.real ? x.livre : desbloqueado(x)) ? fotosDe(x) : []));
   tela.innerHTML = `
   <div class="entra">
     <div class="linha" style="justify-content:space-between;flex-wrap:nowrap;margin-bottom:12px"><span class="muted" style="font-size:13px;min-width:0">${resumoFiltros()}</span><button class="btn sec" type="button" id="filtros" style="padding:8px 14px;flex:none">Filtros</button></div>
@@ -2546,13 +2553,16 @@ async function chamarConta(corpo) {
 async function iniciarConta() {
   await carregarTokenApp();
   try {
+    // As duas chamadas saem juntas: a tela de login (ou o app) abre depois de uma ida ao servidor, não duas.
+    const pedidoEu = chamarConta({ acao: "eu" }).then(j => ({ j }), e => ({ e }));
     cfgConta = await chamarConta({ acao: "config" });
     // No app nativo, os logins do Google e da Apple pela web não abrem dentro do WebView: ficam só e-mail e celular.
     if (nativo) cfgConta.google = cfgConta.apple = null;
     if (!cfgConta.banco) semServidor = true;
     else {
-      try { aplicarConta(await chamarConta({ acao: "eu" })); }
-      catch (e) { if (e.status !== 401 && e.status !== 403) throw e; if (e.status === 403) toast(e.erro); }
+      const eu = await pedidoEu;
+      if (eu.j) aplicarConta(eu.j);
+      else { const e = eu.e; if (e.status !== 401 && e.status !== 403) throw e; if (e.status === 403) toast(e.erro); }
     }
   } catch (e) {
     // No app, falta de internet mostra a tela "Sem conexão": o modo de demonstração (perfis fictícios) é só do site.

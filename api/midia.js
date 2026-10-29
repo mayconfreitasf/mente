@@ -26,7 +26,9 @@ export default async function handler(req, res) {
       corpo = Buffer.from(await new Response(r.stream).arrayBuffer());
     } else corpo = Buffer.from(m.dados, "base64");
     res.setHeader("Content-Type", m.mime);
-    res.setHeader("Cache-Control", "private, max-age=86400");
+    // Cada id é um arquivo que nunca muda: o aparelho guarda por 1 ano e não pede de novo. Fica "private" (sem cache
+    // na CDN) para uma foto apagada pela moderação deixar de ser entregue na hora.
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
     res.setHeader("X-Content-Type-Options", "nosniff");
     return res.status(200).send(corpo);
   } catch (e) {
