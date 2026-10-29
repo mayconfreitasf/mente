@@ -109,7 +109,7 @@ ol.perguntas .certa { color: var(--ok); font-weight: 700; }
 </main>
 <script>
 (() => {
-  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const $ = s => document.querySelector(s);
   const data = d => d ? new Date(d).toLocaleString("pt-BR") : "—";
   const SEXO = { F: "Mulher", M: "Homem", O: "Outro" }, INTERESSE = { F: "Mulheres", M: "Homens", T: "Ambos", N: "Ninguém" };

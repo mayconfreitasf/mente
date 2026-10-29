@@ -583,7 +583,9 @@ function cabecalhos() {
   return h;
 }
 const tela = $("#tela");
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Sem "??" e com Promise.allSettled de reserva: celulares com WebView antiga (Chrome < 80) não abrem o script.
+if (!Promise.allSettled) Promise.allSettled = ps => Promise.all(Array.from(ps, p => Promise.resolve(p).then(value => ({ status: "fulfilled", value }), reason => ({ status: "rejected", reason }))));
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const arred = n => Math.round(n * 10) / 10;
 const fmtNivel = n => Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const brl = v => "R$ " + Number(v).toLocaleString("pt-BR");
@@ -1404,7 +1406,7 @@ function renderDesafioIntro() {
       <span class="rotulo">Desafio${d.peso != null ? " · peso " + fmtNivel(d.peso) : d.m > 1 ? " · " + modoDe(d.m).nome : ""}</span>
       <h1>${d.souCriador ? "Seu desafio" : esc(d.nome) + " te desafiou"}</h1>
       <div class="grande">${d.a}/${d.t}</div>
-      <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${fmtNivel(d.peso ?? d.m)} ${(d.peso ?? d.m) === 1 ? "nível" : "níveis"}.</p>
+      <p style="margin:0">${d.fila.length} ${d.fila.length === 1 ? "pergunta" : "perguntas"} de ${esc(assunto)}, as mesmas que ${esc(d.nome)} respondeu. Cada acerto vale +${fmtNivel(d.peso != null ? d.peso : d.m)} ${(d.peso != null ? d.peso : d.m) === 1 ? "nível" : "níveis"}.</p>
     </div>
     ${htmlRanking(d)}
     ${d.jaRespondeu ? `<p class="aviso" style="margin:0">Você já respondeu este desafio. Pode responder de novo: cada tentativa entra no ranking.</p>` : ""}
@@ -1425,7 +1427,7 @@ function renderDesafioIntro() {
 function iniciarDesafio(d) {
   desafioAberto = null; limparLinkDesafio();
   aba = "quiz";
-  rodada = { nome: "Desafio de " + d.nome + (d.peso != null ? " · peso " + fmtNivel(d.peso) : sufixo(d.m)), ids: [], mult: d.m, peso: d.peso ?? undefined, desafio: d, fila: d.fila, pos: 0, cats: [], hist: [],
+  rodada = { nome: "Desafio de " + d.nome + (d.peso != null ? " · peso " + fmtNivel(d.peso) : sufixo(d.m)), ids: [], mult: d.m, peso: d.peso != null ? d.peso : undefined, desafio: d, fila: d.fila, pos: 0, cats: [], hist: [],
     n: 0, acertos: 0, pontos: 0, atual: null, ultimaCat: null, travado: false, fim: false };
   tela.scrollTop = 0; render();
 }
@@ -2148,7 +2150,7 @@ let digitando = null;
 const previa = m => m.apagada ? "Mensagem apagada" : m.audio ? "Áudio" : m.t;
 // "ref" é o índice da mensagem no aparelho (demonstração) ou o id dela no servidor (pessoas reais).
 function htmlMsg(m, i) {
-  const lado = m.de === "eu" ? "eu" : "ela", ref = m.ref ?? i;
+  const lado = m.de === "eu" ? "eu" : "ela", ref = m.ref != null ? m.ref : i;
   if (m.apagada) return `<div class="msg ${lado} apagada">${lado === "eu" ? "Você apagou esta mensagem" : "Mensagem apagada"}</div>`;
   const audio = typeof m.audio === "string" && (m.audio.startsWith("data:audio/") || m.audio.startsWith("/api/midia?id="));
   // Link de desafio do Jingar na mensagem vira um botão para responder ali mesmo.
