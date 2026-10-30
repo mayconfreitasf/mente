@@ -611,10 +611,10 @@ function animarNivel(qtd = 1) {
   const m = document.createElement("span"); m.className = "mais1"; m.textContent = "+" + fmtNivel(qtd);
   chip.appendChild(m); setTimeout(() => m.remove(), 950);
 }
-function folha(html) {
-  const v = document.createElement("div"); v.className = "veu";
+function folha(html, fixa) {
+  const v = document.createElement("div"); v.className = fixa ? "veu fixa" : "veu";
   v.innerHTML = `<div class="folha entra" role="dialog" aria-modal="true">${html}</div>`;
-  v.addEventListener("click", e => { if (e.target === v) v.remove(); });
+  if (!fixa) v.addEventListener("click", e => { if (e.target === v) v.remove(); });
   document.body.appendChild(v); return v;
 }
 function interesseOk(p) { const i = S.perfil.interesse; return i === "T" || i === p.sexo; }
@@ -1100,7 +1100,7 @@ function renderQuizInicio() {
   ligarBlocoCat(); ligarMinhas(); ligarArquivo();
   const fa = $("#fArq"); if (fa) fa.addEventListener("change", async () => {
     const l = [...fa.files]; fa.value = ""; if (!l.length) return;
-    if (!semServidor && !conta) { toast("Entre na sua conta para o Jingar criar perguntas do seu arquivo"); return; }
+    if (!semServidor && !conta) return avisoArquivoSemConta();
     if (tarefaArq && tarefaArq.etapa !== "erro") { toast("Já tem um arquivo sendo lido"); return; }
     const grande = l.find(f => f.size > (f.type.startsWith("image/") ? MAX_IMAGEM : MAX_DOC));
     if (grande) { toast(grande.type.startsWith("image/") ? "Cada foto pode ter até 5 MB" : "O arquivo pode ter até 5 MB"); return; }
@@ -1609,6 +1609,14 @@ function htmlArquivo() {
     <button class="btn sec mini" type="button" id="escolherArq">Escolher arquivo</button></div>
     ${t ? `<span class="erro" style="min-height:0;margin-top:6px">${esc(t.texto)}</span>` : ""}`;
 }
+// Sem conta (modo teste), o quiz do arquivo não roda: avisa numa folha que só fecha no botão.
+function avisoArquivoSemConta() {
+  const v = folha(`<span class="rotulo">Quiz do seu arquivo</span><h2>Crie uma conta para usar arquivos</h2>
+    <p class="muted" style="margin:0">No modo teste você joga os quizzes prontos e por tema. Para o Jingar criar perguntas do seu arquivo, entre ou crie sua conta.</p>
+    <button class="btn bloco" type="button" id="arqCriar">Criar conta</button><button class="btn sec bloco" type="button" id="arqOk">Ok</button>`, true);
+  v.querySelector("#arqOk").addEventListener("click", () => v.remove());
+  v.querySelector("#arqCriar").addEventListener("click", () => { v.remove(); sairDoTeste("criar"); });
+}
 function ligarArquivo() {
   const el = document.getElementById("painelArq"); if (!el) return;
   const nm = el.querySelector("#fArqNome"), bt = el.querySelector("#escolherArq"), cc = el.querySelector("#arqCancelar");
@@ -1616,6 +1624,7 @@ function ligarArquivo() {
   if (bt) bt.addEventListener("click", () => {
     nomeArq = nm.value.trim();
     if (nomeArq.length < 2) { toast("Dê um nome ao tema antes de anexar"); nm.focus(); return; }
+    if (!semServidor && !conta) return avisoArquivoSemConta();
     $("#fArq").click();
   });
   if (cc) cc.addEventListener("click", () => { tarefaArq.ctl.abort(); tarefaArq = null; pintarArquivo(); });
@@ -1988,9 +1997,8 @@ function renderPrecisaConta() {
   tela.innerHTML = `<div class="vazio entra"><h2>Crie uma conta para conhecer pessoas</h2>
     <p class="muted" style="margin:0">No modo teste você joga os quizzes à vontade. Para ver perfis, curtir e conversar, entre ou crie sua conta. O nível começa a valer a partir da conta.</p>
     <button class="btn" type="button" id="criarContaP">Criar conta</button><button class="link" type="button" id="entrarP">Já tenho conta</button></div>`;
-  const ir = tela2 => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = tela2; render(); };
-  $("#criarContaP").addEventListener("click", () => ir("criar"));
-  $("#entrarP").addEventListener("click", () => ir("entrar"));
+  $("#criarContaP").addEventListener("click", () => sairDoTeste("criar"));
+  $("#entrarP").addEventListener("click", () => sairDoTeste("entrar"));
 }
 
 function fila() {
@@ -2585,6 +2593,8 @@ const senhaForte = x => x.length >= 6 && /[A-Za-z]/.test(x) && /\d/.test(x) && /
 const limpaUsuario = x => x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z]/g, "");
 // "Testar sem login" vale até fechar a aba: o progresso fica só neste aparelho.
 let modoTeste = (() => { try { return sessionStorage.getItem("mente.teste") === "1"; } catch { return false; } })();
+// Deixa o modo teste e volta à tela de conta (entrar ou criar).
+function sairDoTeste(tela2 = "entrar") { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = tela2; render(); }
 let conta = null, contaPronta = false, semServidor = false, cfgConta = {}, telaConta = "entrar";
 // Sem SMS configurado no servidor, o cadastro e a recuperação pedem só e-mail.
 const comSms = () => !!cfgConta.sms;
@@ -2900,7 +2910,7 @@ function ligarNativo() {
   if (!nativo) return;
   const App = plugin("App");
   if (App) App.addListener("backButton", () => {
-    const veu = document.querySelector(".veu"); if (veu) return veu.remove();
+    const veu = document.querySelector(".veu"); if (veu) { if (!veu.classList.contains("fixa")) veu.remove(); return; }
     const match = document.querySelector(".match-tela"); if (match) { match.remove(); return render(); }
     if (chatAberto != null) { clearInterval(timerChat); chatAberto = null; return render(); }
     if (rodada) return;
@@ -2984,12 +2994,12 @@ function renderPerfil() {
       <div class="campo" ${S.meuPasse.ativo ? "" : "hidden"} id="cPasse"><label for="vPasse">Valor (R$)</label><input id="vPasse" type="number" inputmode="numeric" min="10" step="10" value="${S.meuPasse.valor}"></div>
     </div>` : ""}
     <div class="caixa"><div class="chave"><div><strong>Matches</strong><div class="muted" style="font-size:13px">${modoReal() ? "Pessoas com quem você deu match" : `${S.curtidos.length} curtidas enviadas · ${S.passes.length} passes usados`}</div></div><b style="font-family:var(--f-mono)">${modoReal() ? (matchesReal || []).length : S.matches.length}</b></div></div>
-    ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho e o nível não passa para a conta.</div></div><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button></div></div>` : ""}
+    ${modoTeste && !conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Modo teste</strong><div class="muted" style="font-size:13px">Seu progresso fica só neste aparelho e o nível não passa para a conta.</div></div><div class="linha" style="gap:6px;flex-shrink:0"><button class="btn mini" type="button" id="criarContaTeste">Criar conta</button><button class="btn sec mini" type="button" id="sairTeste">Sair</button></div></div></div>` : ""}
     <div class="acoes" style="margin-top:0"><button class="btn sec" type="button" id="editar">Editar perfil</button><button class="btn sec" type="button" id="previa" style="font-size:13px;white-space:nowrap;padding-inline:8px">Como os outros me veem</button></div>
     ${conta ? `<div class="caixa"><div class="chave"><div style="min-width:0"><strong>Conta</strong><div class="muted" style="font-size:13px">${esc(conta.email || conta.telefone || (conta.google ? "Conta Google" : conta.apple ? "Conta Apple" : ""))}</div></div><button class="btn sec mini" type="button" id="sairConta">Sair</button></div>
       <div class="linha" style="gap:6px">${conta.temSenha ? `<button class="btn sec mini" type="button" id="trocarSenha">Trocar senha</button>` : ""}<button class="btn sec mini" type="button" id="trocarContato">Trocar ${comSms() ? "e-mail ou celular" : "e-mail"}</button></div>
       ${nativo ? `<strong style="font-size:14px">Avisos no celular</strong>${TIPOS_AVISO.map(([t, nome]) => `<div class="chave"><span style="font-size:14px">${nome}</span><button class="toggle" type="button" role="switch" data-aviso="${t}" aria-checked="${conta.avisos !== false && !(conta.avisosDesligados || []).includes(t)}" aria-label="Avisos de ${nome.toLowerCase()}"></button></div>`).join("")}` : ""}</div>` : ""}
-    <div class="caixa"><strong>Ajuda e privacidade</strong><div style="display:grid;grid-template-columns:repeat(${cfgConta.contato ? 3 : 2}, minmax(0, 1fr));gap:6px"><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a>${cfgConta.contato ? `<a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="mailto:${esc(cfgConta.contato)}">Contato</a>` : ""}</div></div>
+    <div class="caixa"><strong>Ajuda e privacidade</strong><div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:6px"><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="privacidade.html" target="_blank" rel="noopener">Privacidade</a><a class="btn sec mini" style="font-size:12px;white-space:nowrap;padding-inline:4px;text-align:center" href="mailto:contato@jingar.com.br">Contato</a></div></div>
     <button class="link" type="button" id="zerar">Recomeçar do zero</button>
     ${conta ? `<button class="link" type="button" id="excluirConta" style="color:var(--bad)">Excluir conta</button>` : ""}
   </div>`;
@@ -3024,7 +3034,8 @@ function renderPerfil() {
   }));
   const sc = $("#sairConta"); if (sc) sc.addEventListener("click", sairDaConta);
   const ex = $("#excluirConta"); if (ex) ex.addEventListener("click", excluirConta);
-  const ct = $("#criarContaTeste"); if (ct) ct.addEventListener("click", () => { modoTeste = false; try { sessionStorage.removeItem("mente.teste"); } catch {} telaConta = "criar"; render(); });
+  const ct = $("#criarContaTeste"); if (ct) ct.addEventListener("click", () => sairDoTeste("criar"));
+  const st = $("#sairTeste"); if (st) st.addEventListener("click", () => sairDoTeste("entrar"));
   $("#zerar").addEventListener("click", () => {
     const v = folha(`<h2>Recomeçar do zero?</h2><p class="muted" style="margin:0">Seu nível, matches e conversas serão apagados. Isso não pode ser desfeito.</p>
       <button class="btn bloco" type="button" id="sim" style="background:var(--bad)">Apagar e recomeçar</button><button class="link" type="button" id="nao">Cancelar</button>`);

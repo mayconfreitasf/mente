@@ -305,7 +305,7 @@ export default async function handler(req, res) {
   const b = req.body || {};
   if (b.acao === "config") {
     return res.status(200).json({ banco: !!sql, google: process.env.GOOGLE_CLIENT_ID || null, apple: process.env.APPLE_CLIENT_ID || null,
-      email: temEmail(), sms: temSms(), contato: process.env.CONTATO_EMAIL || null });
+      email: temEmail(), sms: temSms(), contato: process.env.CONTATO_EMAIL || "contato@jingar.com.br" });
   }
   if (!sql) return res.status(503).json({ erro: "O login ainda não está configurado no servidor." });
   try {
